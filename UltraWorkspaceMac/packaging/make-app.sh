@@ -20,8 +20,24 @@ cp "$BIN" "$APP/Contents/MacOS/UltraWorkspaceApp"
 cp "$ROOT/packaging/Info.plist" "$APP/Contents/Info.plist"
 [ -f "$ROOT/packaging/AppIcon.icns" ] && cp "$ROOT/packaging/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns" || true
 
-echo "==> ad-hoc codesign (so Local Network permission works)"
-codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || echo "   (codesign skipped)"
+# Signing: use a Developer ID Application identity when one is in the keychain
+# (override with DECKHAND_SIGN_IDENTITY="Developer ID Application: …" or
+# DECKHAND_SIGN_IDENTITY=- to force ad-hoc). Developer ID + hardened runtime +
+# timestamp is what notarization requires; ad-hoc keeps local builds working.
+IDENTITY="${DECKHAND_SIGN_IDENTITY:-}"
+if [ -z "$IDENTITY" ]; then
+    IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"' || true)"
+fi
+if [ -n "$IDENTITY" ] && [ "$IDENTITY" != "-" ]; then
+    echo "==> codesign with $IDENTITY (hardened runtime, timestamp)"
+    codesign --force --deep --options runtime --timestamp \
+        --entitlements "$ROOT/packaging/Deckhand.entitlements" \
+        --sign "$IDENTITY" "$APP"
+    codesign --verify --strict --verbose=1 "$APP" && echo "   signature OK"
+else
+    echo "==> ad-hoc codesign (no Developer ID identity found; Local Network permission still works)"
+    codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || echo "   (codesign skipped)"
+fi
 
 echo "==> done: $APP"
 echo "   open it with:  open \"$APP\""

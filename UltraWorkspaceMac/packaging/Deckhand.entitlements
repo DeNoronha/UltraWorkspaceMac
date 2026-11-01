@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Hardened-runtime entitlements for Deckhand (not sandboxed).
+         The app talks to the CoreBar on the LAN, reads Calendar/Location via
+         TCC prompts (usage strings in Info.plist), and loads no plug-ins, so no
+         relaxations (JIT, unsigned memory, library validation) are needed. -->
+</dict>
+</plist>

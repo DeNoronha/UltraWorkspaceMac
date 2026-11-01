@@ -19,22 +19,64 @@ if command -v cupsfilter >/dev/null 2>&1; then
     cupsfilter -i text/plain "$ROOT/MANUAL.md" > "$STAGE/Manual.pdf" 2>/dev/null || rm -f "$STAGE/Manual.pdf"
 fi
 
+# Is the app signed with a Developer ID (→ we can notarize) or ad-hoc?
+SIGNED_DEVID=0
+if codesign -dv "$ROOT/dist/Deckhand.app" 2>&1 | grep -q "Authority=Developer ID Application"; then SIGNED_DEVID=1; fi
+
+if [ "$SIGNED_DEVID" = 1 ]; then
+cat > "$STAGE/Read Me First.txt" <<'TXT'
+Deckhand for UltraBar X
+======================
+
+1. Drag Deckhand onto the Applications folder.
+2. Open it from Applications (signed with a Developer ID and notarized by Apple).
+3. BEFORE plugging in: power the CoreBar via the USB-OTG port; connect your
+   computer only to the PC-LINK port (5 V). The wrong port can destroy the unit.
+4. Scan for CoreBars, Pair, and tap Approve on the device.
+
+See Manual.pdf / Manual.md for full instructions.
+Community software. Not affiliated with Sanytron.
+TXT
+else
 cat > "$STAGE/Read Me First.txt" <<'TXT'
 Deckhand for UltraBar X
 ======================
 
 1. Drag Deckhand onto the Applications folder.
 2. First launch: right-click Deckhand in Applications -> Open -> Open.
-   (It's an unsigned community app; you only approve it once.)
-3. Press Scan, then Pair with your CoreBar and tap Approve on the device.
+   (This build is not notarized; you only approve it once.)
+3. BEFORE plugging in: power the CoreBar via the USB-OTG port; connect your
+   computer only to the PC-LINK port (5 V). The wrong port can destroy the unit.
+4. Scan for CoreBars, Pair, and tap Approve on the device.
 
-See Manual.pdf / Manual.md for full instructions, including which USB port to use.
+See Manual.pdf / Manual.md for full instructions.
 Community software. Not affiliated with Sanytron.
 TXT
+fi
 
 DMG="$ROOT/dist/Deckhand.dmg"
 rm -f "$DMG"
 hdiutil create -volname "Deckhand" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 rm -rf "$STAGE"
+
+# Notarize + staple when a Developer ID signature and notary credentials exist.
+# One-time setup (interactive, needs an app-specific password from appleid.apple.com):
+#   xcrun notarytool store-credentials "deckhand-notary" --apple-id <apple-id> --team-id <TEAMID> --password <app-specific-password>
+NOTARY_PROFILE="${DECKHAND_NOTARY_PROFILE:-deckhand-notary}"
+if [ "$SIGNED_DEVID" = 1 ]; then
+    IDENTITY="$(codesign -dv "$ROOT/dist/Deckhand.app" 2>&1 | grep -o 'Authority=Developer ID Application: [^$]*' | head -1 | sed 's/^Authority=//')"
+    echo "==> signing DMG with $IDENTITY"
+    codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+    if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+        echo "==> notarizing (profile: $NOTARY_PROFILE) — this takes a few minutes…"
+        xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+        echo "==> stapling ticket"
+        xcrun stapler staple "$DMG"
+        spctl -a -t open --context context:primary-signature -v "$DMG" && echo "   Gatekeeper: accepted"
+    else
+        echo "==> NOT notarized: no notary credentials under keychain profile '$NOTARY_PROFILE'."
+        echo "    Run once:  xcrun notarytool store-credentials \"$NOTARY_PROFILE\" --apple-id <apple-id> --team-id <TEAMID> --password <app-specific-password>"
+    fi
+fi
 
 echo "done: $DMG ($(du -h "$DMG" | cut -f1))"
