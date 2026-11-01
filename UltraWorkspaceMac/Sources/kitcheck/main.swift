@@ -2,6 +2,8 @@ import Foundation
 import Compression
 import UltraBarKit
 
+setvbuf(stdout, nil, _IONBF, 0) // line-by-line output even when piped/killed
+
 // `kitcheck discover` — run the app's real Discovery from the terminal (which
 // already has Local Network permission) to prove the code works against hardware.
 if CommandLine.arguments.contains("weather") {
@@ -13,6 +15,11 @@ if CommandLine.arguments.contains("weather") {
         print("now: \(Int(now.temperature.rounded()))\(now.unitSuffix)  code=\(now.code) sky=\(now.sky.label) day=\(now.isDay) hum=\(now.humidity ?? -1)% wind=\(now.windSpeed ?? 0)\(now.windSuffix) @ \(now.place)")
     } catch { print("weather error: \(error)"); exit(1) }
     exit(0)
+}
+
+if let i = CommandLine.arguments.firstIndex(of: "e2e") {
+    let ip = CommandLine.arguments.count > i + 1 ? CommandLine.arguments[i + 1] : "127.0.0.1"
+    exit(Int32(await E2E.run(ip: ip)))
 }
 
 if CommandLine.arguments.contains("discover") {

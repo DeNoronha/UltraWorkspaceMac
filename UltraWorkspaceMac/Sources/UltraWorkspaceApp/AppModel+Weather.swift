@@ -47,7 +47,7 @@ extension AppModel {
                 return try await OpenMeteo.current(latitude: lat, longitude: lon, metric: metric, placeName: settings.manualCity)
             }
             guard !settings.manualCity.isEmpty, let p = try await OpenMeteo.geocode(settings.manualCity) else {
-                throw UltraBarError.protocolError("Set a city (or lat/lon) in Settings → Weather.")
+                throw UltraBarError.protocolError("Set a city (or lat/lon) in Widgets → Weather & time.")
             }
             return try await OpenMeteo.current(latitude: p.latitude, longitude: p.longitude, metric: metric, placeName: p.name)
         } else {
@@ -65,7 +65,7 @@ extension AppModel {
             if let ip = await OpenMeteo.ipLocate() {
                 return try await OpenMeteo.current(latitude: ip.lat, longitude: ip.lon, metric: metric, placeName: ip.city)
             }
-            throw UltraBarError.protocolError("Allow Location access, or set a city in Settings → Weather.")
+            throw UltraBarError.protocolError("Allow Location access, or set a city in Widgets → Weather & time.")
         }
     }
 

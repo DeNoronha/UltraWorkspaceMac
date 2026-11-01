@@ -115,17 +115,23 @@ public enum Discovery {
         guard inet_pton(AF_INET, ip, &dst.sin_addr) == 1 else { return nil }
 
         let probe = Array(#"{"act":"discover"}"#.utf8)
-        probe.withUnsafeBufferPointer { buf in
-            _ = withUnsafePointer(to: &dst) { p in
-                p.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                    sendto(fd, buf.baseAddress, buf.count, 0, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
+        func send() {
+            probe.withUnsafeBufferPointer { buf in
+                _ = withUnsafePointer(to: &dst) { p in
+                    p.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                        sendto(fd, buf.baseAddress, buf.count, 0, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
+                    }
                 }
             }
         }
 
         var rbuf = [UInt8](repeating: 0, count: 4096)
         let deadline = Date().addingTimeInterval(timeout)
+        var lastSend = Date.distantPast
         while Date() < deadline {
+            // UDP is lossy (and a sleeping device may miss the first datagram):
+            // re-send the probe every 600 ms until something answers.
+            if Date().timeIntervalSince(lastSend) >= 0.6 { send(); lastSend = Date() }
             var readfds = fd_set(); fdZero(&readfds); fdSet(fd, &readfds)
             var tv = timeval(tv_sec: 0, tv_usec: 300_000)
             if select(fd + 1, &readfds, nil, nil, &tv) > 0 {

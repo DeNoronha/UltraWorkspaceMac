@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-/// Persists pairing tokens (Keychain) and per-CoreBar metadata (cert pin, last
+/// Persists pairing tokens (user-only 0600 files, not the Keychain — see below) and per-CoreBar metadata (cert pin, last
 /// known IP, friendly name) in Application Support.
 public final class Store: @unchecked Sendable {
     public static let shared = Store()

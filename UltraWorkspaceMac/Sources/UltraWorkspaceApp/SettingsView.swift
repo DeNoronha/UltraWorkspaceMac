@@ -33,7 +33,7 @@ struct SettingsView: View {
 
                 Section("On the CoreBar itself") {
                     note("Time & timezone", "Set on the CoreBar (Settings → Time), kept by NTP. The protocol has no set-time command.")
-                    note("Wi-Fi", "Managed on the CoreBar. A protocol Wi-Fi scan exists and is on the roadmap for in-app switching.")
+                    note("Wi-Fi", "Managed on the CoreBar. The protocol can list nearby networks but cannot join one, so Wi-Fi onboarding stays on the device.")
                     note("Bluetooth", "Managed on the CoreBar (module mesh and PC-wake).")
                 }
 

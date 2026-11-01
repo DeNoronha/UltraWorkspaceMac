@@ -16,12 +16,48 @@ public actor CoreBarClient {
 
     private var connection: NWConnection?
     private var buffer = Data()
-    private var lineWaiters: [CheckedContinuation<Data?, Never>] = []
+    private var lineWaiters: [(id: UUID, cont: CheckedContinuation<Data?, Never>)] = []
     private var closed = false
 
+    /// Certificate facts captured *synchronously* inside the TLS verify block
+    /// (which runs off the actor), so `connect()` can report a pin mismatch
+    /// deterministically instead of racing an actor hop.
+    private final class CertBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _presented: String?
+        private var _mismatch = false
+        var presented: String? { lock.withLock { _presented } }
+        var mismatch: Bool { lock.withLock { _mismatch } }
+        func record(_ hex: String?) { lock.withLock { _presented = hex } }
+        func markMismatch() { lock.withLock { _mismatch = true } }
+    }
+    private let certBox = CertBox()
+
+    /// Resumes a connect continuation exactly once, from whichever of the
+    /// state handler / timeout fires first.
+    private final class ConnectOnce: @unchecked Sendable {
+        private let lock = NSLock()
+        private var cont: CheckedContinuation<Void, Error>?
+        private let conn: NWConnection
+        init(_ cont: CheckedContinuation<Void, Error>, _ conn: NWConnection) { self.cont = cont; self.conn = conn }
+        func finish(_ result: Result<Void, Error>, cancel: Bool = false) {
+            lock.lock()
+            let c = cont; cont = nil
+            lock.unlock()
+            guard let c else { return }
+            conn.stateUpdateHandler = nil
+            if cancel { conn.cancel() }
+            c.resume(with: result)
+        }
+    }
+
     /// SHA-256 (hex) of the certificate the CoreBar presented on this connection.
-    public private(set) var presentedCertSHA256: String?
-    public private(set) var certMismatch = false
+    public var presentedCertSHA256: String? { certBox.presented }
+    public var certMismatch: Bool { certBox.mismatch }
+
+    /// Upper bound for TCP+TLS setup. Without it a TLS failure can leave
+    /// NWConnection in `.waiting` forever (it retries silently).
+    public static let connectTimeout: TimeInterval = 10
 
     public init(host: String, pinnedCertSHA256: String? = nil, port: UInt16 = Proto.controlPort) {
         self.host = host
@@ -37,15 +73,16 @@ public actor CoreBarClient {
         sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
 
         let pinned = self.pinnedCertSHA256
+        let box = certBox
         sec_protocol_options_set_verify_block(
             tls.securityProtocolOptions,
             { _, secTrust, complete in
                 let trust = sec_trust_copy_ref(secTrust).takeRetainedValue()
                 let hex = Self.leafCertSHA256(trust)
-                Task { await self.recordPresentedCert(hex) }
+                box.record(hex)
                 guard let hex else { complete(false); return }
                 if let pinned, pinned.caseInsensitiveCompare(hex) != .orderedSame {
-                    Task { await self.markMismatch() }
+                    box.markMismatch()
                     complete(false)
                     return
                 }
@@ -62,25 +99,42 @@ public actor CoreBarClient {
         )
         self.connection = conn
 
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            conn.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    conn.stateUpdateHandler = nil
-                    cont.resume()
-                case .failed(let err):
-                    conn.stateUpdateHandler = nil
-                    cont.resume(throwing: UltraBarError.tlsFailed(err.localizedDescription))
-                case .cancelled:
-                    conn.stateUpdateHandler = nil
-                    cont.resume(throwing: UltraBarError.notConnected)
-                default:
-                    break
+        // Resume exactly once: NWConnection can report .waiting (TLS alert,
+        // unreachable host) and then sit there retrying, so treat .waiting as
+        // failure and back everything with a hard timeout.
+        let timeoutSeconds = Self.connectTimeout
+        do {
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                let once = ConnectOnce(cont, conn)
+                conn.stateUpdateHandler = { state in
+                    switch state {
+                    case .ready:
+                        once.finish(.success(()))
+                    case .failed(let err):
+                        once.finish(.failure(UltraBarError.tlsFailed(err.localizedDescription)))
+                    case .waiting(let err):
+                        once.finish(.failure(UltraBarError.tlsFailed(err.localizedDescription)), cancel: true)
+                    case .cancelled:
+                        once.finish(.failure(UltraBarError.notConnected))
+                    default:
+                        break
+                    }
                 }
+                DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds) {
+                    once.finish(.failure(UltraBarError.tlsFailed("connect timed out after \(Int(timeoutSeconds))s")), cancel: true)
+                }
+                conn.start(queue: DispatchQueue.global(qos: .userInitiated))
             }
-            conn.start(queue: DispatchQueue.global(qos: .userInitiated))
+        } catch {
+            // A pin mismatch always surfaces as a TLS failure (we refused the
+            // handshake); report it as such so callers never send the token.
+            if certMismatch, let p = presentedCertSHA256, let pin = pinnedCertSHA256 {
+                throw UltraBarError.certPinMismatch(presented: p, pinned: pin)
+            }
+            throw error
         }
         if certMismatch, let p = presentedCertSHA256, let pin = pinnedCertSHA256 {
+            conn.cancel()
             throw UltraBarError.certPinMismatch(presented: p, pinned: pin)
         }
         WireLog.shared.event("connected \(host):\(port) (TLS) cert=\(presentedCertSHA256?.prefix(16) ?? "?")")
@@ -91,12 +145,9 @@ public actor CoreBarClient {
         closed = true
         connection?.cancel()
         connection = nil
-        for w in lineWaiters { w.resume(returning: nil) }
-        lineWaiters.removeAll()
+        let ws = lineWaiters; lineWaiters.removeAll()
+        for w in ws { w.cont.resume(returning: nil) }
     }
-
-    private func recordPresentedCert(_ hex: String?) { presentedCertSHA256 = hex }
-    private func markMismatch() { certMismatch = true }
 
     // MARK: Receiving line-delimited JSON
 
@@ -122,8 +173,8 @@ public actor CoreBarClient {
 
     private func handleEOF() {
         closed = true
-        for w in lineWaiters { w.resume(returning: nil) }
-        lineWaiters.removeAll()
+        let ws = lineWaiters; lineWaiters.removeAll()
+        for w in ws { w.cont.resume(returning: nil) }
     }
 
     private var pendingLines: [Data] = []
@@ -140,17 +191,32 @@ public actor CoreBarClient {
         }
         while !lineWaiters.isEmpty, !pendingLines.isEmpty {
             let w = lineWaiters.removeFirst()
-            w.resume(returning: pendingLines.removeFirst())
+            w.cont.resume(returning: pendingLines.removeFirst())
         }
     }
 
-    /// Next JSON line (raw bytes), or nil if the connection closed.
-    private func readLine() async -> Data? {
+    /// Next JSON line (raw bytes), or nil if the connection closed or
+    /// `deadline` passed. The waiter is removed on expiry, so a silent peer
+    /// never leaves a continuation (or caller) stuck.
+    private func readLine(until deadline: Date) async -> Data? {
         if !pendingLines.isEmpty { return pendingLines.removeFirst() }
         if closed { return nil }
+        let remaining = deadline.timeIntervalSinceNow
+        if remaining <= 0 { return nil }
+        let id = UUID()
         return await withCheckedContinuation { cont in
-            lineWaiters.append(cont)
+            lineWaiters.append((id, cont))
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                await self?.expireWaiter(id)
+            }
         }
+    }
+
+    private func expireWaiter(_ id: UUID) {
+        guard let i = lineWaiters.firstIndex(where: { $0.id == id }) else { return }
+        let w = lineWaiters.remove(at: i)
+        w.cont.resume(returning: nil)
     }
 
     // MARK: Sending
@@ -266,18 +332,7 @@ public actor CoreBarClient {
     }
 
     private func readLineWithTimeout(until deadline: Date) async -> Data? {
-        let remaining = deadline.timeIntervalSinceNow
-        if remaining <= 0 { return nil }
-        return await withTaskGroup(of: Data?.self) { group in
-            group.addTask { await self.readLine() }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
-                return nil
-            }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
-        }
+        await readLine(until: deadline)
     }
 
     private nonisolated func intValue(_ v: Any?) -> Int {

@@ -47,10 +47,10 @@ public struct CoreBarSession: Sendable {
         }
     }
 
-    /// List the physical modules attached to the CoreBar. Primary source is the
-    /// gateway config (GET_COREBAR_CONFIG / act 30740), whose `canGateway` /
-    /// `meshGateway` endpoints are the QuantumLink modules. Falls back to
-    /// GET_DEVICE (1300) for logical/integration devices.
+    /// List the physical modules attached to the CoreBar. Tries the gateway
+    /// config first (GET_COREBAR_CONFIG / 30740 — returns null on tested
+    /// firmware, kept for firmwares that do answer), then a live bus scan
+    /// (30100 → pushed 30102), then GET_DEVICE (1300) for logical devices.
     public func listModules() async throws -> [AttachedModule] {
         let client = try await authedClient()
         defer { Task { await client.close() } }
@@ -108,8 +108,9 @@ public struct CoreBarSession: Sendable {
     }
 
     /// Provision the CoreBar: scan the buses and write the discovered modules
-    /// into the gateway config (SET_COREBAR_CONFIG) so they become controllable.
-    /// Returns the number of modules written. This changes device configuration.
+    /// into the gateway config (SET_GATEWAY_CONFIG / 30300) so they become
+    /// controllable. Returns the merged module list, the endpoints blob to cache,
+    /// and a diagnostic line. This changes device configuration (full replace).
     public func provision(scanSeconds: TimeInterval = 16, priorEndpoints: Data? = nil) async throws -> (modules: [AttachedModule], endpointsJSON: Data, diagnostic: String) {
         let client = try await authedClient()
         defer { Task { await client.close() } }
