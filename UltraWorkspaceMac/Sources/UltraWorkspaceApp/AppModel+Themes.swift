@@ -69,6 +69,29 @@ extension AppModel {
         }
     }
 
+    /// Render a widget to an NSImage for an on-screen preview (240×240 cube).
+    /// Pure/local — never touches the device.
+    func previewImage(_ theme: Theme, settings: AppSettings) async -> NSImage? {
+        guard let rgba = await renderTheme(theme, settings: settings),
+              let png = AppModel.pngData(fromRGBA: rgba, width: 240, height: 240) else { return nil }
+        return NSImage(data: png)
+    }
+
+    /// Render the wide (1424×280) CoreBar card for preview. Only the weather
+    /// card has a wide layout today; other widgets get wide layouts later.
+    func previewWideImage(_ theme: Theme, settings: AppSettings) async -> NSImage? {
+        let rgba: [UInt8]?
+        switch theme {
+        case .weather:
+            let now = try? await resolveWeather(settings: settings, metric: settings.units == .metric)
+            rgba = WeatherCard.render(width: 1424, height: 280, now: now, clock24h: settings.clock24h)
+        default:
+            rgba = nil
+        }
+        guard let rgba, let png = AppModel.pngData(fromRGBA: rgba, width: 1424, height: 280) else { return nil }
+        return NSImage(data: png)
+    }
+
     private func renderTheme(_ theme: Theme, settings: AppSettings) async -> [UInt8]? {
         switch theme {
         case .weather:

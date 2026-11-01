@@ -192,6 +192,7 @@ private struct CoreBarView: View {
                     }
                     Divider()
                     Text("CoreBar screen (5:1, 1424×280)").font(.headline)
+                    BarPreview()
                     Button { model.previewCoreBarScreen(settings: settings) } label: {
                         Label("Preview a weather card on the CoreBar screen", systemImage: "rectangle.inset.filled.badge.record")
                     }.disabled(model.isWorking)
@@ -220,6 +221,8 @@ private struct VivoCubeView: View {
             HSplitView {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        CubePreview()
+                        Divider()
                         Text("Display").font(.headline)
                         HStack {
                             Button("Screen On") { push { await $0.setScreen(serial: module.serial, on: true) } }
@@ -300,6 +303,89 @@ private struct DeviceInfo: View {
             }.padding()
         }
     }
+}
+
+// MARK: - Live widget preview (rendered locally, never touches the device)
+
+@MainActor final class PreviewModel: ObservableObject {
+    @Published var image: NSImage?
+    @Published var loading = false
+    private var token = 0
+    func reload(_ make: @escaping () async -> NSImage?) {
+        token += 1; let t = token; loading = true
+        Task { let img = await make(); if t == self.token { self.image = img; self.loading = false } }
+    }
+}
+
+/// 240×240 round preview for the VivoCube, with a picker to choose the widget.
+private struct CubePreview: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var settings: AppSettings
+    @StateObject private var pm = PreviewModel()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Preview").font(.headline)
+                Spacer()
+                Picker("", selection: $model.selectedAddon) {
+                    ForEach(Theme.allCases) { Label($0.title, systemImage: $0.icon).tag($0) }
+                }.labelsHidden().frame(width: 190)
+                Button { reload() } label: { Image(systemName: "arrow.clockwise") }
+                    .buttonStyle(.borderless).help("Refresh preview")
+            }
+            ZStack {
+                Circle().fill(Color.black)
+                if let img = pm.image {
+                    Image(nsImage: img).resizable().interpolation(.high)
+                        .frame(width: 200, height: 200).clipShape(Circle())
+                } else if pm.loading {
+                    ProgressView()
+                } else {
+                    Text("—").foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 210, height: 210)
+            .overlay(Circle().stroke(.white.opacity(0.08), lineWidth: 1).frame(width: 200, height: 200))
+            Text("2.0″ round · 240×240").font(.caption2).foregroundStyle(.secondary)
+        }
+        .onAppear { reload() }
+        .onChange(of: model.selectedAddon) { _ in reload() }
+    }
+    private func reload() { pm.reload { await model.previewImage(model.selectedAddon, settings: settings) } }
+}
+
+/// Wide 1424×280 preview for the CoreBar screen (weather today; more later).
+private struct BarPreview: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var settings: AppSettings
+    @StateObject private var pm = PreviewModel()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Preview").font(.subheadline).bold()
+                Spacer()
+                Button { reload() } label: { Image(systemName: "arrow.clockwise") }
+                    .buttonStyle(.borderless).help("Refresh preview")
+            }
+            ZStack {
+                RoundedRectangle(cornerRadius: 10).fill(Color.black)
+                if let img = pm.image {
+                    Image(nsImage: img).resizable().interpolation(.high).aspectRatio(1424.0/280.0, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 8)).padding(4)
+                } else if pm.loading {
+                    ProgressView()
+                } else {
+                    Text("Weather only for now — wide layouts for other widgets are coming.")
+                        .font(.caption).foregroundStyle(.secondary).padding(8)
+                }
+            }
+            .frame(maxWidth: 420).frame(height: 420 * 280 / 1424 + 8)
+        }
+        .onAppear { reload() }
+    }
+    private func reload() { pm.reload { await model.previewWideImage(.weather, settings: settings) } }
 }
 
 // MARK: - Per-device widget rotation (tick widgets + interval + publish)
