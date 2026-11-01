@@ -1,9 +1,9 @@
 # Mock CoreBar — build + run.
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY package.json ./
-# No lockfile is committed; install from package.json.
-RUN npm install
+# package-lock.json is committed: use `npm ci` for reproducible installs.
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
@@ -11,8 +11,8 @@ RUN npm run build
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-COPY package.json ./
-RUN npm install --omit=dev
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 
 # UDP discovery, TLS control, HTTP upload, web viewer.

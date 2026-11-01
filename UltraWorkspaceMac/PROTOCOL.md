@@ -9,7 +9,7 @@ The campaign describes four "protocol bridges" on the CoreBar: **USB/HID**, **IP
 ## Transport (IP Network)
 
 - **Discovery**: UDP broadcast on port **5319**. Probe payload `{"act":"discover"}` sent to `255.255.255.255:5319` every ~2 s. A CoreBar replies with a JSON object containing at least `tcpPort`, plus `serialNo`, `ver`, `ip`, `name`.
-- **Control**: TLS (1.2/1.3) over TCP, default port **7431**, SNI `ultrabar.local`. The CoreBar uses a self-signed cert → trust-on-first-use: pin the SHA-256 of the presented leaf certificate at pairing, and on later connections abort *before* sending the token if it no longer matches. Messages are UTF-8 JSON objects, one per line (`\n`-delimited).
+- **Control**: TLS over TCP, default port **7431**, SNI `ultrabar.local`. The device negotiates TLS 1.3; the client allows ≥ 1.2 (`sec_protocol_options_set_min_tls_protocol_version(.TLSv12)`). The CoreBar uses a self-signed cert → trust-on-first-use: pin the SHA-256 of the presented leaf certificate at pairing, and on later connections abort *before* sending the token if it no longer matches. Messages are UTF-8 JSON objects, one per line (`\n`-delimited).
 - **Upload**: HTTP on port **8080**, `POST /upload?serialNo=<serial>`, `multipart/form-data`, field `file`, filename `<serial>.tgz`, `Content-Type: application/gzip`. Success body contains `"state":200` and `"msg":"ok"`.
 
 ## Control messages
@@ -23,13 +23,15 @@ Every request is `{"act":<int>,"id":"<hex>","data":<value>}`; replies echo `id` 
 | 30100  | **MODULE_START_DISCOVERY** — live bus scan | `"can"` (magnetic bus) or `"mesh"` (wireless) | fire-and-forget; results arrive as pushed 30102 messages |
 | 30102  | MODULE_START_DISCOVERY_REPLAY | (pushed by the CoreBar)                     | one per found module; `data` is a module endpoint |
 | 30300  | **SET_GATEWAY_CONFIG** — provision modules | the `CoreBarConfiguration` object directly | writes the discovered endpoints into the gateway config |
-| 30200  | read property      | `{serialNo, deviceId:256, propertyId, extra:null}`         | `data.result` (integer) |
-| 30201  | write property     | `{serialNo, deviceId:256, propertyId, value}`              | `code` |
+| 30200  | read property      | `{serialNo, deviceId:256 (or sub-device id), propertyId, extra:null}` | `data.result` (integer) |
+| 30201  | write property     | `{serialNo, deviceId:256 (or sub-device id), propertyId, value}` | `code` |
 | 1300   | GET_DEVICE — logical/integration device list | `{}`                             | `data` = array of `{id, name, deviceType, online, …}` (empty on this firmware for physical modules) |
 
 ### Enumerating modules is a live scan, not a config read
 
-On the firmware tested here the static config reads come back **empty**: `GET_DEVICE` (1300), `QUERY_MODULE_STATE` (30730), and `GET_COREBAR_CONFIG` (30740) return nothing useful for the physical QuantumLink modules. (An earlier version of this client listed modules with 30730 and always got an empty array back.)
+On the firmware tested here the static config reads come back **empty**: `GET_DEVICE` (1300) and `QUERY_MODULE_STATE` (30730) return nothing useful for the physical QuantumLink modules, and `GET_COREBAR_CONFIG` (30740) with `{type:"GATEWAY_CONFIG"}` returns `null`. (An earlier version of this client listed modules with 30730 and always got an empty array back.)
+
+The app's `listModules()` still tries the gateway-config read **first** (cheap, and kept for firmwares that do answer), then falls through to the live scan below, and only if that finds nothing to `GET_DEVICE` (1300). On the tested firmware the live scan is the source of truth.
 
 Enumeration is therefore a **live QuantumLink bus scan**:
 1. Fire `MODULE_START_DISCOVERY` (30100) with data `"can"` for the magnetic bus and again with `"mesh"` for the wireless bus.
@@ -46,7 +48,7 @@ A discovered module isn't controllable until its endpoint is written into the ga
 
 Endpoints are split into `meshGateway` (those with `interfaceType == "mesh"`) and `canGateway` (the rest).
 
-- The older `SET_COREBAR_CONFIG` (30741) is **not** used: it wraps the configuration in a `ReadWriteRequest` and the device throws a `ClassCastException`.
+- `SET_COREBAR_CONFIG` (30741) with `{type:"GATEWAY_CONFIG", value: CoreBarConfiguration}` is accepted per the launcher source, but on the firmware tested it fails server-side with a `ClassCastException` (it wraps the configuration in a `ReadWriteRequest`). That is why the app uses 30300. This is the one place this caveat is stated; the "Device settings" section below refers back here.
 - **Asleep-module merge.** Each provision starts from the endpoints last written to that CoreBar (cached per CoreBar on the Mac) and overlays the freshly-discovered ones. A module that is asleep during a scan (often the DotKey) therefore stays in the config instead of being dropped. A freshly-discovered endpoint overrides its remembered copy.
 - If an upload is rejected with "module not found", the app provisions once and retries the upload.
 
@@ -95,7 +97,7 @@ The CoreBar's PC-facing command set, recovered from LineOS `com.ultrabar.launch.
 
 The complete QuantumLink module protocol (how the CoreBar talks to each module over the magnetic bus / CAN / Mesh) lives in the `quantum.link` package of the LineOS/CoreBridge APKs: `QLinkVivoCube`, `QLinkSenseCube`, `QLinkKnobKey`, `QLinkDotKey`, `QLinkPCBootCard`, VivoCube widgets (`VCWidget*`), sensors, and `HidKeyboardOut` (USB-HID keystroke output for button macros). This is the reference for building out widget, sensor, KnobKey/DotKey, and OTA support.
 
-`deviceId` for the main device inside a module is **256**.
+`deviceId` for the main device inside a VivoCube is **256** (`Proto.deviceMain`). The SenseCube is different: its main device id is **0** (not 256), and its sensors are addressed as sub-devices **10 / 11 / 12 / …** (see *SenseCube sensors* below).
 
 ### Known property IDs (VivoCube main device)
 
@@ -155,7 +157,7 @@ The :7431 channel is **not** a general system-settings API. Only the act codes r
 Controllable today:
 - **Screensaver** — `GET {act:30740, data:{type:"BASE_SET"}}` → `ScreensaverConfig`; `SET {act:30741, data:{type:"BASE_SET", value:{featureEnabled, lockTime, uri, packageName, ver}}}`. `lockTime` is a `LockTime` enum serialized by name: `TIME_30S, TIME_1MIN, TIME_2MIN, TIME_3MIN, TIME_4MIN, TIME_5MIN, NEVER`.
 - **Screensaver preview** — `{act:30742, data:{url, mediaType:"IMAGE"|"VIDEO"}}` (one-shot).
-- **Gateway endpoints** — `{act:30741, data:{type:"GATEWAY_CONFIG", value:CoreBarConfiguration}}` (write; get returns null). `SET_GATEWAY_CONFIG` (30300) also accepts the config as the raw body.
+- **Gateway endpoints** — the launcher registers `{act:30741, data:{type:"GATEWAY_CONFIG", value:CoreBarConfiguration}}` for writes, but it fails with a `ClassCastException` on the tested firmware (see *Provisioning* above), so the app writes with `SET_GATEWAY_CONFIG` (30300), which takes the config as the raw body. The matching read, `GET_COREBAR_CONFIG` (30740) `{type:"GATEWAY_CONFIG"}`, returns `null` on the tested firmware; the app tries it first anyway and falls back to the live scan.
 - **Reboot** — `{act:20100}`.
 - **Wi-Fi scan/list only** — `{act:1633}` start / `{act:1634}` stop; results pushed as `{act:1635}` (`CUBE_SCAN_WIFI_LIST_RESULT`), each `{name, signal, frequency}`, open networks filtered. No connect path.
 - **Screen on/off** — `{act:30201, data:{serialNo, deviceId, propertyId:4, value}}`, addressed to a real module endpoint (rejects `serialNo=="0000000000000000"`; the CoreBar's own local volume/brightness are not reachable this way).
@@ -164,7 +166,7 @@ Controllable today:
 
 ## SenseCube sensors (read)
 
-Read with `MODULE_PROPERTY_READ` (30200), `data = {serialNo, deviceId, propertyId}`; the value comes back raw in `data.result` (the app does the scaling — the device only scales on its internal push path, not on reads). The SenseCube's sub-devices use their own ids (not main=256).
+Read with `MODULE_PROPERTY_READ` (30200), `data = {serialNo, deviceId, propertyId}`; the value comes back raw in `data.result` (the app does the scaling — the device only scales on its internal push path, not on reads). The SenseCube's main device id is **0** (not 256); the sensors are sub-devices with their own ids (10 / 11 / 12 / …), and the app reads them with `deviceId` 11 / 12 / 10 (`CoreBarSession.readSenseCube`).
 
 | deviceId | propId | sensor | unit (raw → value) | pollable |
 |---|---|---|---|---|
@@ -195,9 +197,12 @@ The device has an automation engine: a `Scene` = `triggers[]` + `conditions[]` +
 - **Presence trigger** (works): `{"type":"DEVICE_STATE","params":{"id":"<senseCubeId>","property":"state","from":"UNOCCUPIED","to":"OCCUPIED"}}`. Read helpers: `SCENE_DEPENDS_DEVICES` (30701, data `"SENSE_CUBE"` → id), 30702 (props), 30703 (values).
 - **Actions** — the gap for "wake": `START_SCREEN`/`CLOSE_SCREEN` exist in the enum but have **no handler** (dead). Available display actions: `BRIGHT` (target `"corebar"`, sets screen brightness — doesn't dismiss the screensaver), `ACTIVITY` (launch an app — the best candidate to actually wake the panel), `VIVO_CUBE_TOGGLE` (change a VivoCube's shown layer), `CHANGE_PROFILE`. So **motion → wake** is approximate (ACTIVITY or BRIGHT) and must be verified on hardware; it is not a built-in behavior and there's no clean screen-power action.
 
-## Not yet mapped
+## Not yet implemented in the app
 
-- Persistent CoreBar **wallpaper/pages** via `BATCH_SAVE_PROFILE` (1108): needs the full authoritative profile array (open question: does `albumId` alone repaint, or must the TIME-widget `icon` be set; exact `/upload/zip` success JSON; the screensaver app's `packageName`/`ver`).
-- **Inbound button / rotation events** for KnobKey and DotKey (needed to bind KnobKey → volume and DotKey presses to Mac actions). The official app encodes these as integer `act` codes, best recovered from the LineOS APK.
-- Additional `act` codes for widgets, automations, OTA (`MODULE_OAT_*`), and smart-home bridging.
-- Cloud backend `aiks360.com` (`/api/v1/base-service/pub/...`) for the app marketplace and icon/plugin catalog.
+The protocol for these is mapped above; what is missing is the client-side implementation (and, where noted, hardware confirmation).
+
+- **Persistent CoreBar wallpaper / pages** via `BATCH_SAVE_PROFILE` (1108). Deckhand only does the one-shot `PREVIEW_SCREENSAVER` (30742) today. Writing profiles needs the full authoritative profile array (destructive if sent partial) and still has open questions: does `albumId` alone repaint, or must the TIME-widget `icon` be set; the exact `/upload/zip` success JSON; the screensaver app's `packageName` / `ver`.
+- **KnobKey → volume and DotKey → Mac actions.** The inbound path is understood (`PUSH_MESSAGE` 1000000 with `SET_VOLUME` / `PC_CONTROL`, see *CoreBar inputs*), but it only flows once a control is bound to a PC target in the profile — which again needs the `BATCH_SAVE_PROFILE` write path. The app does not yet listen for act 1000000.
+- **Presence → wake** via an on-device scene (`BATCH_CREATE_SCENE` 30500): trigger understood, no clean screen-on action; must be verified on hardware.
+- **OTA module flashing** (`MODULE_OAT_START` 30400 / `MODULE_OAT_DATA` 30401): act codes known, payload framing not worked out.
+- Smart-home bridging (`DeviceEnum` LIGHT / SWITCH / …) and the cloud backend `aiks360.com` (`/api/v1/base-service/pub/...`) for the app marketplace and icon/plugin catalog — out of scope for now.

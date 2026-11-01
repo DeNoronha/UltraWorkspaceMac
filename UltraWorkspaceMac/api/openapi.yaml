@@ -31,8 +31,10 @@ servers:
     description: CoreBar HTTP server (plain HTTP, no TLS on this port)
     variables:
       corebarHost:
-        default: corebar.local
-        description: CoreBar IP or hostname (discover via UDP :5319; field `ip`).
+        default: 192.0.2.1
+        description: >-
+          Placeholder — use the IP from UDP discovery on :5319 (field `ip`). The CoreBar
+          does not advertise an mDNS name; there is no `corebar.local`.
 tags:
   - name: upload
     description: Binary/asset upload endpoints.
@@ -117,7 +119,7 @@ paths:
         CAVEAT: the exact success JSON body for this route is NOT fully confirmed. The
         handler returns `HttpResult.onSuccess(<fileCount>)`; whether the wire shape
         matches the `{state,msg}` seen on `/upload` is an open question (see PROTOCOL.md
-        "Not yet mapped" / scratchpad corebar-screen-findings). Modeled below as the same
+        "Not yet implemented in the app"). Modeled below as the same
         UploadResult shape with that uncertainty noted.
       parameters:
         - name: subDir

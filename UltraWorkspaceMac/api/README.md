@@ -4,7 +4,7 @@ Machine-readable specs for the UltraBar X **CoreBar** local (LAN) protocol, as r
 
 **Unofficial and reverse-engineered.** These specs were recovered from decompiled binaries (the "VivoCube Weather Tool" .NET client, the official UltraWorkSpace macOS binary, and the LineOS APK), not from vendor documentation. There is no warranty, and the vendor may change the protocol at any time. Field types and payloads carry `description:` caveats wherever they are uncertain — read those before relying on a field.
 
-**Authoritative source:** [`../PROTOCOL.md`](../PROTOCOL.md). These two specs mirror `PROTOCOL.md`; on any conflict, `PROTOCOL.md` wins. Extra detail behind some entries lives in the Deckhand scratchpad findings (screen, SenseCube, input events, device settings, presence/wake).
+**Authoritative source:** [`../PROTOCOL.md`](../PROTOCOL.md). These two specs mirror `PROTOCOL.md`; on any conflict, `PROTOCOL.md` wins. The background for the screen, SenseCube, input-event, device-settings and presence/wake entries is in the corresponding sections of `PROTOCOL.md`.
 
 ## The two surfaces, and why two standards
 

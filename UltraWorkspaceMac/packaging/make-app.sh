@@ -20,7 +20,7 @@ cp "$BIN" "$APP/Contents/MacOS/UltraWorkspaceApp"
 cp "$ROOT/packaging/Info.plist" "$APP/Contents/Info.plist"
 [ -f "$ROOT/packaging/AppIcon.icns" ] && cp "$ROOT/packaging/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns" || true
 
-echo "==> ad-hoc codesign (so Keychain + local network work)"
+echo "==> ad-hoc codesign (so Local Network permission works)"
 codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || echo "   (codesign skipped)"
 
 echo "==> done: $APP"

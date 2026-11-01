@@ -1,6 +1,6 @@
 # Deckhand widgets — how they work, and how to build one
 
-A widget renders a small card that Deckhand pushes to a display: a VivoCube (240×240, round) or the CoreBar screen (1424×280, wide). Widgets can be shown statically or rotated.
+A widget renders a small card that Deckhand pushes to a display: a VivoCube (240×240, round) or the CoreBar screen (1424×280, wide). On a VivoCube, widgets can be shown statically or rotated. On the CoreBar screen only the one-shot preview exists today ("Show this on the CoreBar screen now", `PREVIEW_SCREENSAVER`), it renders the weather-only wide layout, and rotation / persistent pages are not implemented (they need `BATCH_SAVE_PROFILE`; see ROADMAP.md).
 
 ## How built-in widgets work today
 
@@ -18,7 +18,7 @@ This is great for built-ins but is **macOS-only and requires recompiling the app
 
 To "build a widget once, run on macOS and Windows", a widget can't be compiled Swift. Full option set:
 
-1. **HTML/CSS/JS, authored in TypeScript, rendered headlessly to an image** — CHOSEN. A widget is a folder with `manifest.json` + a built `index.html`/`bundle.js` (authored in TypeScript, compiled to JS) + assets. Deckhand loads it in an offscreen web view (WKWebView on macOS, WebView2 on Windows), hands it data via a typed JS bridge, and snapshots to the target resolution (240×240 or 1424×280). Pros: truly write-once, the largest author pool, TypeScript gives authors types + tooling, easy styling/animation/Canvas/SVG, sandboxable (no filesystem/native access — only the data we inject). Cons: a web runtime per render (fine at a 10–60 s cadence). We publish an official `@deckhand/widget-sdk` TypeScript package with the типed data API and a local preview harness.
+1. **HTML/CSS/JS, authored in TypeScript, rendered headlessly to an image** — CHOSEN. A widget is a folder with `manifest.json` + a built `index.html`/`bundle.js` (authored in TypeScript, compiled to JS) + assets. Deckhand loads it in an offscreen web view (WKWebView on macOS, WebView2 on Windows), hands it data via a typed JS bridge, and snapshots to the target resolution (240×240 or 1424×280). Pros: truly write-once, the largest author pool, TypeScript gives authors types + tooling, easy styling/animation/Canvas/SVG, sandboxable (no filesystem/native access — only the data we inject). Cons: a web runtime per render (fine at a 10–60 s cadence). We publish an official `@deckhand/widget-sdk` TypeScript package with the typed data API and a local preview harness.
 2. **Declarative JSON/YAML spec** (layout + data bindings, no code). Safest and tiny, renders natively on each platform, but limited expressiveness (no custom charts/animation); good as a *simple* widget tier layered on top of option 1 later.
 3. **WASM module** (write in Rust/AssemblyScript/TinyGo, run anywhere). Very sandboxable and fast, but a much smaller author pool and more toolchain friction than TS — overkill for drawing a card.
 4. **Lua / QuickJS embedded script** (a small scripting runtime drawing to a canvas). Lighter than a full web view, but a bespoke API few people know; weaker ecosystem than TS.
@@ -51,4 +51,4 @@ Data/permissions a widget can request (so authors don't each re-implement): cloc
 
 ## For now
 
-Built-ins stay native Swift (fast, no runtime). The community format (likely format 1) is the next architecture step — pending your call in ROADMAP.md open question #1. This file will carry the full authoring guide once the format is chosen.
+Built-ins stay native Swift (fast, no runtime). The community format is decided (web / TypeScript, option 1 above) and is the next architecture step. This file will carry the full authoring guide once the SDK and runtime exist.
