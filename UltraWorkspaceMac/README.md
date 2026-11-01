@@ -175,7 +175,7 @@ Mirrors [`docs/ROADMAP.md`](docs/ROADMAP.md); that file is authoritative.
 - **KnobKey → volume** and **DotKey → Mac actions** — understood, not implemented; need the profile-write path above plus a persistent connection (heartbeat act 20) that answers act 1000000.
 - **Presence → wake** via an on-device scene (`BATCH_CREATE_SCENE`) — understood, not implemented.
 - **Module OTA firmware flashing** (`UBX-OTA-FILE` `.bin`, `MODULE_OAT_START` / `DATA` — framing fully specified in `PROTOCOL.md`).
-- **VivoCube panel size** — measure with the panel size test and raise the 240 px canvas if the panel is larger.
+- ~~VivoCube panel size~~ — resolved: the panel is 240 × 240 (hardware test 2026-11-01).
 - A Stream-Deck-style **widget marketplace** (web/TypeScript widget format, see `docs/WIDGETS.md`), and a notarized / Developer-ID signed release.
 
 ## Ecosystem features (reference / backlog)

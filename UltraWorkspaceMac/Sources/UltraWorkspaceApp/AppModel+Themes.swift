@@ -103,7 +103,8 @@ extension AppModel {
     /// Panel-size experiment: push an opaque `size`×`size` test pattern (frame,
     /// rings, label) as layer 1 / widget 101 so the physical resolution of the
     /// VivoCube can be read off the glass. 240 is the official 100 % icon size;
-    /// the panel itself looked larger in photos.
+    /// Hardware test 2026-11-01: the panel IS 240 × 240 (280 px is not shown);
+    /// the wide-looking border is the bezel. Kept as an upload diagnostic.
     func sendPanelSizeTest(serial: String, size: Int) {
         guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
         let w = size, h = size
