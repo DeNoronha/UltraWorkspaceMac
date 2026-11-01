@@ -152,9 +152,9 @@ final class AppModel: ObservableObject {
                     self.selectedModuleSerial = (mods.first(where: { $0.isVivoCube }) ?? mods.first)?.serial
                 }
                 if mods.isEmpty {
-                    self.say("No devices reported (act 1300).")
-                    if let raw = try? await session.rawRequest(act: Proto.actGetDevice) {
-                        self.say("raw 1300 → \(raw.prefix(500))")
+                    self.say("No modules reported.")
+                    if let raw = try? await session.rawRequest(act: Proto.actGetCoreBarConfig, data: ["type": "GATEWAY_CONFIG"]) {
+                        self.say("raw 30740 → \(raw.prefix(700))")
                     }
                 } else {
                     let names = mods.map { "\($0.displayName) (\($0.prettyType))" }.joined(separator: ", ")

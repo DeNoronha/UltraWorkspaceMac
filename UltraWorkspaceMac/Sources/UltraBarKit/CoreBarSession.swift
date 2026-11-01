@@ -47,38 +47,81 @@ public struct CoreBarSession: Sendable {
         }
     }
 
-    /// List all devices/modules the CoreBar knows about (GET_DEVICE / act 1300).
+    /// List the physical modules attached to the CoreBar. Primary source is the
+    /// gateway config (GET_COREBAR_CONFIG / act 30740), whose `canGateway` /
+    /// `meshGateway` endpoints are the QuantumLink modules. Falls back to
+    /// GET_DEVICE (1300) for logical/integration devices.
     public func listModules() async throws -> [AttachedModule] {
         let client = try await authedClient()
         defer { Task { await client.close() } }
         let emptyObj = try JSONSerialization.data(withJSONObject: [String: Any]())
-        guard let line = try await client.request(act: Proto.actGetDevice, dataJSON: emptyObj, timeout: 15),
-              let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-              let arr = reply["data"] as? [[String: Any]] else { return [] }
-        return arr.map { d in
-            let attr = d["attr"] as? [String: Any]
-            let serial = (attr?["serialNo"] as? String)
-                ?? (attr?["sn"] as? String)
-                ?? (attr?["serial"] as? String)
-                ?? (d["serialNo"] as? String)
-                ?? (d["id"] as? String) ?? ""
-            return AttachedModule(
-                deviceId: (d["id"] as? String) ?? serial,
-                name: (d["name"] as? String) ?? "",
-                type: (d["deviceType"] as? String) ?? "UNKNOWN",
-                online: (d["online"] as? Bool) ?? true,
-                serial: serial
-            )
+        // GET_COREBAR_CONFIG expects a ReadWriteRequest naming what to read.
+        let gwReq = try JSONSerialization.data(withJSONObject: ["type": "GATEWAY_CONFIG"])
+
+        var modules: [AttachedModule] = []
+        if let line = try await client.request(act: Proto.actGetCoreBarConfig, dataJSON: gwReq, timeout: 15),
+           let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+           let data = reply["data"] as? [String: Any] {
+            for key in ["canGateway", "meshGateway"] {
+                if let gw = data[key] as? [String: Any], let eps = gw["endpoints"] as? [[String: Any]] {
+                    modules.append(contentsOf: eps.map { Self.endpoint($0) })
+                }
+            }
+            if let eps = data["endpoints"] as? [[String: Any]] {
+                modules.append(contentsOf: eps.map { Self.endpoint($0) })
+            }
+        }
+        if !modules.isEmpty { return modules }
+
+        // Fallback: GET_DEVICE (logical/integration devices).
+        if let line = try await client.request(act: Proto.actGetDevice, dataJSON: emptyObj, timeout: 15),
+           let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+           let arr = reply["data"] as? [[String: Any]] {
+            return arr.map { d in
+                let serial = (d["serialNo"] as? String) ?? (d["id"] as? String) ?? ""
+                return AttachedModule(deviceId: (d["id"] as? String) ?? serial,
+                                      name: (d["name"] as? String) ?? "",
+                                      type: (d["deviceType"] as? String) ?? "UNKNOWN",
+                                      online: (d["online"] as? Bool) ?? true, serial: serial)
+            }
+        }
+        return []
+    }
+
+    private static func endpoint(_ e: [String: Any]) -> AttachedModule {
+        let serial = (e["serialNumber"] as? String) ?? (e["serialNo"] as? String) ?? (e["uid"] as? String) ?? ""
+        return AttachedModule(
+            deviceId: (e["uid"] as? String) ?? serial,
+            name: (e["name"] as? String) ?? "",
+            type: productType(e["productId"]),
+            online: (e["online"] as? Bool) ?? true,
+            serial: serial
+        )
+    }
+
+    /// Map a QLinkProductId (int or name) to our normalized type string.
+    private static func productType(_ v: Any?) -> String {
+        if let s = v as? String, !s.isEmpty { return s.uppercased() }
+        let n: Int? = (v as? Int) ?? (v as? NSNumber)?.intValue
+        switch n {
+        case 268435456: return "EXT_SCREEN"
+        case 268435457: return "DOT_KEY"
+        case 268435458: return "KNOB_KEY"
+        case 268435459: return "VIVO_CUBE"
+        case 268435460: return "SENSE_CUBE"
+        case 268435461: return "PC_BOOT"
+        case -1: return "GATEWAY"
+        default: return "UNKNOWN"
         }
     }
 
     /// Diagnostic: send an act with empty `{}` data and return the raw reply line
     /// (as text). Used to inspect what a given firmware actually returns.
-    public func rawRequest(act: Int, timeout: TimeInterval = 15) async throws -> String {
+    public func rawRequest(act: Int, data: [String: Any] = [:], timeout: TimeInterval = 15) async throws -> String {
         let client = try await authedClient()
         defer { Task { await client.close() } }
-        let empty = try JSONSerialization.data(withJSONObject: [String: Any]())
-        guard let line = try await client.request(act: act, dataJSON: empty, timeout: timeout) else {
+        let json = try JSONSerialization.data(withJSONObject: data)
+        guard let line = try await client.request(act: act, dataJSON: json, timeout: timeout) else {
             return "<no reply to act \(act)>"
         }
         return String(data: line, encoding: .utf8) ?? "<non-utf8 reply>"

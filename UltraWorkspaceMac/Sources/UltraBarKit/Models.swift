@@ -87,7 +87,11 @@ public struct AttachedModule: Identifiable, Hashable, Sendable {
         switch type {
         case "VIVO_CUBE": return "VivoCube"
         case "SENSE_CUBE": return "SenseCube"
-        case "PC_BOOT": return "PC-Boot"
+        case "KNOB_KEY": return "KnobKey"
+        case "DOT_KEY": return "DotKey"
+        case "PC_BOOT", "PC_BOOT_CARD": return "PC-Boot"
+        case "EXT_SCREEN": return "CoreBar screen"
+        case "GATEWAY": return "Gateway"
         case "COMPUTER_INFO": return "Computer"
         case "ACTION": return "Action"
         case "AUDIO_PLAYER": return "Audio"
