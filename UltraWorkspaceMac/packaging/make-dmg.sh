@@ -20,8 +20,11 @@ if command -v cupsfilter >/dev/null 2>&1; then
 fi
 
 # Is the app signed with a Developer ID (→ we can notarize) or ad-hoc?
+# (No grep -q in a pipeline here: with `pipefail`, grep closing the pipe early
+# makes codesign exit 141 and the test silently fails.)
 SIGNED_DEVID=0
-if codesign -dv "$ROOT/dist/Deckhand.app" 2>&1 | grep -q "Authority=Developer ID Application"; then SIGNED_DEVID=1; fi
+SIGINFO="$(codesign -dvv "$ROOT/dist/Deckhand.app" 2>&1 || true)"
+case "$SIGINFO" in *"Authority=Developer ID Application"*) SIGNED_DEVID=1 ;; esac
 
 if [ "$SIGNED_DEVID" = 1 ]; then
 cat > "$STAGE/Read Me First.txt" <<'TXT'
@@ -64,7 +67,7 @@ rm -rf "$STAGE"
 #   xcrun notarytool store-credentials "deckhand-notary" --apple-id <apple-id> --team-id <TEAMID> --password <app-specific-password>
 NOTARY_PROFILE="${DECKHAND_NOTARY_PROFILE:-deckhand-notary}"
 if [ "$SIGNED_DEVID" = 1 ]; then
-    IDENTITY="$(codesign -dv "$ROOT/dist/Deckhand.app" 2>&1 | grep -o 'Authority=Developer ID Application: [^$]*' | head -1 | sed 's/^Authority=//')"
+    IDENTITY="$(printf '%s\n' "$SIGINFO" | sed -n 's/^Authority=\(Developer ID Application: .*\)$/\1/p' | sed -n 1p)"
     echo "==> signing DMG with $IDENTITY"
     codesign --force --timestamp --sign "$IDENTITY" "$DMG"
     if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
