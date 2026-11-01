@@ -100,6 +100,47 @@ extension AppModel {
         }
     }
 
+    /// Panel-size experiment: push an opaque `size`×`size` test pattern (frame,
+    /// rings, label) as layer 1 / widget 101 so the physical resolution of the
+    /// VivoCube can be read off the glass. 240 is the official 100 % icon size;
+    /// the panel itself looked larger in photos.
+    func sendPanelSizeTest(serial: String, size: Int) {
+        guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
+        let w = size, h = size
+        let cs = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        ctx.setFillColor(CGColor(red: 0.06, green: 0.06, blue: 0.10, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        // 4 px frame at the very edge: if visible on all sides, the panel is ≥ size.
+        ctx.setStrokeColor(CGColor(red: 1, green: 0.3, blue: 0.2, alpha: 1)); ctx.setLineWidth(8)
+        ctx.stroke(CGRect(x: 4, y: 4, width: w - 8, height: h - 8))
+        // Rings every 40 px from the centre to read the scale.
+        ctx.setStrokeColor(CGColor(gray: 0.7, alpha: 1)); ctx.setLineWidth(2)
+        var r = 40
+        while r < size / 2 { ctx.strokeEllipse(in: CGRect(x: w/2 - r, y: h/2 - r, width: 2*r, height: 2*r)); r += 40 }
+        // Label
+        let label = "\(size)" as NSString
+        let font = NSFont.systemFont(ofSize: CGFloat(size) * 0.28, weight: .bold)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.white]
+        let sz = label.size(withAttributes: attrs)
+        label.draw(at: CGPoint(x: (CGFloat(w) - sz.width) / 2, y: (CGFloat(h) - sz.height) / 2), withAttributes: attrs)
+        NSGraphicsContext.restoreGraphicsState()
+        guard let data = ctx.data else { return }
+        let rgba = Array(UnsafeBufferPointer(start: data.assumingMemoryBound(to: UInt8.self), count: w * h * 4))
+        let bin = DeviceImage.encode(width: w, height: h, rgba: rgba)
+        let tgz = DeployPackager.buildTgz(layers: [.init(layerId: 1, widgetId: 101, defaultBin: bin, pressedBin: bin)], defaultLayer: 1)
+        say("Sending \(size)×\(size) test pattern to \(serial)… (\(tgz.count) B)")
+        Task {
+            do {
+                _ = try await session.upload(serial: serial, tgz: tgz)
+                self.selectFirstLayerAfterSettle(session: session, serial: serial)
+                self.say("\(size)×\(size) test accepted — in ~10 s: is the red frame visible on all four sides? Then the panel is ≥ \(size) px.")
+            } catch { self.say("Size test failed: \(error.localizedDescription)") }
+        }
+    }
+
     /// Put a black VivoCube back: screen on + layer 1 / widget 101.
     func recoverVivoDisplay(serial: String) {
         guard let bar = selectedCoreBar, let session = session(for: bar) else { return }

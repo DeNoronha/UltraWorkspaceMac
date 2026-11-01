@@ -22,13 +22,16 @@ export function startDiscovery(): dgram.Socket {
     const text = msg.toString('utf8').trim();
     state.record('in', 'udp', `${rinfo.address}:${rinfo.port} ${text}`);
 
-    let isDiscover = false;
-    try {
-      const obj = JSON.parse(text);
-      isDiscover = obj && obj.act === 'discover';
-    } catch {
-      // Tolerate non-JSON probes; match on the substring as a fallback.
-      isDiscover = text.includes('"discover"');
+    // The official client sends the plain string `discovery.ultrabar`;
+    // Deckhand sends `{"act":"discover"}` (the real CoreBar answers both).
+    let isDiscover = text === 'discovery.ultrabar';
+    if (!isDiscover) {
+      try {
+        const obj = JSON.parse(text);
+        isDiscover = obj && obj.act === 'discover';
+      } catch {
+        isDiscover = text.includes('"discover"') || text.includes('discovery.ultrabar');
+      }
     }
     if (!isDiscover) return;
 

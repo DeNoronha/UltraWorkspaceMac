@@ -269,6 +269,16 @@ private struct VivoCubeView: View {
                         }
                         Text("Uploads are applied by the VivoCube itself a few seconds after the CoreBar accepts them. \"Screen Off\" is remembered by the CoreBar until you turn it on again.")
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        HStack {
+                            Menu {
+                                ForEach([240, 280, 320, 360, 390, 412, 454, 466, 480], id: \.self) { s in
+                                    Button("\(s) × \(s)") { model.sendPanelSizeTest(serial: module.serial, size: s) }
+                                }
+                            } label: { Label("Panel size test…", systemImage: "ruler") }
+                            .frame(width: 180)
+                            Text("Experiment: pushes a test pattern of that size. A red frame on all four sides = the panel is at least that big.")
+                                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
 
                         Divider()
                         RotationView(target: .vivocube, publishSerial: module.serial)
