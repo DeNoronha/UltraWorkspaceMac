@@ -73,6 +73,22 @@ public struct CoreBarSession: Sendable {
         }
         if !modules.isEmpty { return modules }
 
+        // Live bus scan: the gateway config is empty until a PC app writes it,
+        // so trigger a QuantumLink discovery and collect the pushed endpoints
+        // (act 30102, one per found module).
+        let canData = try JSONSerialization.data(withJSONObject: "", options: [.fragmentsAllowed])
+        try await client.fire(act: Proto.actModuleStartDiscovery, dataJSON: canData)
+        let found = await client.collect(act: Proto.actModuleDiscoveryReplay, duration: 7)
+        var bySerial: [String: AttachedModule] = [:]
+        for line in found {
+            if let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+               let d = obj["data"] as? [String: Any] {
+                let m = Self.endpoint(d)
+                if !m.serial.isEmpty { bySerial[m.serial] = m }
+            }
+        }
+        if !bySerial.isEmpty { return Array(bySerial.values) }
+
         // Fallback: GET_DEVICE (logical/integration devices).
         if let line = try await client.request(act: Proto.actGetDevice, dataJSON: emptyObj, timeout: 15),
            let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any],

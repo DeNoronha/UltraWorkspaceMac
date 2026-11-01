@@ -234,6 +234,32 @@ public actor CoreBarClient {
         return nil
     }
 
+    /// Fire a message without waiting for its reply (for push-based flows).
+    public func fire(act: Int, dataJSON: Data?) async throws {
+        let msgId = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        var payload: [String: Any] = ["act": act, "id": msgId]
+        if let dataJSON {
+            payload["data"] = try JSONSerialization.jsonObject(with: dataJSON, options: [.fragmentsAllowed])
+        } else {
+            payload["data"] = NSNull()
+        }
+        try await send(payload)
+    }
+
+    /// Collect pushed messages with the given `act` for `duration` seconds.
+    public func collect(act: Int, duration: TimeInterval) async -> [Data] {
+        var out: [Data] = []
+        let deadline = Date().addingTimeInterval(duration)
+        while Date() < deadline {
+            guard let line = await readLineWithTimeout(until: deadline) else { break }
+            if let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+               intValue(obj["act"]) == act {
+                out.append(line)
+            }
+        }
+        return out
+    }
+
     private func readLineWithTimeout(until deadline: Date) async -> Data? {
         let remaining = deadline.timeIntervalSinceNow
         if remaining <= 0 { return nil }
