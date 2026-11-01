@@ -28,6 +28,7 @@ struct ContentView: View {
             SettingsView().environmentObject(model).environmentObject(settings)
         }
         .sheet(isPresented: $model.showingAbout) { AboutView() }
+        .sheet(isPresented: $model.showingAddIP) { AddByIPSheet().environmentObject(model) }
         .sheet(isPresented: Binding(get: { model.pairingPrompt != nil },
                                     set: { if !$0 { model.pairingPrompt = nil } })) {
             VStack(spacing: 16) { ProgressView(); Text(model.pairingPrompt ?? "").multilineTextAlignment(.center) }
@@ -78,6 +79,9 @@ private struct SidebarView: View {
                 Button { model.scan() } label: {
                     Label(model.isScanning ? "Scanning…" : "Scan for CoreBars", systemImage: "antenna.radiowaves.left.and.right")
                 }.buttonStyle(.borderless).disabled(model.isScanning)
+                Button { model.showingAddIP = true } label: {
+                    Label("Add by IP…", systemImage: "number")
+                }.buttonStyle(.borderless)
             }
 
             if model.selectedCoreBar != nil {
@@ -126,6 +130,32 @@ private struct SidebarView: View {
         case "PC_BOOT": return "power"
         default: return "cube"
         }
+    }
+}
+
+// MARK: - Add by IP
+
+@MainActor final class DraftIP: ObservableObject { @Published var ip = "127.0.0.1" }
+
+private struct AddByIPSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var draft = DraftIP()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Add a CoreBar by IP").font(.title3).bold()
+            Text("Enter the device's IP address. Useful for a mock CoreBar on localhost, or when discovery can't find it (e.g. across Docker's network).")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            TextField("192.168.1.50", text: $draft.ip).textFieldStyle(.roundedBorder).frame(width: 260)
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button("Add") { model.addCoreBar(byIP: draft.ip) }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(draft.ip.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }.padding(24).frame(width: 340)
     }
 }
 

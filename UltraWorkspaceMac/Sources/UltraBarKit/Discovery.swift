@@ -93,6 +93,55 @@ public enum Discovery {
         return Array(found.values).sorted { $0.name < $1.name }
     }
 
+    /// Targeted (unicast) discovery of a single CoreBar at a known IP — used by
+    /// "Add by IP", e.g. to reach a mock running on localhost (where broadcast
+    /// discovery doesn't cross Docker's NAT). Returns the CoreBar if it replies.
+    public static func probe(ip: String, timeout: TimeInterval = 3) async -> CoreBar? {
+        await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .userInitiated).async {
+                cont.resume(returning: blockingProbe(ip: ip, timeout: timeout))
+            }
+        }
+    }
+
+    private static func blockingProbe(ip: String, timeout: TimeInterval) -> CoreBar? {
+        let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        guard fd >= 0 else { return nil }
+        defer { close(fd) }
+
+        var dst = sockaddr_in()
+        dst.sin_family = sa_family_t(AF_INET)
+        dst.sin_port = Proto.discoveryPort.bigEndian
+        guard inet_pton(AF_INET, ip, &dst.sin_addr) == 1 else { return nil }
+
+        let probe = Array(#"{"act":"discover"}"#.utf8)
+        probe.withUnsafeBufferPointer { buf in
+            _ = withUnsafePointer(to: &dst) { p in
+                p.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                    sendto(fd, buf.baseAddress, buf.count, 0, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
+                }
+            }
+        }
+
+        var rbuf = [UInt8](repeating: 0, count: 4096)
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            var readfds = fd_set(); fdZero(&readfds); fdSet(fd, &readfds)
+            var tv = timeval(tv_sec: 0, tv_usec: 300_000)
+            if select(fd + 1, &readfds, nil, nil, &tv) > 0 {
+                var from = sockaddr_in()
+                var fromLen = socklen_t(MemoryLayout<sockaddr_in>.size)
+                let n = withUnsafeMutablePointer(to: &from) { p in
+                    p.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                        recvfrom(fd, &rbuf, rbuf.count, 0, sa, &fromLen)
+                    }
+                }
+                if n > 0, let bar = parse(Data(rbuf[0..<n]), from: ip) { return bar }
+            }
+        }
+        return nil
+    }
+
     static func parse(_ data: Data, from: String) -> CoreBar? {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               obj["tcpPort"] != nil else { return nil }

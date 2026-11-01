@@ -22,6 +22,7 @@ final class AppModel: ObservableObject {
     @Published var pairingPrompt: String?
     @Published var showingSettings = false
     @Published var showingAbout = false
+    @Published var showingAddIP = false
     @Published var nav: NavItem = .coreBar
     @Published var selectedAddon: Theme = .weather
 
@@ -113,6 +114,26 @@ final class AppModel: ObservableObject {
                 self.say("No CoreBars found. Make sure the CoreBar and this Mac are on the same Wi-Fi, then scan again.")
             } else {
                 self.say("Found \(found.count) CoreBar\(found.count == 1 ? "" : "s").")
+            }
+        }
+    }
+
+    /// Add a CoreBar by IP (targeted unicast discovery). Falls back to a manual
+    /// entry if there's no discovery reply, so you can still try to pair — handy
+    /// for a mock on localhost or a device that doesn't answer unicast.
+    func addCoreBar(byIP rawIP: String) {
+        let ip = rawIP.trimmingCharacters(in: .whitespaces)
+        guard !ip.isEmpty else { return }
+        showingAddIP = false
+        say("Probing \(ip)…")
+        Task {
+            if let bar = await Discovery.probe(ip: ip) {
+                if !self.discovered.contains(where: { $0.serialNo == bar.serialNo }) { self.discovered.append(bar) }
+                self.say("Found \(bar.name.isEmpty ? bar.serialNo : bar.name) at \(ip). Tap Pair in the sidebar.")
+            } else {
+                let bar = CoreBar(serialNo: "manual-\(ip)", version: "", ip: ip, name: ip, tcpPort: Int(Proto.controlPort))
+                if !self.discovered.contains(where: { $0.serialNo == bar.serialNo }) { self.discovered.append(bar) }
+                self.say("No discovery reply from \(ip) — added it anyway. Tap Pair to try.")
             }
         }
     }
