@@ -36,15 +36,32 @@ extension AppModel {
         say("Display stopped.")
     }
 
-    /// Render one theme now and push it to the VivoCube.
-    func pushTheme(_ theme: Theme, settings: AppSettings) async {
-        guard let bar = selectedCoreBar, let session = session(for: bar), let serial = vivoCubeSerial else { return }
+    /// Render one theme now and push it to a specific VivoCube (default: first).
+    func pushTheme(_ theme: Theme, settings: AppSettings, to serial: String? = nil) async {
+        guard let bar = selectedCoreBar, let session = session(for: bar),
+              let target = serial ?? vivoCubeSerial else { return }
         guard let rgba = await renderTheme(theme, settings: settings) else { return }
         let bin = DeviceImage.encode(width: 240, height: 240, rgba: rgba)
         let layer = DeployPackager.Layer(layerId: 1, widgetId: 101, defaultBin: bin, pressedBin: bin)
         let tgz = DeployPackager.buildTgz(layers: [layer], defaultLayer: 1)
-        do { _ = try await session.upload(serial: serial, tgz: tgz) }
+        do { _ = try await session.upload(serial: target, tgz: tgz) }
         catch { say("\(theme.title): push failed (\(error.localizedDescription))") }
+    }
+
+    /// Publish one add-on to a specific VivoCube now (user-facing, with status).
+    func publishAddon(_ theme: Theme, to serial: String, settings: AppSettings) {
+        guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
+        say("Publishing \(theme.title) to \(serial)…")
+        Task {
+            guard let rgba = await self.renderTheme(theme, settings: settings) else {
+                self.say("\(theme.title): could not render."); return
+            }
+            let bin = DeviceImage.encode(width: 240, height: 240, rgba: rgba)
+            let layer = DeployPackager.Layer(layerId: 1, widgetId: 101, defaultBin: bin, pressedBin: bin)
+            let tgz = DeployPackager.buildTgz(layers: [layer], defaultLayer: 1)
+            do { _ = try await session.upload(serial: serial, tgz: tgz); self.say("\(theme.title) published to \(serial). ✓") }
+            catch { self.say("\(theme.title): publish failed (\(error.localizedDescription))") }
+        }
     }
 
     private func renderTheme(_ theme: Theme, settings: AppSettings) async -> [UInt8]? {

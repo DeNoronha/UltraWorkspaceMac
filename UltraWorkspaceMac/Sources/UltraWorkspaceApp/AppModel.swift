@@ -21,6 +21,8 @@ final class AppModel: ObservableObject {
     @Published var log: [LogEntry] = []
     @Published var pairingPrompt: String?
     @Published var showingSettings = false
+    @Published var nav: NavItem = .coreBar
+    @Published var selectedAddon: Theme = .weather
 
     // Upload options (VivoCube native resolution is ~240×240)
     @Published var canvasSize = 240
