@@ -81,7 +81,7 @@ public struct CoreBarSession: Sendable {
         let meshData = try JSONSerialization.data(withJSONObject: "mesh", options: [.fragmentsAllowed])
         try await client.fire(act: Proto.actModuleStartDiscovery, dataJSON: canData)
         try await client.fire(act: Proto.actModuleStartDiscovery, dataJSON: meshData)
-        let found = await client.collect(act: Proto.actModuleDiscoveryReplay, duration: 12)
+        let found = await client.collect(act: Proto.actModuleDiscoveryReplay, duration: 16)
         var bySerial: [String: AttachedModule] = [:]
         for line in found {
             if let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
@@ -228,8 +228,23 @@ public struct CoreBarSession: Sendable {
         _ = await writeProperty(serial: serial, propertyId: Proto.Property.reboot, value: true, timeout: 0.3)
     }
 
-    /// Upload a layer package (tgz) to a module over HTTP.
+    /// Upload a layer package (tgz) to a module over HTTP. If the module isn't
+    /// registered yet ("module not found"), provision the CoreBar once and retry.
     public func upload(serial: String, tgz: Data) async throws -> Bool {
+        let (accepted, text) = try await postUpload(serial: serial, tgz: tgz)
+        if accepted { return true }
+        if text.contains("module not found") {
+            WireLog.shared.event("upload: module not registered — provisioning then retrying")
+            _ = try? await provision(scanSeconds: 14)
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            let (ok2, text2) = try await postUpload(serial: serial, tgz: tgz)
+            if ok2 { return true }
+            throw UltraBarError.uploadRejected(text2)
+        }
+        throw UltraBarError.uploadRejected(text)
+    }
+
+    private func postUpload(serial: String, tgz: Data) async throws -> (accepted: Bool, text: String) {
         let boundary = "ubw-\(UUID().uuidString)"
         guard let url = URL(string: "http://\(ip):\(Proto.uploadPort)/upload?serialNo=\(serial.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? serial)") else {
             throw UltraBarError.protocolError("bad upload URL")
@@ -251,8 +266,7 @@ public struct CoreBarSession: Sendable {
         WireLog.shared.http("← \((resp as? HTTPURLResponse)?.statusCode ?? 0) \(text.prefix(200))")
         let httpOK = (resp as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
         let accepted = httpOK && text.contains("\"state\":200") && text.contains("\"msg\":\"ok\"")
-        if !accepted { throw UltraBarError.uploadRejected(text.isEmpty ? "HTTP \( (resp as? HTTPURLResponse)?.statusCode ?? 0)" : text) }
-        return true
+        return (accepted, text.isEmpty ? "HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0)" : text)
     }
 
     // helpers
