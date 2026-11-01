@@ -83,6 +83,7 @@ public actor CoreBarClient {
         if certMismatch, let p = presentedCertSHA256, let pin = pinnedCertSHA256 {
             throw UltraBarError.certPinMismatch(presented: p, pinned: pin)
         }
+        WireLog.shared.event("connected \(host):\(port) (TLS) cert=\(presentedCertSHA256?.prefix(16) ?? "?")")
         startReceiveLoop()
     }
 
@@ -132,7 +133,10 @@ public actor CoreBarClient {
             let line = buffer.subdata(in: buffer.startIndex..<nl)
             buffer.removeSubrange(buffer.startIndex...nl)
             let trimmed = line.filter { $0 != 0x0D }
-            if !trimmed.isEmpty { pendingLines.append(Data(trimmed)) }
+            if !trimmed.isEmpty {
+                pendingLines.append(Data(trimmed))
+                WireLog.shared.received(String(bytes: trimmed, encoding: .utf8) ?? "<binary>")
+            }
         }
         while !lineWaiters.isEmpty, !pendingLines.isEmpty {
             let w = lineWaiters.removeFirst()
@@ -154,6 +158,7 @@ public actor CoreBarClient {
     private func send(_ message: [String: Any]) async throws {
         guard let conn = connection else { throw UltraBarError.notConnected }
         var data = try JSONSerialization.data(withJSONObject: message, options: [.sortedKeys])
+        WireLog.shared.sent(String(data: data, encoding: .utf8) ?? "<binary>")
         data.append(0x0A)
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             conn.send(content: data, completion: .contentProcessed { err in

@@ -6,4 +6,5 @@ enum NavItem: Hashable {
     case module(String)   // module serial
     case addons
     case people
+    case logs
 }

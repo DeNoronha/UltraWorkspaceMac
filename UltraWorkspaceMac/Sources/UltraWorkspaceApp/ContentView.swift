@@ -77,6 +77,7 @@ private struct SidebarView: View {
             Section("Configure") {
                 Label("Add-ons", systemImage: "puzzlepiece.extension").tag(NavItem.addons)
                 Label("People", systemImage: "person.2").tag(NavItem.people)
+                Label("Logs", systemImage: "doc.text.magnifyingglass").tag(NavItem.logs)
             }
 
             Section("Discovered") {
@@ -123,17 +124,15 @@ private struct DetailRouter: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        if model.selectedCoreBar == nil {
-            Unavailable()
-        } else {
-            switch model.nav {
-            case .coreBar: CoreBarView()
-            case .module(let serial):
-                if let m = model.modules.first(where: { $0.serial == serial }) { ModuleRouter(module: m) }
-                else { CoreBarView() }
-            case .addons: AddonsView()
-            case .people: PeopleView()
-            }
+        switch model.nav {
+        case .addons: AddonsView()
+        case .people: PeopleView()
+        case .logs: LogsView()
+        case .coreBar:
+            if model.selectedCoreBar != nil { CoreBarView() } else { Unavailable() }
+        case .module(let serial):
+            if model.selectedCoreBar != nil, let m = model.modules.first(where: { $0.serial == serial }) { ModuleRouter(module: m) }
+            else if model.selectedCoreBar != nil { CoreBarView() } else { Unavailable() }
         }
     }
 }

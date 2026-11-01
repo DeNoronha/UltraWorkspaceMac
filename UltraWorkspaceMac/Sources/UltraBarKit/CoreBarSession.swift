@@ -245,8 +245,10 @@ public struct CoreBarSession: Sendable {
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         req.httpBody = body
 
+        WireLog.shared.http("POST \(url.absoluteString) (\(tgz.count) B tgz)")
         let (data, resp) = try await URLSession.shared.data(for: req)
         let text = String(data: data, encoding: .utf8) ?? ""
+        WireLog.shared.http("← \((resp as? HTTPURLResponse)?.statusCode ?? 0) \(text.prefix(200))")
         let httpOK = (resp as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
         let accepted = httpOK && text.contains("\"state\":200") && text.contains("\"msg\":\"ok\"")
         if !accepted { throw UltraBarError.uploadRejected(text.isEmpty ? "HTTP \( (resp as? HTTPURLResponse)?.statusCode ?? 0)" : text) }
