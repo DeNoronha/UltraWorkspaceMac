@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import CoreGraphics
 
-/// Renders a Disk / Storage widget into RGBA8888 for a 240×240 round AMOLED,
+/// Renders a Disk / Storage widget into RGBA8888 for a 240×240 square AMOLED,
 /// in a consistent style with StatCard. Reads the startup volume itself —
 /// `render` takes NO data argument. Square-first (bottom-left origin, NOT flipped).
 @MainActor

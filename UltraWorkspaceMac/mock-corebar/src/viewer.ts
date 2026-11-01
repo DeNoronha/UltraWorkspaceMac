@@ -61,7 +61,7 @@ export function startViewer(): import('http').Server {
                 widgetId: img.widgetId,
                 receivedAt: img.receivedAt,
                 packageBytes: img.packageBytes,
-                round: m.productName === 'VIVO_CUBE',
+                round: false, // the VivoCube panel is square (240×240, verified on hardware)
               }
             : null,
         };

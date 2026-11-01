@@ -4,7 +4,7 @@ import CoreGraphics
 
 /// Renders a crypto ticker card into RGBA8888, matching StatCard's style
 /// (dark vertical-gradient card, title top-left, SF Symbol top-right, rows).
-/// Square-first for the 240x240 round AMOLED.
+/// Square-first for the 240x240 square AMOLED.
 @MainActor
 enum CryptoCard {
     static func render(_ coins: [CryptoStats.Coin], size: Int, currencySymbol: String = "€") -> [UInt8]? {

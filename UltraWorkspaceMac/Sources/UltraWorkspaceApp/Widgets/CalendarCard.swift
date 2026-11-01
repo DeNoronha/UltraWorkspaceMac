@@ -3,7 +3,7 @@ import AppKit
 import CoreGraphics
 
 /// Renders a Calendar / next-event card into row-major RGBA8888 for the 240×240
-/// round AMOLED display, in the same visual language as `StatCard` (dark
+/// square AMOLED display, in the same visual language as `StatCard` (dark
 /// vertical-gradient background, title top-left, SF Symbol top-right).
 ///
 /// The returned bytes come from a CGContext with

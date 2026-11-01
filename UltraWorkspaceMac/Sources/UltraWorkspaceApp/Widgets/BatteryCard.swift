@@ -4,7 +4,7 @@ import CoreGraphics
 
 /// Renders a Battery & Power card into RGBA8888, in the same house style as
 /// StatCard (dark vertical-gradient background, title top-left, SF Symbol
-/// top-right). Designed for a 240×240 round AMOLED. Square-first.
+/// top-right). Designed for a 240×240 square AMOLED. Square-first.
 @MainActor
 enum BatteryCard {
     static func render(_ s: BatteryStats.Sample, size: Int) -> [UInt8]? {

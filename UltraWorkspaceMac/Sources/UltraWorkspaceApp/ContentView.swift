@@ -419,7 +419,7 @@ private struct DeviceInfo: View {
     }
 }
 
-/// 240×240 round preview for the VivoCube, with a picker to choose the widget.
+/// 240×240 square preview for the VivoCube (the panel is square; the bezel only looks round-ish), with a picker to choose the widget.
 private struct CubePreview: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
@@ -437,10 +437,10 @@ private struct CubePreview: View {
                     .buttonStyle(.borderless).help("Refresh preview")
             }
             ZStack {
-                Circle().fill(Color.black)
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black)
                 if let img = pm.image {
                     Image(nsImage: img).resizable().interpolation(.high)
-                        .frame(width: 200, height: 200).clipShape(Circle())
+                        .frame(width: 200, height: 200).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 } else if pm.loading {
                     ProgressView()
                 } else {
@@ -449,7 +449,7 @@ private struct CubePreview: View {
             }
             .frame(width: 210, height: 210)
             .overlay(Circle().stroke(.white.opacity(0.08), lineWidth: 1).frame(width: 200, height: 200))
-            Text("2.0″ round · 240×240").font(.caption2).foregroundStyle(.secondary)
+            Text("2.0″ square · 240×240").font(.caption2).foregroundStyle(.secondary)
         }
         .onAppear { reload() }
         .onChange(of: model.selectedAddon) { _ in reload() }
