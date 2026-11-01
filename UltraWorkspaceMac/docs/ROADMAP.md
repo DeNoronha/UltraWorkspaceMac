@@ -8,7 +8,7 @@ Deckhand is an independent, native client for the UltraBar X (CoreBar + QuantumL
 - Live bus scan + provisioning (SET_GATEWAY_CONFIG 30300) with an on-disk module cache that keeps asleep modules (e.g. the DotKey) from being dropped.
 - Push widgets to a VivoCube (RGB565 + tar/gzip over HTTP :8080). 13 widgets: weather, music, Claude usage, CPU, network, battery, storage, world clock, crypto, calendar, disk I/O, top CPU, uptime.
 - Per-device rotation screens (VivoCube now; CoreBar placeholder), live on-screen widget preview, wire-log, About, MIT license.
-- CoreBar big-screen: non-destructive preview implemented (upload zip + PREVIEW_SCREENSAVER). See PROTOCOL.md.
+- CoreBar big-screen: non-destructive preview implemented (Mac-hosted http image + PREVIEW_SCREENSAVER; the device pulls the image over HTTP). Awaiting hardware confirmation. See PROTOCOL.md.
 
 ## Near-term (next)
 

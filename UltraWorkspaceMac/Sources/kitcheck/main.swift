@@ -59,9 +59,11 @@ do {
     let w = 2, h = 2
     var rgba = [UInt8](repeating: 0xFF, count: w * h * 4)
     rgba[3] = 0x00
-    let out = DeviceImage.encode(width: w, height: h, rgba: rgba)
+    let flat = DeviceImage.encode(width: w, height: h, rgba: rgba)
+    check(Int((UInt32(flat[0]) | UInt32(flat[1]) << 8) & 0x3FF) == 4 && flat.count == 8 + w * h * 2, "default encode flattens to opaque (marker 4)")
+    let out = DeviceImage.encode(width: w, height: h, rgba: rgba, allowAlpha: true)
     let word = UInt32(out[0]) | UInt32(out[1]) << 8 | UInt32(out[2]) << 16 | UInt32(out[3]) << 24
-    check(Int(word & 0x3FF) == 5, "alpha marker == 5")
+    check(Int(word & 0x3FF) == 5, "alpha marker == 5 (opt-in)")
     check(out.count == 8 + w * h * 3, "alpha total size")
     check(out[10] == 0x00, "first pixel alpha preserved")
 }

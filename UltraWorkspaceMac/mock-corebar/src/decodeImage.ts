@@ -88,6 +88,8 @@ export interface ExtractedPackage {
   members: Map<string, Buffer>;
   /** Parsed config.json if present. */
   config?: unknown;
+  /** Raw config.json text (for logging the exact schema another client sends). */
+  configJSON?: string;
   /** widgetId → { default, pressed } decoded images. */
   widgets: Map<number, { default?: DecodedBin; pressed?: DecodedBin }>;
 }
@@ -140,14 +142,19 @@ export async function decodePackage(tgz: Buffer): Promise<ExtractedPackage> {
   }
 
   let config: unknown;
+  let configJSON: string | undefined;
   const cfg = members.get('config.json');
   if (cfg) {
+    configJSON = cfg.toString('utf8');
     try {
-      config = JSON.parse(cfg.toString('utf8'));
+      config = JSON.parse(configJSON);
     } catch {
       /* ignore malformed config */
     }
   }
+  // Log every member so unknown files from the official client are visible.
+  // eslint-disable-next-line no-console
+  console.log(`[decode] members: ${[...members.keys()].join(', ')}`);
 
-  return { members, config, widgets };
+  return { members, config, configJSON, widgets };
 }

@@ -11,12 +11,12 @@
 
 ---
 
-## 🍎 UltraWorkspace for Mac (this repository's active project)
+## 🍎 Deckhand — native macOS client (this repository's active project)
 
-> **[`UltraWorkspaceMac/`](UltraWorkspaceMac/) — a native, independent macOS client for UltraBar X, written in Swift/SwiftUI.**
+> **[`UltraWorkspaceMac/`](UltraWorkspaceMac/) — Deckhand, a native, independent macOS client for UltraBar X, written in Swift/SwiftUI.** (The folder keeps its original name; the app is called Deckhand.)
 > This is **community software, not affiliated with or endorsed by Sanytron.** The sections below mirror the official product description for reference; the actual code developed here is the native Mac app.
 >
-> It already does LAN discovery, pairing (token in the Keychain, certificate-pinned), module listing, display control, and image push. See [`UltraWorkspaceMac/README.md`](UltraWorkspaceMac/README.md) and the reverse-engineered [`UltraWorkspaceMac/PROTOCOL.md`](UltraWorkspaceMac/PROTOCOL.md).
+> It already does LAN discovery, pairing (certificate-pinned, token stored in a user-only file), module listing + provisioning, VivoCube widgets (13), SenseCube readings, a one-shot CoreBar screen preview, and ships with a mock CoreBar for hardware-free testing. See [`UltraWorkspaceMac/README.md`](UltraWorkspaceMac/README.md) and the reverse-engineered [`UltraWorkspaceMac/PROTOCOL.md`](UltraWorkspaceMac/PROTOCOL.md).
 
 ---
 
@@ -24,53 +24,31 @@
 
 UltraBar X is engineered around a **Three-Layer Architecture** to deliver real-time physical response and powerful desktop integration:
 
+```text
 +-------------------------------------------------------------------+
-
-| 1. Compute & Data Hub (PC/Mac)                                   |
-
-|    UltraWorkspace Desktop Client (Qt6)                            |
-
+| 1. Compute & Data Hub (PC/Mac)                                    |
+|    Desktop client: official UltraWorkSpace (Qt6) or Deckhand (Mac)|
 |    - System metrics collection, Profile management, Macros        |
-
 +-------------------------------------------------------------------+
-
-│
-
-USB-C (PCLINK) / Local Wi-Fi (UDP)
-
-│
-
-▼
-
+                                │
+                 USB-C (PC-LINK, power) / Local Wi-Fi (UDP + TLS)
+                                │
+                                ▼
 +-------------------------------------------------------------------+
-
 | 2. Rendering & Driver Engine (CoreBAR)                            |
-
 |    LineOS™ Embedded Operating System                              |
-
-|    - 7" UI rendering, offline automations, smarthome drivers      |
-
+|    - 5:1 ultrawide UI rendering, offline automations, drivers     |
 +-------------------------------------------------------------------+
-
-│
-
-QuantumLink™ Magnetic Bus
-
-│
-
-▼
-
+                                │
+                     QuantumLink™ Magnetic Bus
+                                │
+                                ▼
 +-------------------------------------------------------------------+
-
-| 3. Physical Interaction Layer (Modules)                          |
-
-|    - VivoCube (OLED Pad)   - KnobKey (Rotary Encoder)              |
-
-|    - DotKey (Macro Keys)   - SenseCube (Environment Radar)        |
-
+| 3. Physical Interaction Layer (Modules)                           |
+|    - VivoCube (round AMOLED)  - KnobKey (Rotary Encoder)          |
+|    - DotKey (Macro Keys)      - SenseCube (Environment Sensors)   |
 +-------------------------------------------------------------------+
-
-
+```
 
 > **Note:** Because **CoreBAR** runs its own independent operating system (**LineOS™**), smart home controls, Sonos music playback, and sensor automations remain active even when your PC is sleeping or powered off.
 

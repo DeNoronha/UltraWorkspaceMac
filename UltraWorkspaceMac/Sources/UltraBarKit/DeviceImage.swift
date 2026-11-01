@@ -5,15 +5,24 @@ import CoreGraphics
 /// an 8-byte header followed by RGB565 (2 bytes/pixel), or RGB565+Alpha
 /// (3 bytes/pixel) when the image has any transparency.
 public enum DeviceImage {
-    /// `rgba` must be row-major RGBA8888, `width*height*4` bytes.
-    public static func encode(width: Int, height: Int, rgba: [UInt8]) -> [UInt8] {
+    /// `rgba` must be row-major RGBA8888 (premultiplied, as CoreGraphics
+    /// produces), `width*height*4` bytes.
+    ///
+    /// `allowAlpha`: when false (default) the image is always emitted as opaque
+    /// RGB565 (marker 4). Premultiplied RGB over black *is* the flattened
+    /// colour, so dropping the alpha channel composites onto black. Only the
+    /// opaque format has been confirmed on hardware; the +alpha variant
+    /// (marker 5) rendered black on a VivoCube in testing, so it is opt-in.
+    public static func encode(width: Int, height: Int, rgba: [UInt8], allowAlpha: Bool = false) -> [UInt8] {
         precondition(rgba.count >= width * height * 4)
 
         var hasAlpha = false
-        outer: for y in 0..<height {
-            for x in 0..<width where rgba[(y * width + x) * 4 + 3] != 0xFF {
-                hasAlpha = true
-                break outer
+        if allowAlpha {
+            outer: for y in 0..<height {
+                for x in 0..<width where rgba[(y * width + x) * 4 + 3] != 0xFF {
+                    hasAlpha = true
+                    break outer
+                }
             }
         }
 

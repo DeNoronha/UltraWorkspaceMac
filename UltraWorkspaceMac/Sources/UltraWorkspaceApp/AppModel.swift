@@ -293,13 +293,18 @@ final class AppModel: ObservableObject {
                 self.say("Could not render the CoreBar card."); self.isWorking = false; return
             }
             do {
-                let zip = ZipWriter.archive([ZipWriter.Entry(name: "preview.png", data: png)])
-                let up = try await session.uploadScreenZip(zip, subDir: "deckhand", isFull: false)
-                guard up.accepted else {
-                    self.say("CoreBar upload rejected: \(up.text.prefix(120))"); self.isWorking = false; return
+                // The CoreBar *pulls* the image over HTTP (its preview dialog only
+                // accepts http URLs), so serve it from this Mac and hand it the URL.
+                try PreviewServer.shared.start()
+                let name = "corebar-preview-\(Int(Date().timeIntervalSince1970)).png"
+                PreviewServer.shared.publish(png, name: name)
+                guard let url = PreviewServer.shared.url(for: name, reachableFrom: session.ip) else {
+                    self.say("Could not determine this Mac's LAN address for \(session.ip)."); self.isWorking = false; return
                 }
-                let reply = try await session.previewScreen(path: "deckhand/preview.png")
-                self.say("CoreBar preview sent. Reply: \(reply.prefix(120))")
+                let reply = try await session.previewScreen(url: url)
+                self.say("CoreBar preview: \(url) — \(reply.prefix(100))")
+                // Keep it published a while so the device can fetch (and the user can retry), then free it.
+                Task { try? await Task.sleep(nanoseconds: 120_000_000_000); PreviewServer.shared.unpublish(name: name) }
             } catch {
                 self.say("CoreBar preview failed: \(error.localizedDescription)")
             }

@@ -34,6 +34,16 @@ export function startViewer(): import('http').Server {
     res.type(asset.contentType).set('Cache-Control', 'no-store').send(asset.data);
   });
 
+  // The image the mock fetched for the last PREVIEW_SCREENSAVER.
+  app.get('/img/preview', (_req, res) => {
+    const p = state.preview;
+    if (!p?.image) {
+      res.status(404).end();
+      return;
+    }
+    res.type(p.imageType ?? 'application/octet-stream').set('Cache-Control', 'no-store').send(p.image);
+  });
+
   // JSON snapshot the page polls.
   app.get('/state', (_req, res) => {
     res.set('Cache-Control', 'no-store').json({
@@ -86,20 +96,21 @@ export function startViewer(): import('http').Server {
 }
 
 /** Resolve the preview to a viewable URL when possible. */
-function resolvePreview(): { url: string; mediaType: string; at: number; viewUrl: string | null } | null {
+function resolvePreview(): {
+  url: string;
+  mediaType: string;
+  at: number;
+  viewUrl: string | null;
+  fetched: boolean;
+  fetchBytes?: number;
+  fetchError?: string;
+  note?: string;
+} | null {
   if (!state.preview) return null;
-  const { url, mediaType, at } = state.preview;
-  let viewUrl: string | null = null;
-  if (/^https?:\/\//i.test(url)) {
-    viewUrl = url; // direct http(s) image
-  } else {
-    // Try to resolve a relative path against the uploaded zip assets.
-    const rel = url.replace(/^\/+/, '');
-    if (state.assets.has(rel)) {
-      viewUrl = `/asset/${rel.split('/').map(encodeURIComponent).join('/')}?t=${at}`;
-    }
-  }
-  return { url, mediaType, at, viewUrl };
+  const { url, mediaType, at, fetched, fetchBytes, fetchError, note } = state.preview;
+  // Only what the mock actually fetched is "on screen" — exactly like the device.
+  const viewUrl = fetched ? `/img/preview?t=${at}` : null;
+  return { url, mediaType, at, viewUrl, fetched, fetchBytes, fetchError, note };
 }
 
 const PAGE = `<!doctype html>

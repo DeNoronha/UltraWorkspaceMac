@@ -148,7 +148,7 @@ The CoreBar runs LineOS (`com.ultrabar.launch`); the screen protocol lives there
 
 **Screensaver.** `SET_COREBAR_CONFIG` (30741) `data` = `{type:"BASE_SET", value: ScreensaverConfig}` where `ScreensaverConfig = {featureEnabled, lockTime(TIME_30S…NEVER), packageName, uri, ver}`; a separate screensaver app renders/rotates. `GET_COREBAR_CONFIG` (30740) `{type:"BASE_SET"}` reads it back.
 
-**Non-destructive preview.** `PREVIEW_SCREENSAVER` (30742) `data` = `{url, mediaType:"IMAGE"|"VIDEO"}` shows a full-screen image/video immediately — one-shot, changes no saved state. This is the safe way to validate upload + sizing/format. **Deckhand implements exactly this** (`uploadScreenZip` + `previewScreen`) and deliberately does NOT yet write profiles.
+**Non-destructive preview.** `PREVIEW_SCREENSAVER` (30742) `data` = `{url, mediaType:"IMAGE"|"VIDEO"}` shows a full-screen image/video immediately — one-shot, changes no saved state. **Verified on hardware (2026-11-01): `url` MUST be an http(s) URL** — `FullScreenMediaDialog` fetches it with `HttpURLConnection(new URL(url))` (10 s timeouts) and silently dismisses on anything else (relative paths, `file://`). The handler never calls `reply`, so the device sends **no acknowledgement** for 30742. Files uploaded via `/upload/zip` are *not* served back by the device (only `/tgz` → cacheDir and `/module` → filesDir/backup/module are static mounts), so Deckhand serves the PNG itself from the Mac (`PreviewServer`, ephemeral port) and passes `http://<mac-lan-ip>:<port>/<name>.png`. This is the safe way to validate upload + sizing/format. **Deckhand implements exactly this** (`uploadScreenZip` + `previewScreen`) and deliberately does NOT yet write profiles.
 
 ## Device settings — confirmed scope
 
@@ -156,7 +156,7 @@ The :7431 channel is **not** a general system-settings API. Only the act codes r
 
 Controllable today:
 - **Screensaver** — `GET {act:30740, data:{type:"BASE_SET"}}` → `ScreensaverConfig`; `SET {act:30741, data:{type:"BASE_SET", value:{featureEnabled, lockTime, uri, packageName, ver}}}`. `lockTime` is a `LockTime` enum serialized by name: `TIME_30S, TIME_1MIN, TIME_2MIN, TIME_3MIN, TIME_4MIN, TIME_5MIN, NEVER`.
-- **Screensaver preview** — `{act:30742, data:{url, mediaType:"IMAGE"|"VIDEO"}}` (one-shot).
+- **Screensaver preview** — `{act:30742, data:{url, mediaType:"IMAGE"|"VIDEO"}}` (one-shot; http(s) `url` only; no ack).
 - **Gateway endpoints** — the launcher registers `{act:30741, data:{type:"GATEWAY_CONFIG", value:CoreBarConfiguration}}` for writes, but it fails with a `ClassCastException` on the tested firmware (see *Provisioning* above), so the app writes with `SET_GATEWAY_CONFIG` (30300), which takes the config as the raw body. The matching read, `GET_COREBAR_CONFIG` (30740) `{type:"GATEWAY_CONFIG"}`, returns `null` on the tested firmware; the app tries it first anyway and falls back to the live scan.
 - **Reboot** — `{act:20100}`.
 - **Wi-Fi scan/list only** — `{act:1633}` start / `{act:1634}` stop; results pushed as `{act:1635}` (`CUBE_SCAN_WIFI_LIST_RESULT`), each `{name, signal, frequency}`, open networks filtered. No connect path.

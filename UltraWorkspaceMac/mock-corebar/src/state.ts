@@ -39,6 +39,15 @@ export interface PreviewRecord {
   url: string;
   mediaType: string;
   at: number;
+  /** Like the real FullScreenMediaDialog: the device PULLS the image over HTTP. */
+  fetched: boolean;
+  fetchBytes?: number;
+  fetchError?: string;
+  /** Human note, e.g. why the real firmware would show nothing. */
+  note?: string;
+  /** Fetched image bytes + content type (served by the viewer at /img/preview). */
+  image?: Buffer;
+  imageType?: string;
 }
 
 export interface ZipAsset {

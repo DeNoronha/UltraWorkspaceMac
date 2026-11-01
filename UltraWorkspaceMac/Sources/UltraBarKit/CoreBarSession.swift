@@ -336,18 +336,31 @@ public struct CoreBarSession: Sendable {
 
     /// Non-destructive: show a full-screen image on the CoreBar screen right now
     /// (PREVIEW_SCREENSAVER / act 30742). One-shot; does NOT change saved config
-    /// or any profile/page. `path` is an http URL or a relative path the device
-    /// resolves under its external files dir (e.g. "wallpaper/preview.jpg").
+    /// or any profile/page.
+    ///
+    /// `url` MUST be an http(s) URL: the firmware's `FullScreenMediaDialog`
+    /// fetches images with `HttpURLConnection(new URL(url))` and silently
+    /// dismisses on anything else. The handler never calls `reply`, so the
+    /// device does not acknowledge this act — we fire it and wait only briefly
+    /// for an (optional) error frame. Use `PreviewServer` to host the image.
     @discardableResult
-    public func previewScreen(path: String, isVideo: Bool = false) async throws -> String {
+    public func previewScreen(url: String, isVideo: Bool = false) async throws -> String {
+        guard url.lowercased().hasPrefix("http://") || url.lowercased().hasPrefix("https://") else {
+            throw UltraBarError.protocolError("preview url must be http(s): the CoreBar fetches it over HTTP")
+        }
         let client = try await authedClient()
         defer { Task { await client.close() } }
-        let payload: [String: Any] = ["url": path, "mediaType": isVideo ? "VIDEO" : "IMAGE"]
+        let payload: [String: Any] = ["url": url, "mediaType": isVideo ? "VIDEO" : "IMAGE"]
         let json = try JSONSerialization.data(withJSONObject: payload)
-        guard let line = try await client.request(act: Proto.actPreviewScreensaver, dataJSON: json, timeout: 10) else {
-            return "<no reply>"
+        if let line = try await client.request(act: Proto.actPreviewScreensaver, dataJSON: json, timeout: 1.5) {
+            return String(data: line, encoding: .utf8) ?? "<non-utf8>"
         }
-        return String(data: line, encoding: .utf8) ?? "<non-utf8>"
+        return "sent (the CoreBar does not acknowledge 30742; watch the screen)"
+    }
+
+    @available(*, deprecated, renamed: "previewScreen(url:isVideo:)")
+    public func previewScreen(path: String, isVideo: Bool = false) async throws -> String {
+        try await previewScreen(url: path, isVideo: isVideo)
     }
 
     private func postUpload(serial: String, tgz: Data) async throws -> (accepted: Bool, text: String) {

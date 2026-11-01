@@ -180,14 +180,43 @@ function handleFrame(socket: tls.TLSSocket, req: RequestFrame): void {
     }
 
     case Act.PREVIEW_SCREENSAVER: {
+      // Mirrors PreviewScreensaverMessage + FullScreenMediaDialog on the real
+      // firmware: the handler never calls reply (so: NO ack frame), and the
+      // dialog loads the url with HttpURLConnection — anything that is not an
+      // http(s) URL fails silently and the dialog dismisses itself.
       const d = (data ?? {}) as { url?: string; mediaType?: string };
-      state.preview = {
-        url: d.url ?? '',
+      const url = d.url ?? '';
+      const rec: typeof state.preview = {
+        url,
         mediaType: d.mediaType ?? 'IMAGE',
         at: Date.now(),
+        fetched: false,
       };
-      state.record('evt', 'tls', `PREVIEW_SCREENSAVER url="${state.preview.url}" (${state.preview.mediaType})`);
-      sendFrame(socket, reply(Act.PREVIEW_SCREENSAVER, id, null));
+      state.preview = rec;
+      state.record('evt', 'tls', `PREVIEW_SCREENSAVER url="${url}" (${rec.mediaType}) — no ack, like the device`);
+      if (!/^https?:\/\//i.test(url)) {
+        rec.note = 'NOT an http(s) URL: the real firmware (HttpURLConnection) shows nothing and dismisses silently';
+        state.record('evt', 'tls', `PREVIEW_SCREENSAVER ⚠ ${rec.note}`);
+        return;
+      }
+      // Pull the image exactly like the device would (10 s timeout).
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10_000);
+      fetch(url, { signal: ctrl.signal })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const buf = Buffer.from(await res.arrayBuffer());
+          rec.fetched = true;
+          rec.fetchBytes = buf.length;
+          rec.image = buf;
+          rec.imageType = res.headers.get('content-type') ?? 'application/octet-stream';
+          state.record('evt', 'http', `preview fetched ${buf.length} B from ${url} → shown full-screen`);
+        })
+        .catch((e: Error) => {
+          rec.fetchError = e.message;
+          state.record('evt', 'http', `preview fetch FAILED from ${url}: ${e.message} (device would dismiss)`);
+        })
+        .finally(() => clearTimeout(timer));
       return;
     }
 

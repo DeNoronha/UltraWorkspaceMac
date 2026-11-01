@@ -20,6 +20,31 @@ import { Ports } from './protocol';
 import { state } from './state';
 import { decodePackage, rgbaToPng } from './decodeImage';
 
+import fs from 'node:fs';
+
+/**
+ * Raw capture: every uploaded body is also written to ./captures/ so that a
+ * run of the OFFICIAL client against this mock yields ground-truth packages
+ * (exact config.json schema, image sizes, zip layouts) we can diff against
+ * Deckhand's output. Disable with MOCK_CAPTURE=0.
+ */
+const CAPTURE_DIR = process.env.MOCK_CAPTURE_DIR ?? 'captures';
+const CAPTURE = process.env.MOCK_CAPTURE !== '0';
+function capture(kind: string, label: string, buf: Buffer): string | null {
+  if (!CAPTURE) return null;
+  try {
+    fs.mkdirSync(CAPTURE_DIR, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const safe = label.replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 60);
+    const file = path.join(CAPTURE_DIR, `${stamp}-${kind}-${safe}`);
+    fs.writeFileSync(file, buf);
+    return file;
+  } catch (e) {
+    state.record('evt', 'http', `capture failed: ${(e as Error).message}`);
+    return null;
+  }
+}
+
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
 const CONTENT_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -43,9 +68,18 @@ export function startHttpUpload(): import('http').Server {
       return;
     }
     state.record('in', 'http', `POST /upload?serialNo=${serialNo} (${file.size} B tgz)`);
+    const saved = capture('upload', `${serialNo}-${file.originalname ?? 'file'}.tgz`, file.buffer);
+    if (saved) state.record('evt', 'http', `captured → ${saved}`);
 
     try {
       const pkg = await decodePackage(file.buffer);
+      if (pkg.configJSON !== undefined) {
+        state.record('evt', 'http', `config.json: ${pkg.configJSON.slice(0, 400)}`);
+      }
+      for (const [widgetId, imgs] of pkg.widgets) {
+        const d = imgs.default, p = imgs.pressed;
+        state.record('evt', 'http', `widget ${widgetId}: default=${d ? `${d.width}x${d.height}${d.hasAlpha ? '+a' : ''}` : '-'} pressed=${p ? `${p.width}x${p.height}${p.hasAlpha ? '+a' : ''}` : '-'}`);
+      }
       // Pick the first widget that has a decoded default image.
       let stored = false;
       for (const [widgetId, imgs] of pkg.widgets) {
@@ -90,6 +124,8 @@ export function startHttpUpload(): import('http').Server {
       return;
     }
     state.record('in', 'http', `POST /upload/zip?subDir=${subDir}&isFull=${isFull} (${file.size} B zip)`);
+    const savedZip = capture('uploadzip', `${subDir || 'root'}-${file.originalname ?? 'file'}.zip`, file.buffer);
+    if (savedZip) state.record('evt', 'http', `captured → ${savedZip}`);
 
     if (isFull) {
       // Wipe the target subdir first (full replace).

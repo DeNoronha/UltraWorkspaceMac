@@ -122,20 +122,35 @@ enum E2E {
             } else { check(false, "fetch decoded PNG from viewer") }
         } else { check(false, "VivoCube present") }
 
-        // 8. CoreBar big screen: PNG → zip → /upload/zip → PREVIEW_SCREENSAVER
+        // 8. CoreBar big screen: zip upload still works, and PREVIEW_SCREENSAVER
+        //    with an http URL served by this machine (the device PULLS the image).
         do {
             let png = makePNG(width: 1424, height: 280)
             check(png.count > 100, "rendered 1424×280 PNG", "\(png.count) B")
             let zip = ZipWriter.archive([.init(name: "preview.png", data: png)])
             let (ok, text) = try await session.uploadScreenZip(zip, subDir: "deckhand", isFull: true)
             check(ok, "upload/zip accepted", text.prefix(60).description)
-            let reply = try await session.previewScreen(path: "deckhand/preview.png")
-            check(reply.contains("\"code\":200"), "PREVIEW_SCREENSAVER (30742) code 200", reply.prefix(80).description)
-            let st = await fetchState()
-            let assets = (st["assets"] as? [[String: Any]])?.compactMap { $0["path"] as? String } ?? []
+            let st0 = await fetchState()
+            let assets = (st0["assets"] as? [[String: Any]])?.compactMap { $0["path"] as? String } ?? []
             check(assets.contains("deckhand/preview.png"), "zip extracted to deckhand/preview.png", assets.joined(separator: ","))
+
+            try PreviewServer.shared.start()
+            PreviewServer.shared.publish(png, name: "e2e.png")
+            let url = PreviewServer.shared.url(for: "e2e.png", reachableFrom: ip)
+            check(url?.hasPrefix("http://") == true, "preview server URL reachable from \(ip)", url ?? "nil")
+            // Self-fetch to prove the server speaks HTTP.
+            if let u = url.flatMap(URL.init(string:)), let (d, r) = try? await URLSession.shared.data(from: u) {
+                check((r as? HTTPURLResponse)?.statusCode == 200 && d == png, "preview server serves the exact PNG")
+            } else { check(false, "preview server self-fetch") }
+            do { _ = try await session.previewScreen(url: "deckhand/preview.png"); check(false, "non-http preview url rejected") }
+            catch { check(true, "non-http preview url rejected client-side") }
+            let reply = try await session.previewScreen(url: url ?? "")
+            check(reply.contains("\"code\":200") || reply.hasPrefix("sent"), "PREVIEW_SCREENSAVER (30742) dispatched", reply.prefix(80).description)
+            try? await Task.sleep(nanoseconds: 800_000_000) // let the mock fetch it
+            let st = await fetchState()
             let prev = st["preview"] as? [String: Any]
-            check((prev?["url"] as? String) == "deckhand/preview.png", "viewer shows preview pointing at the asset", "\(prev ?? [:])")
+            check((prev?["url"] as? String) == url, "mock recorded the http preview url", "\(prev?["url"] ?? "nil")")
+            check((prev?["fetched"] as? Bool) == true, "mock fetched the image from this machine", "\(prev?["fetchBytes"] ?? "no fetch")")
         } catch { check(false, "big screen flow", "\(error)") }
 
         // 9. Raw request to an unknown act must not hang the client
