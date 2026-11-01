@@ -1,0 +1,16 @@
+# Vendor binaries / reverse-engineering inputs — not for redistribution
+Fetched/
+*.dmg
+*.apk
+*.bin
+
+# Swift / build artifacts
+UltraWorkspaceMac/.build/
+UltraWorkspaceMac/dist/
+.build/
+dist/
+*.xcodeproj
+*.xcworkspace
+
+# macOS
+.DS_Store

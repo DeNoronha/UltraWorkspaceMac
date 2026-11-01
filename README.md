@@ -11,6 +11,15 @@
 
 ---
 
+## 🍎 UltraWorkspace for Mac (this repository's active project)
+
+> **[`UltraWorkspaceMac/`](UltraWorkspaceMac/) — a native, independent macOS client for UltraBar X, written in Swift/SwiftUI.**
+> This is **community software, not affiliated with or endorsed by Sanytron.** The sections below mirror the official product description for reference; the actual code developed here is the native Mac app.
+>
+> It already does LAN discovery, pairing (token in the Keychain, certificate-pinned), module listing, display control, and image push. See [`UltraWorkspaceMac/README.md`](UltraWorkspaceMac/README.md) and the reverse-engineered [`UltraWorkspaceMac/PROTOCOL.md`](UltraWorkspaceMac/PROTOCOL.md).
+
+---
+
 ## 📐 System Architecture
 
 UltraBar X is engineered around a **Three-Layer Architecture** to deliver real-time physical response and powerful desktop integration:
