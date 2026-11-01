@@ -1,0 +1,1601 @@
+asyncapi: '2.6.0'
+info:
+  title: UltraBar X CoreBar — TLS message protocol (:7431)
+  version: 0.1.0-unofficial
+  description: |
+    UNOFFICIAL, REVERSE-ENGINEERED. This document describes the CoreBar's message-driven
+    control protocol on TCP port 7431, as recovered by the Deckhand project. It is a
+    best-effort mirror of `PROTOCOL.md` in this repo; `PROTOCOL.md` is authoritative on
+    any conflict. Field types and payloads are marked with caveats wherever uncertain.
+
+    WHY AsyncAPI (not OpenAPI): :7431 is not request/response HTTP. It is a persistent,
+    line-delimited JSON socket where either side may send frames at any time, keyed by an
+    integer `act` (action) code. Some acts are request/reply; some are device-initiated
+    pushes (e.g. PUSH_MESSAGE 1000000) or pushed results (e.g. discovery replay 30102,
+    Wi-Fi list 1635). AsyncAPI models this message/event style; the HTTP :8080 asset
+    surface is documented separately in `openapi.yaml`.
+
+    TRANSPORT:
+      - TLS 1.2/1.3 over TCP, default port 7431, SNI `ultrabar.local`.
+      - Self-signed cert → trust-on-first-use: pin the SHA-256 of the leaf cert at
+        pairing; on later connects, abort BEFORE sending the token if it no longer
+        matches.
+      - UTF-8 JSON objects, one per line (`\n`-delimited).
+
+    ENVELOPES:
+      - Request:  `{ "act": <int>, "code": <int?>, "data": <value>, "id": "<hex/uuid>" }`
+      - Response: `{ "act": <int>, "code": <int>, "data": <value>, "id": "<echoed>",
+                     "msg": "<string>", "timestamp": <int?> }`
+      - `code` 200 = success, `code` -1 = fail. Read-back payloads live under `data`.
+      - The shape of `data` differs per act; it may be an object, an array, a string,
+        or an int. This is noted per message below.
+
+    DIRECTION CONVENTION IN THIS DOCUMENT:
+      The "application" is the PC/desktop client (Deckhand). Therefore:
+        - `publish`   operations = frames the CLIENT SENDS to the CoreBar (requests).
+        - `subscribe` operations = frames the CLIENT RECEIVES from the CoreBar
+                                   (replies and device-initiated pushes).
+
+    DESTRUCTIVE-OP WARNING: BATCH_SAVE_PROFILE (1108), BATCH_CREATE_SCENE (30500), and
+    the GATEWAY_CONFIG writes (SET_GATEWAY_CONFIG 30300 / SET_COREBAR_CONFIG 30741 with
+    type GATEWAY_CONFIG) FULL-REPLACE the corresponding list on the device. There is no
+    "get profiles" / "get scenes" read op over :7431, so the client must own the
+    authoritative list and resend the complete array on every change, or it will wipe
+    existing entries.
+
+    The integer act code for each message is recorded in the `x-act` extension field.
+  contact:
+    name: Deckhand project (reverse-engineering notes)
+  license:
+    name: Unofficial / reverse-engineered — no warranty
+defaultContentType: application/json
+servers:
+  corebar:
+    url: '{corebarHost}:7431'
+    protocol: secure-tcp
+    description: |
+      CoreBar TLS control socket. Line-delimited JSON. SNI `ultrabar.local`, self-signed
+      cert (trust-on-first-use, pin leaf SHA-256). Discover host via UDP :5319.
+    variables:
+      corebarHost:
+        default: corebar.local
+        description: CoreBar IP or hostname.
+
+channels:
+  auth/req_token:
+    description: Pairing — request an auth token (act 101).
+    publish:
+      operationId: reqAuthToken
+      summary: Client requests a pairing token (REQ_AUTH_TOKEN).
+      description: |
+        Begins pairing. The CoreBar replies with a token only AFTER the user taps
+        "Approve" on the device. Store the token for subsequent AUTH (100).
+      message:
+        $ref: '#/components/messages/ReqAuthTokenRequest'
+    subscribe:
+      operationId: reqAuthTokenReply
+      summary: Pairing token reply.
+      message:
+        $ref: '#/components/messages/ReqAuthTokenReply'
+
+  auth/authenticate:
+    description: Authenticate an existing token (act 100).
+    publish:
+      operationId: auth
+      summary: Client authenticates with a stored token (AUTH).
+      message:
+        $ref: '#/components/messages/AuthRequest'
+    subscribe:
+      operationId: authReply
+      summary: Auth result (code 200 on success).
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  device/get_device:
+    description: List logical/integration devices (act 1300).
+    publish:
+      operationId: getDevice
+      summary: Get device list (GET_DEVICE).
+      description: |
+        Returns an array of Device objects. NOTE: on the firmware tested, this comes back
+        EMPTY for physical QuantumLink modules — enumeration is a live bus scan (see
+        MODULE_START_DISCOVERY 30100). Useful mainly for logical/integration (e.g. HA)
+        devices.
+      message:
+        $ref: '#/components/messages/GetDeviceRequest'
+    subscribe:
+      operationId: getDeviceReply
+      message:
+        $ref: '#/components/messages/GetDeviceReply'
+
+  app/get_app_list:
+    description: Get the installed app list (act 1000).
+    publish:
+      operationId: getAppList
+      summary: Get app list (GET_APP_LIST).
+      description: |
+        Returns the installed-app list. The same data is also reachable via
+        SET/GET_COREBAR_CONFIG with type APP_LIST. Payload/field shape of the entries
+        (AppDetail) is not fully modeled here (uncertain).
+      message:
+        $ref: '#/components/messages/GetAppListRequest'
+    subscribe:
+      operationId: getAppListReply
+      message:
+        $ref: '#/components/messages/GetAppListReply'
+
+  module/start_discovery:
+    description: Start a live QuantumLink bus scan (act 30100).
+    publish:
+      operationId: moduleStartDiscovery
+      summary: Start module discovery (MODULE_START_DISCOVERY).
+      description: |
+        Fire with data "can" (magnetic/CAN bus) and again with "mesh" (wireless). Results
+        arrive asynchronously as pushed MODULE_START_DISCOVERY_REPLAY (30102) frames —
+        this request is effectively fire-and-forget.
+      message:
+        $ref: '#/components/messages/ModuleStartDiscoveryRequest'
+
+  module/stop_discovery:
+    description: Stop a running bus scan (act 30101).
+    publish:
+      operationId: moduleStopDiscovery
+      summary: Stop module discovery (MODULE_STOP_DISCOVERY).
+      message:
+        $ref: '#/components/messages/ModuleStopDiscoveryRequest'
+
+  module/discovery_replay:
+    description: Pushed discovery results (act 30102, device→client).
+    subscribe:
+      operationId: moduleDiscoveryReplay
+      summary: A discovered module endpoint (MODULE_START_DISCOVERY_REPLAY).
+      description: |
+        Pushed by the CoreBar, one per found module, after a start_discovery. Collect for
+        a fixed window (~16 s) and de-duplicate by serial. Provision discovered endpoints
+        with SET_GATEWAY_CONFIG (30300) to make modules controllable.
+      message:
+        $ref: '#/components/messages/ModuleDiscoveryReplayPush'
+
+  gateway/set_config:
+    description: Provision module endpoints into the gateway (act 30300).
+    publish:
+      operationId: setGatewayConfig
+      summary: Write the gateway config (SET_GATEWAY_CONFIG).
+      description: |
+        The `data` IS the CoreBarConfiguration object directly (not wrapped). Endpoints
+        split into `meshGateway` (interfaceType == "mesh") and `canGateway` (the rest).
+        DESTRUCTIVE: writes the endpoint lists. The reference client merges freshly
+        discovered endpoints over the last-written set so asleep modules are not dropped.
+        The alternative SET_COREBAR_CONFIG (30741) with type GATEWAY_CONFIG is NOT used
+        here (it wraps in a ReadWriteRequest and the device throws ClassCastException).
+      message:
+        $ref: '#/components/messages/SetGatewayConfigRequest'
+    subscribe:
+      operationId: setGatewayConfigReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  module/property_read:
+    description: Read a module property (act 30200).
+    publish:
+      operationId: modulePropertyRead
+      summary: Read a property (MODULE_PROPERTY_READ).
+      description: |
+        Addresses a sub-device of a module endpoint. Value returns RAW in `data.result`
+        (the client applies any scaling). See SenseCubeSensorMap in components for the
+        SenseCube deviceId/propertyId table and scaling notes. For the VivoCube main
+        device, deviceId is 256.
+      message:
+        $ref: '#/components/messages/ReadPropertyRequest'
+    subscribe:
+      operationId: modulePropertyReadReply
+      message:
+        $ref: '#/components/messages/ReadPropertyReply'
+
+  module/property_write:
+    description: Write a module property (act 30201).
+    publish:
+      operationId: modulePropertyWrite
+      summary: Write a property (MODULE_PROPERTY_WRITE).
+      description: |
+        Same addressing as read, plus `value`. Rejects serialNo "0000000000000000" and
+        routes only to real CAN/Mesh gateway endpoints. Used for config (e.g. SenseCube
+        min-report-interval propertyId 0; sensitivity), screen on/off (propertyId 4),
+        etc. Success reply strips the `result` field.
+      message:
+        $ref: '#/components/messages/WritePropertyRequest'
+    subscribe:
+      operationId: modulePropertyWriteReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  module/query_state:
+    description: Query module state (act 30730).
+    publish:
+      operationId: queryModuleState
+      summary: Query module state (QUERY_MODULE_STATE).
+      description: |
+        Static config read. NOTE: on the firmware tested this returns empty for physical
+        QuantumLink modules (like GET_DEVICE and GET_COREBAR_CONFIG). Enumeration is a
+        live scan instead. Exact request/reply payload shape is uncertain.
+      message:
+        $ref: '#/components/messages/QueryModuleStateRequest'
+    subscribe:
+      operationId: queryModuleStateReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  corebar/get_config:
+    description: Read CoreBar config (act 30740).
+    publish:
+      operationId: getCorebarConfig
+      summary: Read a CoreBar config section (GET_COREBAR_CONFIG).
+      description: |
+        `data` is a ReadWriteRequest with just `type`. type BASE_SET → returns the
+        current ScreensaverConfig; type APP_LIST → returns the installed-app list; type
+        GATEWAY_CONFIG → get() returns null (write-only).
+      message:
+        $ref: '#/components/messages/GetCorebarConfigRequest'
+    subscribe:
+      operationId: getCorebarConfigReply
+      message:
+        $ref: '#/components/messages/GetCorebarConfigReply'
+
+  corebar/set_config:
+    description: Write CoreBar config (act 30741).
+    publish:
+      operationId: setCorebarConfig
+      summary: Write a CoreBar config section (SET_COREBAR_CONFIG).
+      description: |
+        `data` is a ReadWriteRequest `{type, value}`. type has EXACTLY three members
+        (ReadWriteType): BASE_SET (value = ScreensaverConfig — screensaver settings),
+        GATEWAY_CONFIG (value = CoreBarConfiguration — DESTRUCTIVE, re-inits endpoints),
+        APP_LIST (read-only; set() returns null). The enum is serialized by name.
+      message:
+        $ref: '#/components/messages/SetCorebarConfigRequest'
+    subscribe:
+      operationId: setCorebarConfigReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  screensaver/preview:
+    description: One-shot full-screen media preview (act 30742).
+    publish:
+      operationId: previewScreensaver
+      summary: Show media full-screen immediately (PREVIEW_SCREENSAVER).
+      description: |
+        Non-destructive: shows an image/video full-screen at once and changes no saved
+        state. The safe way to validate a 1424x280 upload + sizing/format. mediaType is
+        IMAGE or VIDEO (device also auto-detects VIDEO by extension).
+      message:
+        $ref: '#/components/messages/PreviewScreensaverRequest'
+    subscribe:
+      operationId: previewScreensaverReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  sys/reboot:
+    description: Reboot the CoreBar (act 20100).
+    publish:
+      operationId: sysReboot
+      summary: Reboot (SYS_REBOOT).
+      description: |
+        Reboots the CoreBar host. Request body shape not strongly typed in sources
+        (RebootMessage); data may be empty/absent.
+      message:
+        $ref: '#/components/messages/SysRebootRequest'
+    subscribe:
+      operationId: sysRebootReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  wifi/start_scan:
+    description: Start a Wi-Fi scan (act 1633).
+    publish:
+      operationId: startScanWifi
+      summary: Start Wi-Fi scan (START_SCAN_WIFI).
+      description: |
+        Scan/list only — there is NO Wi-Fi connect path in the protocol. Results are
+        pushed as CUBE_SCAN_WIFI_LIST_RESULT (1635). Request uses the message id; no
+        meaningful body.
+      message:
+        $ref: '#/components/messages/StartScanWifiRequest'
+
+  wifi/stop_scan:
+    description: Stop a Wi-Fi scan (act 1634).
+    publish:
+      operationId: stopScanWifi
+      summary: Stop Wi-Fi scan (STOP_SCAN_WIFI).
+      message:
+        $ref: '#/components/messages/StopScanWifiRequest'
+
+  wifi/scan_result:
+    description: Pushed Wi-Fi scan results (act 1635, device→client).
+    subscribe:
+      operationId: cubeScanWifiListResult
+      summary: Wi-Fi scan result list (CUBE_SCAN_WIFI_LIST_RESULT).
+      description: |
+        Pushed list of networks `{name, signal, frequency}`. Open (unsecured) networks
+        are filtered OUT by the device.
+      message:
+        $ref: '#/components/messages/WifiScanResultPush'
+
+  profile/get_widget:
+    description: Get the placeable widget tree (act 1002).
+    publish:
+      operationId: getProfileWidget
+      summary: Get placeable widgets (GET_PROFILE_WIDGET).
+      description: |
+        `data` is a STRING parent id (e.g. "" for the top tree). Reply is the tree of
+        available WidgetProperty nodes (devices under iot, apps under apps, etc.) you can
+        drop into a profile.
+      message:
+        $ref: '#/components/messages/GetProfileWidgetRequest'
+    subscribe:
+      operationId: getProfileWidgetReply
+      message:
+        $ref: '#/components/messages/GetProfileWidgetReply'
+
+  profile/trigger_change:
+    description: Switch the active profile/page (act 1103).
+    publish:
+      operationId: triggerProfileChange
+      summary: Switch active profile (TRIGGER_PROFILE_CHANGE).
+      description: |
+        `data` is a STRING = the profile id. Errors if the id is unknown.
+      message:
+        $ref: '#/components/messages/TriggerProfileChangeRequest'
+    subscribe:
+      operationId: triggerProfileChangeReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  profile/batch_save:
+    description: Save (replace) the whole profile list (act 1108).
+    publish:
+      operationId: batchSaveProfile
+      summary: Save all profiles (BATCH_SAVE_PROFILE).
+      description: |
+        `data` is an ARRAY of ProfileDTO. DESTRUCTIVE / FULL-REPLACE: the device replaces
+        the entire profile list (no merge). There is no "list profiles" op, so the client
+        must own the authoritative array and always send it in full. Also used to set the
+        big-screen background (TIME widget `icon`) and to bind DotKey/KnobKey inputs.
+      message:
+        $ref: '#/components/messages/BatchSaveProfileRequest'
+    subscribe:
+      operationId: batchSaveProfileReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  scene/batch_create:
+    description: Create/save (replace) the whole scene list (act 30500).
+    publish:
+      operationId: batchCreateScene
+      summary: Save all scenes/automations (BATCH_CREATE_SCENE).
+      description: |
+        `data` is an ARRAY of Scene. DESTRUCTIVE / FULL-REPLACE: the device overwrites the
+        entire scene list and re-activates everything. No "get scenes" op exists, so the
+        client must own the authoritative array. An AUTO scene needs type "AUTO",
+        enabled true, non-empty triggers, non-empty actions.
+      message:
+        $ref: '#/components/messages/BatchCreateSceneRequest'
+    subscribe:
+      operationId: batchCreateSceneReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  scene/depends_devices:
+    description: List trigger-source devices (act 30701).
+    publish:
+      operationId: sceneDependsDevices
+      summary: List devices usable as scene triggers (SCENE_DEPENDS_DEVICES).
+      description: |
+        Metadata/read only (builds the scene-builder UI; creates nothing). `data` is a
+        STRING parent id — send "SENSE_CUBE" to list SenseCube devices, or "" for the top
+        tree. Child `value` is the device id used as a trigger's params.id.
+      message:
+        $ref: '#/components/messages/SceneDependsDevicesRequest'
+    subscribe:
+      operationId: sceneDependsDevicesReply
+      message:
+        $ref: '#/components/messages/SceneDependsReply'
+
+  scene/depends_property:
+    description: List triggerable properties of a device (act 30702).
+    publish:
+      operationId: sceneDependsProperty
+      summary: List a device's trigger properties (SCENE_DEPENDS_DEVICES_PROPERTY).
+      description: |
+        Metadata/read only. `data = {id:<deviceId>}`. For a SenseCube returns
+        `state` (presence), `alsAlarm`, `tempAlarm`.
+      message:
+        $ref: '#/components/messages/SceneDependsPropertyRequest'
+    subscribe:
+      operationId: sceneDependsPropertyReply
+      message:
+        $ref: '#/components/messages/SceneDependsReply'
+
+  scene/depends_property_value:
+    description: List legal values of a trigger property (act 30703).
+    publish:
+      operationId: sceneDependsPropertyValue
+      summary: List a property's values (SCENE_DEPENDS_DEVICES_PROPERTY_VALUE).
+      description: |
+        Metadata/read only. `data = {id:<deviceId>, property:"state"}`. For SenseCube
+        `state` returns OCCUPIED / UNOCCUPIED.
+      message:
+        $ref: '#/components/messages/SceneDependsPropertyValueRequest'
+    subscribe:
+      operationId: sceneDependsPropertyValueReply
+      message:
+        $ref: '#/components/messages/SceneDependsReply'
+
+  scene/action_v2:
+    description: Get the available scene-action catalog (act 1205).
+    publish:
+      operationId: sceneActionV2
+      summary: Get scene action catalog (SCENE_ACTION_V2).
+      description: |
+        Returns the catalog of actions the device offers (e.g. CoreBar brightness
+        action id "corebar"/"corebar.bright", volume, profile change, activity launch,
+        VivoCube toggle). Request `data` observed as empty string "". Reply payload shape
+        not fully modeled (uncertain).
+      message:
+        $ref: '#/components/messages/SceneActionV2Request'
+    subscribe:
+      operationId: sceneActionV2Reply
+      message:
+        $ref: '#/components/messages/SceneActionV2Reply'
+
+  push/message:
+    description: Device-initiated push messages (act 1000000, device→client).
+    subscribe:
+      operationId: pushMessage
+      summary: A device push (PUSH_MESSAGE).
+      description: |
+        The single device→client push act. Payload is `{type: PushType, payload}`. Starts
+        flowing automatically once a relevant binding exists (e.g. a KnobKey direction
+        bound to PC_VOLUME) — no subscribe handshake. There is NO raw key/knob event; the
+        device only sends semantic, pre-mapped messages. See PushType enum + PushMessage.
+      message:
+        $ref: '#/components/messages/PushMessagePush'
+
+components:
+  messages:
+    ReqAuthTokenRequest:
+      name: reqAuthTokenRequest
+      title: REQ_AUTH_TOKEN request
+      contentType: application/json
+      x-act: 101
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_ReqAuthToken'
+    ReqAuthTokenReply:
+      name: reqAuthTokenReply
+      title: REQ_AUTH_TOKEN reply
+      contentType: application/json
+      x-act: 101
+      payload:
+        $ref: '#/components/schemas/ReplyEnvelope_Token'
+    AuthRequest:
+      name: authRequest
+      title: AUTH request
+      contentType: application/json
+      x-act: 100
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_AuthToken'
+    GetDeviceRequest:
+      name: getDeviceRequest
+      title: GET_DEVICE request
+      contentType: application/json
+      x-act: 1300
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_EmptyObject'
+    GetDeviceReply:
+      name: getDeviceReply
+      title: GET_DEVICE reply
+      contentType: application/json
+      x-act: 1300
+      payload:
+        $ref: '#/components/schemas/ReplyEnvelope_DeviceArray'
+    GetAppListRequest:
+      name: getAppListRequest
+      title: GET_APP_LIST request
+      contentType: application/json
+      x-act: 1000
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_EmptyObject'
+    GetAppListReply:
+      name: getAppListReply
+      title: GET_APP_LIST reply
+      contentType: application/json
+      x-act: 1000
+      payload:
+        $ref: '#/components/schemas/ReplyEnvelope_Generic'
+    ModuleStartDiscoveryRequest:
+      name: moduleStartDiscoveryRequest
+      title: MODULE_START_DISCOVERY request
+      contentType: application/json
+      x-act: 30100
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_DiscoveryBus'
+    ModuleStopDiscoveryRequest:
+      name: moduleStopDiscoveryRequest
+      title: MODULE_STOP_DISCOVERY request
+      contentType: application/json
+      x-act: 30101
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_DiscoveryBus'
+    ModuleDiscoveryReplayPush:
+      name: moduleDiscoveryReplayPush
+      title: MODULE_START_DISCOVERY_REPLAY push
+      contentType: application/json
+      x-act: 30102
+      payload:
+        $ref: '#/components/schemas/Push_DiscoveryReplay'
+    SetGatewayConfigRequest:
+      name: setGatewayConfigRequest
+      title: SET_GATEWAY_CONFIG request
+      contentType: application/json
+      x-act: 30300
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_CoreBarConfiguration'
+    ReadPropertyRequest:
+      name: readPropertyRequest
+      title: MODULE_PROPERTY_READ request
+      contentType: application/json
+      x-act: 30200
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_ReadProperty'
+    ReadPropertyReply:
+      name: readPropertyReply
+      title: MODULE_PROPERTY_READ reply
+      contentType: application/json
+      x-act: 30200
+      payload:
+        $ref: '#/components/schemas/ReplyEnvelope_PropertyResult'
+    WritePropertyRequest:
+      name: writePropertyRequest
+      title: MODULE_PROPERTY_WRITE request
+      contentType: application/json
+      x-act: 30201
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_WriteProperty'
+    QueryModuleStateRequest:
+      name: queryModuleStateRequest
+      title: QUERY_MODULE_STATE request
+      contentType: application/json
+      x-act: 30730
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_EmptyObject'
+    GetCorebarConfigRequest:
+      name: getCorebarConfigRequest
+      title: GET_COREBAR_CONFIG request
+      contentType: application/json
+      x-act: 30740
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_ReadWriteType'
+    GetCorebarConfigReply:
+      name: getCorebarConfigReply
+      title: GET_COREBAR_CONFIG reply
+      contentType: application/json
+      x-act: 30740
+      payload:
+        $ref: '#/components/schemas/ReplyEnvelope_Generic'
+    SetCorebarConfigRequest:
+      name: setCorebarConfigRequest
+      title: SET_COREBAR_CONFIG request
+      contentType: application/json
+      x-act: 30741
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_ReadWriteRequest'
+    PreviewScreensaverRequest:
+      name: previewScreensaverRequest
+      title: PREVIEW_SCREENSAVER request
+      contentType: application/json
+      x-act: 30742
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_PreviewMessage'
+    SysRebootRequest:
+      name: sysRebootRequest
+      title: SYS_REBOOT request
+      contentType: application/json
+      x-act: 20100
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_EmptyOrAbsent'
+    StartScanWifiRequest:
+      name: startScanWifiRequest
+      title: START_SCAN_WIFI request
+      contentType: application/json
+      x-act: 1633
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_EmptyOrAbsent'
+    StopScanWifiRequest:
+      name: stopScanWifiRequest
+      title: STOP_SCAN_WIFI request
+      contentType: application/json
+      x-act: 1634
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_EmptyOrAbsent'
+    WifiScanResultPush:
+      name: wifiScanResultPush
+      title: CUBE_SCAN_WIFI_LIST_RESULT push
+      contentType: application/json
+      x-act: 1635
+      payload:
+        $ref: '#/components/schemas/Push_WifiScanResult'
+    GetProfileWidgetRequest:
+      name: getProfileWidgetRequest
+      title: GET_PROFILE_WIDGET request
+      contentType: application/json
+      x-act: 1002
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_StringData'
+    GetProfileWidgetReply:
+      name: getProfileWidgetReply
+      title: GET_PROFILE_WIDGET reply
+      contentType: application/json
+      x-act: 1002
+      payload:
+        $ref: '#/components/schemas/ReplyEnvelope_WidgetTree'
+    TriggerProfileChangeRequest:
+      name: triggerProfileChangeRequest
+      title: TRIGGER_PROFILE_CHANGE request
+      contentType: application/json
+      x-act: 1103
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_StringData'
+    BatchSaveProfileRequest:
+      name: batchSaveProfileRequest
+      title: BATCH_SAVE_PROFILE request
+      contentType: application/json
+      x-act: 1108
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_ProfileArray'
+    BatchCreateSceneRequest:
+      name: batchCreateSceneRequest
+      title: BATCH_CREATE_SCENE request
+      contentType: application/json
+      x-act: 30500
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_SceneArray'
+    SceneDependsDevicesRequest:
+      name: sceneDependsDevicesRequest
+      title: SCENE_DEPENDS_DEVICES request
+      contentType: application/json
+      x-act: 30701
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_StringData'
+    SceneDependsPropertyRequest:
+      name: sceneDependsPropertyRequest
+      title: SCENE_DEPENDS_DEVICES_PROPERTY request
+      contentType: application/json
+      x-act: 30702
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_DependsPropertyQuery'
+    SceneDependsPropertyValueRequest:
+      name: sceneDependsPropertyValueRequest
+      title: SCENE_DEPENDS_DEVICES_PROPERTY_VALUE request
+      contentType: application/json
+      x-act: 30703
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_DependsValueQuery'
+    SceneDependsReply:
+      name: sceneDependsReply
+      title: SCENE_DEPENDS_* reply
+      contentType: application/json
+      x-act: 30701
+      payload:
+        $ref: '#/components/schemas/ReplyEnvelope_DependsArray'
+    SceneActionV2Request:
+      name: sceneActionV2Request
+      title: SCENE_ACTION_V2 request
+      contentType: application/json
+      x-act: 1205
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_StringData'
+    SceneActionV2Reply:
+      name: sceneActionV2Reply
+      title: SCENE_ACTION_V2 reply
+      contentType: application/json
+      x-act: 1205
+      payload:
+        $ref: '#/components/schemas/ReplyEnvelope_Generic'
+    PushMessagePush:
+      name: pushMessagePush
+      title: PUSH_MESSAGE push
+      contentType: application/json
+      x-act: 1000000
+      payload:
+        $ref: '#/components/schemas/Push_PushMessage'
+    GenericReply:
+      name: genericReply
+      title: Generic reply envelope
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ReplyEnvelope_Generic'
+
+  schemas:
+    # ---------- Core envelopes ----------
+    RequestBase:
+      type: object
+      description: Common request envelope fields. `data` shape varies per act.
+      required: [act, id]
+      properties:
+        act:
+          type: integer
+          description: Integer action code.
+        id:
+          type: string
+          description: Client-generated request id (hex/uuid); echoed in the reply.
+        code:
+          type: integer
+          description: Optional; usually absent/unused on requests.
+    ReplyEnvelope_Generic:
+      type: object
+      description: |
+        Response envelope. `code` 200 = success, -1 = fail. `data` carries any read-back
+        and varies per act.
+      required: [act, code, id]
+      properties:
+        act:
+          type: integer
+        code:
+          type: integer
+          description: 200 = success, -1 = fail.
+        id:
+          type: string
+          description: Echoed request id.
+        msg:
+          type: string
+          description: Human-readable status.
+        data:
+          description: Per-act payload (object, array, string, int, or null).
+        timestamp:
+          type: integer
+          description: Device timestamp (presence/precision not guaranteed).
+
+    RequestEnvelope_EmptyObject:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          properties:
+            data:
+              type: object
+              description: Empty object `{}`.
+
+    RequestEnvelope_EmptyOrAbsent:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          properties:
+            data:
+              description: |
+                May be absent or empty. Exact body not strongly typed in sources.
+
+    RequestEnvelope_StringData:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: string
+              description: String payload (e.g. profile id, parent id, or "").
+
+    RequestEnvelope_ReqAuthToken:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              description: Pairing request body.
+              properties:
+                id:
+                  type: string
+                  description: Client identifier.
+                clientType:
+                  type: string
+                  description: Client type, e.g. "pc".
+                  examples: ["pc"]
+                name:
+                  type: string
+                  description: Human-friendly client name shown on the Approve prompt.
+
+    RequestEnvelope_AuthToken:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: string
+              description: The pairing token string returned by REQ_AUTH_TOKEN.
+
+    RequestEnvelope_DiscoveryBus:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: string
+              enum: [can, mesh]
+              description: '"can" = magnetic/CAN bus, "mesh" = wireless bus.'
+
+    RequestEnvelope_CoreBarConfiguration:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/CoreBarConfiguration'
+
+    RequestEnvelope_ReadProperty:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/ReadProperty'
+
+    RequestEnvelope_WriteProperty:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/WriteProperty'
+
+    RequestEnvelope_ReadWriteType:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  $ref: '#/components/schemas/ReadWriteType'
+
+    RequestEnvelope_ReadWriteRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/ReadWriteRequest'
+
+    RequestEnvelope_PreviewMessage:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/PreviewMessage'
+
+    RequestEnvelope_ProfileArray:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              description: FULL profile list (full-replace). See ProfileDTO.
+              items:
+                $ref: '#/components/schemas/ProfileDTO'
+
+    RequestEnvelope_SceneArray:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              description: FULL scene list (full-replace). See Scene.
+              items:
+                $ref: '#/components/schemas/Scene'
+
+    RequestEnvelope_DependsPropertyQuery:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: string
+                  description: Device id (from SCENE_DEPENDS_DEVICES).
+
+    RequestEnvelope_DependsValueQuery:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [id, property]
+              properties:
+                id:
+                  type: string
+                property:
+                  type: string
+                  description: e.g. "state", "alsAlarm", "tempAlarm".
+
+    # ---------- Reply payloads ----------
+    ReplyEnvelope_Token:
+      allOf:
+        - $ref: '#/components/schemas/ReplyEnvelope_Generic'
+        - type: object
+          properties:
+            data:
+              type: object
+              description: Only populated after the user taps Approve on the device.
+              properties:
+                token:
+                  type: string
+                  description: The auth token to store for subsequent AUTH (100).
+
+    ReplyEnvelope_DeviceArray:
+      allOf:
+        - $ref: '#/components/schemas/ReplyEnvelope_Generic'
+        - type: object
+          properties:
+            data:
+              type: array
+              description: Device list (empty for physical modules on tested firmware).
+              items:
+                $ref: '#/components/schemas/Device'
+
+    ReplyEnvelope_PropertyResult:
+      allOf:
+        - $ref: '#/components/schemas/ReplyEnvelope_Generic'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/PropertyResult'
+
+    ReplyEnvelope_WidgetTree:
+      allOf:
+        - $ref: '#/components/schemas/ReplyEnvelope_Generic'
+        - type: object
+          properties:
+            data:
+              type: array
+              description: |
+                Tree of placeable WidgetProperty nodes. Exact nesting/children shape not
+                fully modeled (uncertain); items use WidgetProperty.
+              items:
+                $ref: '#/components/schemas/WidgetProperty'
+
+    ReplyEnvelope_DependsArray:
+      allOf:
+        - $ref: '#/components/schemas/ReplyEnvelope_Generic'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/DependsResponse'
+
+    # ---------- Push payloads ----------
+    Push_DiscoveryReplay:
+      type: object
+      description: |
+        A single discovered module endpoint, pushed with act 30102. `data` is the module
+        endpoint.
+      required: [act, data]
+      properties:
+        act:
+          type: integer
+          const: 30102
+        id:
+          type: string
+        code:
+          type: integer
+        data:
+          $ref: '#/components/schemas/ModuleEndpoint'
+
+    Push_WifiScanResult:
+      type: object
+      description: Pushed Wi-Fi scan result list (act 1635).
+      required: [act, data]
+      properties:
+        act:
+          type: integer
+          const: 1635
+        id:
+          type: string
+        code:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WifiNetwork'
+
+    Push_PushMessage:
+      type: object
+      description: Device→client push (act 1000000). `data` is a PushMessage.
+      required: [act, data]
+      properties:
+        act:
+          type: integer
+          const: 1000000
+        id:
+          type: string
+        data:
+          $ref: '#/components/schemas/PushMessage'
+
+    # ---------- Domain schemas ----------
+    Device:
+      type: object
+      description: |
+        A logical/integration device from GET_DEVICE. deviceType is a DeviceEnum name.
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        deviceType:
+          $ref: '#/components/schemas/DeviceEnum'
+        online:
+          type: boolean
+        supportedFeatures:
+          description: Opaque feature set (shape not modeled).
+        attr:
+          description: Device attributes (shape varies by type; not modeled).
+
+    DeviceEnum:
+      type: string
+      description: |
+        Device type names (from DeviceEnum). May serialize by name.
+      enum:
+        - VIVO_CUBE
+        - SENSE_CUBE
+        - PC_BOOT
+        - COMPUTER_INFO
+        - AUDIO_PLAYER
+        - ACTION
+        - SCENE
+        - EMAIL_CARD
+        - SWITCH
+        - LIGHT
+        - LIGHT_TEMP
+        - LIGHT_HS
+        - LIGHT_HS_TEMP
+        - CURTAIN
+        - CURTAIN_SWITCH
+        - AC
+        - FAN
+        - TEMPERATURE_SENSOR
+        - HUMIDITY_SENSOR
+        - UNKNOWN
+
+    ModuleEndpoint:
+      type: object
+      description: |
+        A QuantumLink module endpoint discovered via 30102 and written into the gateway
+        config. Field names vary in observed data (serial may appear as serialNumber,
+        serialNo, or uid).
+      properties:
+        serialNumber:
+          type: string
+          description: Module serial (may also appear as serialNo or uid).
+        serialNo:
+          type: string
+        uid:
+          type: string
+        name:
+          type: string
+        online:
+          type: boolean
+        productId:
+          $ref: '#/components/schemas/QLinkProductId'
+        interfaceType:
+          type: string
+          description: '"mesh" for wireless; otherwise the magnetic/CAN bus.'
+
+    QLinkProductId:
+      type: integer
+      description: |
+        Physical module type id carried on an endpoint's productId. Known values:
+          268435456 = EXT_SCREEN (CoreBar's own screen)
+          268435457 = DOT_KEY
+          268435458 = KNOB_KEY
+          268435459 = VIVO_CUBE
+          268435460 = SENSE_CUBE
+          268435461 = PC_BOOT_CARD
+          -1         = the gateway itself
+      enum:
+        - 268435456
+        - 268435457
+        - 268435458
+        - 268435459
+        - 268435460
+        - 268435461
+        - -1
+
+    CoreBarConfiguration:
+      type: object
+      description: |
+        Gateway endpoint configuration. Endpoints split by interfaceType: "mesh" →
+        meshGateway, otherwise canGateway. This object is the body of SET_GATEWAY_CONFIG
+        (30300) directly, and the `value` of a SET_COREBAR_CONFIG GATEWAY_CONFIG write.
+      properties:
+        canGateway:
+          $ref: '#/components/schemas/Gateway'
+        meshGateway:
+          $ref: '#/components/schemas/Gateway'
+
+    Gateway:
+      type: object
+      properties:
+        endpoints:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModuleEndpoint'
+
+    ReadProperty:
+      type: object
+      description: MODULE_PROPERTY_READ data. Addresses a sub-device + property.
+      required: [serialNo, deviceId, propertyId]
+      properties:
+        serialNo:
+          type: string
+          description: Target module endpoint serial.
+        deviceId:
+          type: integer
+          description: |
+            Sub-device id within the module. 256 = VivoCube main device. SenseCube
+            sub-devices: 10 ALS, 11 temp, 12 hum, 13 proximity, 14 SPL, 15 shock (main=0).
+        propertyId:
+          type: integer
+          description: Property id within the sub-device.
+        extra:
+          description: Optional extra bytes (usually null).
+        type:
+          type: string
+          description: Usually unused.
+
+    WriteProperty:
+      allOf:
+        - $ref: '#/components/schemas/ReadProperty'
+        - type: object
+          required: [value]
+          properties:
+            value:
+              description: |
+                Value to write (type depends on the property). e.g. screen on/off via
+                propertyId 4 (0=off,1=on); SenseCube min-report-interval via propertyId 0.
+
+    PropertyResult:
+      type: object
+      description: |
+        MODULE_PROPERTY_READ reply data. Value is RAW in `result` (client scales).
+      properties:
+        serialNo:
+          type: string
+        deviceId:
+          type: integer
+        propertyId:
+          type: integer
+        result:
+          description: |
+            Raw value (number, bool, or string; hex string for BIN type). Scaling is
+            applied by the client — see SenseCubeSensorMap. Absent on write replies.
+        error:
+          type: integer
+          description: Present on failure (code -1), e.g. 1000 = invalid device/property.
+
+    ReadWriteType:
+      type: string
+      description: |
+        The three config sections (ReadWriteType), serialized by name.
+          BASE_SET       = ScreensaverConfig (screensaver settings)
+          GATEWAY_CONFIG = CoreBarConfiguration (write-only; get() returns null)
+          APP_LIST       = installed-app list (read-only; set() returns null)
+      enum:
+        - BASE_SET
+        - GATEWAY_CONFIG
+        - APP_LIST
+
+    ReadWriteRequest:
+      type: object
+      description: Body of SET_COREBAR_CONFIG (30741).
+      required: [type]
+      properties:
+        type:
+          $ref: '#/components/schemas/ReadWriteType'
+        value:
+          description: |
+            Section-specific value. For BASE_SET → ScreensaverConfig. For GATEWAY_CONFIG →
+            CoreBarConfiguration (DESTRUCTIVE). APP_LIST is read-only.
+          oneOf:
+            - $ref: '#/components/schemas/ScreensaverConfig'
+            - $ref: '#/components/schemas/CoreBarConfiguration'
+
+    ScreensaverConfig:
+      type: object
+      description: Screensaver settings (BASE_SET value / reply).
+      properties:
+        featureEnabled:
+          type: boolean
+          description: Whether the screensaver is enabled.
+        lockTime:
+          $ref: '#/components/schemas/LockTime'
+        packageName:
+          type: string
+          description: |
+            Screensaver app package (empty for plain media). For ver >= 2 this is the
+            screensaver host; for ver < 2 `uri` is used instead.
+        uri:
+          type: string
+          description: Media URL/path (host used for ver < 2).
+        ver:
+          type: integer
+          description: Config version (default 1; use 2 to drive packageName host).
+          default: 1
+
+    LockTime:
+      type: string
+      description: |
+        Idle timeout before the screensaver starts (LockTime enum, serialized by name).
+        Value in seconds shown in parentheses; NEVER = Integer.MAX_VALUE.
+          TIME_30S (30), TIME_1MIN (60), TIME_2MIN (120), TIME_3MIN (180),
+          TIME_4MIN (240), TIME_5MIN (300), NEVER.
+      enum:
+        - TIME_30S
+        - TIME_1MIN
+        - TIME_2MIN
+        - TIME_3MIN
+        - TIME_4MIN
+        - TIME_5MIN
+        - NEVER
+
+    PreviewMessage:
+      type: object
+      description: PREVIEW_SCREENSAVER data — one-shot full-screen media.
+      required: [url, mediaType]
+      properties:
+        url:
+          type: string
+          description: http URL, file://, or absolute path to the media.
+        mediaType:
+          type: string
+          enum: [IMAGE, VIDEO]
+          description: |
+            IMAGE or VIDEO. Device also auto-detects VIDEO by extension
+            (.mp4/.mov/.mkv/.webm/.3gp/.avi).
+
+    ProfileDTO:
+      type: object
+      description: |
+        A profile = a big-screen "page" (Stream-Deck-like). Sent in BATCH_SAVE_PROFILE
+        (1108) as a full array. On save, `widget[]` maps to the device's `homeData[]`.
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: Required, non-empty.
+        name:
+          type: string
+        icon:
+          type: string
+        bgColor:
+          type: string
+        iconScale:
+          type: integer
+          description: <= 0 is coerced to 100.
+        isDefault:
+          type: boolean
+        showName:
+          type: boolean
+        module:
+          type: array
+          description: |
+            Physical modules bound to this profile (ModuleConfig; DotKey = array of
+            KeyCodeConfig, KnobKey = KnobConfig.Detail). Shape not fully modeled here —
+            see PROTOCOL.md and input-events notes. Binding inputs to PC targets is done
+            by writing these.
+          items:
+            type: object
+        widget:
+          type: array
+          description: The on-screen widget strip (order = on-screen order; no x/y).
+          items:
+            $ref: '#/components/schemas/WidgetProperty'
+        albumId:
+          type: string
+          description: |
+            Profile-level background resource id (default "time_image_10"). Whether this
+            alone repaints the background is UNCERTAIN; setting the TIME widget `icon` is
+            the confirmed path.
+        player:
+          description: Audio player state (shape not modeled).
+
+    WidgetProperty:
+      type: object
+      description: |
+        A placeable widget / on-screen item (becomes HomeData on save). For a TIME widget,
+        `icon` doubles as the background image reference (http URL, resId://name, a
+        relative path under the device files dir, or an absolute/file:// path).
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        icon:
+          type: string
+          description: Widget icon URL; for TIME, the background image reference.
+        bgColor:
+          type: string
+        iconScale:
+          type: integer
+        type:
+          $ref: '#/components/schemas/WidgetType'
+        param:
+          description: |
+            Type-specific config, converted per-type on the device (TimeParamConverter,
+            WeatherParamConverter, etc.). Exact per-type shape NOT modeled here (uncertain
+            — read the matching converter). Represented as an opaque object.
+          type: object
+
+    WidgetType:
+      type: string
+      description: Widget type names (WidgetType enum, serialized by name).
+      enum:
+        - EMAIL_CARD
+        - TIMER
+        - SOUNDSCAPE
+        - SET
+        - APPS
+        - TIME
+        - WORLD_TIME
+        - WEATHER
+        - SWITCH
+        - SCENE
+        - CURTAIN_SWITCH
+        - CURTAIN
+        - LIGHT
+        - LIGHT_TEMP
+        - LIGHT_HS
+        - LIGHT_HS_TEMP
+        - AC
+        - FAN
+        - TEMPERATURE_SENSOR
+        - HUMIDITY_SENSOR
+        - AUDIO_PLAYER
+        - PC_CONTROL
+        - CPU
+        - MEMORY
+        - STORAGE
+        - NETWORK
+        - HOT_KEY_GROUP
+        - SENSE_CUBE
+        - PC_BOOT
+        - SENSE_CUBE_ALS
+        - SENSE_CUBE_RADAR
+        - SENSE_CUBE_TEMP
+        - SENSE_CUBE_HUM
+        - SENSE_CUBE_AUDIO
+        - UNSUPPORTED
+
+    Scene:
+      type: object
+      description: |
+        An automation/scene. Sent in BATCH_CREATE_SCENE (30500) as a full array
+        (full-replace). An AUTO scene needs enabled=true, non-empty triggers and actions.
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        icon:
+          type: string
+        show:
+          type: boolean
+        enabled:
+          type: boolean
+        type:
+          $ref: '#/components/schemas/SceneType'
+        triggers:
+          type: array
+          items:
+            $ref: '#/components/schemas/SceneItemConfig'
+        conditions:
+          type: array
+          description: Optional gating (time, AND/OR/NOT); nestable ConditionItemConfig.
+          items:
+            $ref: '#/components/schemas/SceneItemConfig'
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionConfig'
+
+    SceneType:
+      type: string
+      enum: [AUTO, MANUAL, MODULE]
+      description: AUTO = trigger-driven, MANUAL = button/hotkey, MODULE = module-bound.
+
+    SceneItemConfig:
+      type: object
+      description: |
+        A trigger (or condition) item. For SenseCube presence: type "DEVICE_STATE",
+        params {id:<SenseCube device id>, property:"state", from:"UNOCCUPIED",
+        to:"OCCUPIED"}. Validation requires from != to.
+      properties:
+        type:
+          type: string
+          description: e.g. "DEVICE_STATE".
+        params:
+          type: object
+          description: Type-specific parameters (free-form map).
+          additionalProperties: true
+        duration:
+          type: string
+          description: Optional duration gate.
+
+    ActionConfig:
+      type: object
+      description: |
+        A scene action. `id` is the target: "corebar" (host brightness/volume), a profile
+        id (CHANGE_PROFILE), a package name (ACTIVITY), or a VivoCube serialNo
+        (VIVO_CUBE_TOGGLE). `values` are {id,value} pairs addressed by id. NOTE:
+        START_SCREEN / CLOSE_SCREEN exist in the enum but have NO handler (dead) — there
+        is no first-class "screen power / wake" action.
+      properties:
+        id:
+          type: string
+          description: Target id (see description).
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/ActionType'
+        values:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              value:
+                description: Value for this sub-id (type varies).
+        objectParams:
+          description: Optional extra params (shape varies).
+
+    ActionType:
+      type: string
+      description: |
+        Scene action types. Only a subset are registered/handled. Display-affecting
+        actions that work: BRIGHT (CoreBar brightness, id "corebar"), CHANGE_PROFILE,
+        ACTIVITY (app launch — best candidate to "wake" the panel), VIVO_CUBE_TOGGLE
+        (VivoCube layer toggle). START_SCREEN / CLOSE_SCREEN are DEAD (no handler). This
+        enum list is non-exhaustive and some members are uncertain.
+      enum:
+        - BRIGHT
+        - CHANGE_PROFILE
+        - ACTIVITY
+        - VIVO_CUBE_TOGGLE
+        - VOLUME
+        - PC_CONTROL
+        - PC_BOOT
+        - COLOR
+        - COLOR_TEMP
+        - SOUNDSCAPE
+        - TIMER
+        - DEVICE_STATE
+        - MODE
+        - SCENE
+        - SPEED
+        - TEMPERATURE
+        - DELAY
+        - AUDIO_PLAYER_TOGGLE
+        - START_SCREEN
+        - CLOSE_SCREEN
+
+    DependsResponse:
+      type: object
+      description: |
+        An entry from SCENE_DEPENDS_* queries (devices / properties / values). Read-only
+        metadata that populates the scene builder.
+      properties:
+        parentId:
+          type: string
+        label:
+          type: string
+        value:
+          type: string
+          description: |
+            The selectable value (device id for DEVICES, property name for PROPERTY,
+            e.g. "OCCUPIED" for VALUE).
+        last:
+          type: boolean
+
+    WifiNetwork:
+      type: object
+      description: A Wi-Fi scan result entry (open networks are filtered out).
+      properties:
+        name:
+          type: string
+          description: SSID.
+        signal:
+          type: integer
+          description: Signal level (units per device; not confirmed).
+        frequency:
+          type: integer
+          description: Frequency (units per device; not confirmed).
+
+    PushMessage:
+      type: object
+      description: |
+        Body of a PUSH_MESSAGE (1000000). `type` is a PushType discriminator; `payload`
+        is type-specific. Observed payloads: SET_VOLUME/SET_BRIGHTNESS = integer 0..100;
+        GET_VOLUME/GET_BRIGHTNESS = null (poll, every ~5 s); PC_CONTROL = a scene-config
+        blob (shape not modeled); CPU/MEMORY/STORAGE/NETWORK = null (device asking the PC
+        for stats). The JSON encoding of `type` (name vs ordinal) is UNCERTAIN — capture a
+        live push to confirm.
+      required: [type]
+      properties:
+        type:
+          $ref: '#/components/schemas/PushType'
+        payload:
+          description: Type-specific; often an integer or null (see description).
+
+    PushType:
+      type: string
+      description: |
+        Push discriminator (PushType enum). ULTRA_KEY, ULTRA_KEY_SET, TEST are declared
+        but never emitted by this launcher build (dead here). There is NO raw key/knob
+        event type.
+      enum:
+        - ULTRA_KEY
+        - ULTRA_KEY_SET
+        - PC_CONTROL
+        - METRIC
+        - MODULE_STATE
+        - TEST
+        - SET_BRIGHTNESS
+        - GET_BRIGHTNESS
+        - GET_VOLUME
+        - SET_VOLUME
+        - CPU
+        - MEMORY
+        - STORAGE
+        - NETWORK
+
+    SenseCubeSensorMap:
+      type: object
+      description: |
+        REFERENCE ONLY (not a wire message). The SenseCube read map for
+        MODULE_PROPERTY_READ (30200): deviceId/propertyId → sensor, with raw→value
+        scaling (reads return RAW in data.result; the client scales). Pollable sensors are
+        readable; presence/SPL/shock are event/push-only (rwFlag has no READABLE bit, so a
+        30200 read throws on-device) AND are not clearly forwarded over :7431.
+          10/1 illuminance  — lux, no scaling (UINT16)          — pollable
+          11/1 temperature  — raw / 10 = degC (INT16, 0.1 degC) — pollable
+          12/1 humidity     — raw / 10 = %RH  (UINT16, 0.1 %RH) — pollable
+          15/2 shock wake   — 0 / non-0 (UINT8)                 — pollable
+          13/2 presence     — bool (mmWave radar)               — event-only (not readable)
+          14/1 SPL/audio    — dB (UINT8)                        — event-only (not readable)
+          15/3 shock event  — event id (UINT8)                  — event-only (not readable)
+          <dev>/0 min report interval — ms (UINT32, r+w; <100 forced to 0/off) — config write
+        No battery property exists (SenseCube is mains/USB powered). SenseCube main
+        device id is 0 (NOT 256). Example: temperature read result 235 = 23.5 degC.
+      properties:
+        note:
+          type: string
+          description: See the schema description for the full table.

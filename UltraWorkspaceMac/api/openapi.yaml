@@ -1,0 +1,231 @@
+openapi: 3.1.0
+info:
+  title: UltraBar X CoreBar — HTTP asset surface (:8080)
+  version: 0.1.0-unofficial
+  summary: Reverse-engineered HTTP file-upload / asset surface of the UltraBar X "CoreBar".
+  description: |
+    UNOFFICIAL, REVERSE-ENGINEERED. This spec documents the CoreBar's HTTP server on
+    port 8080 (AndServer, inside the LineOS launcher `com.ultrabar.launch`), as recovered
+    by the Deckhand project. It is a best-effort mirror of `PROTOCOL.md` in this repo;
+    `PROTOCOL.md` is authoritative on any conflict.
+
+    The CoreBar exposes TWO LAN control surfaces:
+      - (A) this HTTP server on :8080 — REST-ish, used for binary/image file uploads.
+      - (B) a message-driven TLS socket on :7431 — line-delimited JSON `{act,data,id}`
+            frames; documented separately in `asyncapi.yaml` (AsyncAPI is the right
+            standard for that event/message protocol, not OpenAPI).
+    There is also UDP discovery on :5319 (not modeled here; see PROTOCOL.md).
+
+    The :8080 surface is used for the bulk binary payloads that do not fit the JSON
+    control channel: module firmware/image packages (.tgz) and big-screen image assets
+    (.zip). State that those assets reference (which profile/widget uses them, screensaver
+    config) is mutated over the :7431 channel, not here.
+
+    SECURITY NOTE: no authentication is required or observed on any :8080 endpoint. Any
+    host on the LAN that can reach the port can POST uploads. There is no API key, token,
+    or auth header on this surface (unlike :7431, which has an AUTH/token handshake).
+    The server does block path traversal and restricts the zip route to image files, but
+    offers no caller authentication. Treat the port as unauthenticated and LAN-trusted.
+servers:
+  - url: http://{corebarHost}:8080
+    description: CoreBar HTTP server (plain HTTP, no TLS on this port)
+    variables:
+      corebarHost:
+        default: corebar.local
+        description: CoreBar IP or hostname (discover via UDP :5319; field `ip`).
+tags:
+  - name: upload
+    description: Binary/asset upload endpoints.
+  - name: widget
+    description: Widget icon fetch.
+paths:
+  /upload:
+    post:
+      tags: [upload]
+      operationId: uploadModulePackage
+      summary: Upload a module layer package (.tgz) to a QuantumLink module
+      description: |
+        Pushes a gzip-compressed layer package to a specific QuantumLink module
+        (e.g. a VivoCube, rendered at 240x240). The module is addressed by its serial
+        via the `serialNo` query parameter. The server looks the module up and relays
+        the package to it over the magnetic/CAN bus.
+
+        This is the MODULE route. It is NOT the big-screen route — the CoreBar's own
+        1424x280 screen has no serialNo and uses `/upload/zip` instead.
+
+        Package format (see PROTOCOL.md "Layer package (tgz)"): a gzip-compressed ustar
+        tar containing, per layer, `com_res<widgetId>/default.bin`,
+        `com_res<widgetId>/pressed.bin`, and a `config.json`. Images are RGB565
+        (+ optional alpha) with an 8-byte header. The multipart filename observed by the
+        reference client is `<serialNo>.tgz` with Content-Type `application/gzip`.
+      parameters:
+        - name: serialNo
+          in: query
+          required: true
+          description: Serial number of the target QuantumLink module.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: |
+                    The .tgz layer package. Sent as multipart field `file`; the reference
+                    client uses filename `<serialNo>.tgz` and Content-Type
+                    `application/gzip`.
+      responses:
+        '200':
+          description: |
+            Upload accepted. Note the HTTP status is 200; success is also signalled in
+            the JSON body via `state`. "module not found" can be returned if the module
+            is not yet provisioned into the gateway config (over :7431); the reference
+            client then provisions once and retries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResult'
+              examples:
+                ok:
+                  value:
+                    state: 200
+                    msg: ok
+  /upload/zip:
+    post:
+      tags: [upload]
+      operationId: uploadScreenZip
+      summary: Upload a zip of image assets for the big screen
+      description: |
+        Uploads a .zip of image files to the CoreBar's own external files directory.
+        Used to place big-screen assets (wallpaper album images, screensaver images)
+        onto the device filesystem. The device unzips into
+        `getExternalFilesDir(null)/<subDir>/...`, preserving folder structure.
+
+        After upload, images are referenced from a profile/widget or a screensaver config
+        (over :7431) by the relative path `"<subDir>/<file>"` (resolved against the
+        external files dir) or by absolute path.
+
+        The unzip step only writes image files (jpg/jpeg/png/webp/gif), skips
+        `__MACOSX`/`.DS_Store`, and blocks path traversal. Target panel is 1424x280.
+
+        CAVEAT: the exact success JSON body for this route is NOT fully confirmed. The
+        handler returns `HttpResult.onSuccess(<fileCount>)`; whether the wire shape
+        matches the `{state,msg}` seen on `/upload` is an open question (see PROTOCOL.md
+        "Not yet mapped" / scratchpad corebar-screen-findings). Modeled below as the same
+        UploadResult shape with that uncertainty noted.
+      parameters:
+        - name: subDir
+          in: query
+          required: false
+          description: |
+            Subdirectory under the external files dir to extract into. Optional;
+            default is "" (the files dir root).
+          schema:
+            type: string
+            default: ""
+        - name: isFull
+          in: query
+          required: false
+          description: |
+            If true, the target subdir is wiped before extracting (full replace). If
+            false, files are merged in. Server default is "true". Sent as a string.
+          schema:
+            type: boolean
+            default: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: |
+                    A .zip of image files (jpg/jpeg/png/webp/gif), max 50 MB. Sent as
+                    multipart field `file`.
+      responses:
+        '200':
+          description: |
+            Upload accepted and extracted. Exact JSON body shape unconfirmed for this
+            route (see description caveat).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResult'
+              examples:
+                ok:
+                  summary: Shape unconfirmed — mirrors /upload success for now
+                  value:
+                    state: 200
+                    msg: ok
+  /widget/icon:
+    get:
+      tags: [widget]
+      operationId: getWidgetIcon
+      summary: Fetch a widget icon image
+      description: |
+        Returns a widget icon image. Icon URLs of the form
+        `http://<ip>:8080/widget/icon?id=...&type=...&scheme=...` are built by the
+        launcher (`ProfileManager.getAppICON`/`getICON`) and appear as widget `icon`
+        fields. This confirms the :8080 base and the shape of widget icon URLs.
+
+        The exact meaning of each parameter and the returned content type are not fully
+        documented in the sources (see description caveats on the parameters).
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Widget/app id whose icon is requested.
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          description: |
+            Icon type selector. Exact enum of accepted values is not documented in the
+            recovered sources; included because it appears in the generated URL.
+          schema:
+            type: string
+        - name: scheme
+          in: query
+          required: false
+          description: |
+            Icon scheme/variant selector (e.g. color scheme). Exact accepted values not
+            documented in the recovered sources.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: |
+            The icon image. Content type not confirmed in sources (likely image/png or
+            image/webp); modeled permissively.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+components:
+  schemas:
+    UploadResult:
+      type: object
+      description: |
+        Success body returned by `/upload`. Confirmed shape for the module route; the
+        `/upload/zip` body shape is unconfirmed (see that route's description).
+      properties:
+        state:
+          type: integer
+          description: Status code in the body; 200 = ok.
+          examples: [200]
+        msg:
+          type: string
+          description: Human-readable status; "ok" on success.
+          examples: ["ok"]
