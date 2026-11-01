@@ -18,28 +18,50 @@ info:
     TRANSPORT:
       - TLS over TCP, default port 7431, SNI `ultrabar.local`. The device negotiates
         TLS 1.3; the Deckhand client allows >= 1.2.
-      - Self-signed cert → trust-on-first-use: pin the SHA-256 of the leaf cert at
-        pairing; on later connects, abort BEFORE sending the token if it no longer
-        matches.
-      - UTF-8 JSON objects, one per line (`\n`-delimited).
+      - Self-signed cert (same key on every device). The vendor client embeds a root CA
+        (CN ultrabar.local) but disables peer verification and ignores TLS errors, so it
+        verifies nothing (CONFIRMED). Deckhand: trust-on-first-use — pin the SHA-256 of
+        the leaf cert at pairing; on later connects, abort BEFORE sending the token if it
+        no longer matches.
+      - UTF-8 JSON objects, one per line (`\n`-delimited). The vendor client writes keys
+        in the order `id, act, data` and uses a decimal counter string as `id`; the
+        device only echoes `id`.
+      - Connection model: the vendor client keeps ONE persistent connection per CoreBar
+        and sends HEARTBEAT_PACKAGE (20) every 3 s (see channel `sys/heartbeat`); it
+        considers the link dead after 15 s without inbound frames and reconnects every
+        30 s. Deckhand opens one connection per operation instead, so it needs no
+        heartbeat but only receives pushes while a connection is open.
+      - UDP discovery (:5319, not modeled): the vendor client broadcasts the plain string
+        `discovery.ultrabar` to the interface broadcast address every 2000 ms; the JSON
+        probe `{"act":"discover"}` also works on the tested firmware. Reply:
+        `{serialNo, ver, ip, name:"ultrabar", tcpPort:7431}`.
 
     ENVELOPES:
-      - Request:  `{ "act": <int>, "code": <int?>, "data": <value>, "id": "<hex/uuid>" }`
+      - Request:  `{ "act": <int>, "code": <int?>, "data": <value>, "id": "<string>" }`
       - Response: `{ "act": <int>, "code": <int>, "data": <value>, "id": "<echoed>",
                      "msg": "<string>", "timestamp": <int?> }`
       - `code` 200 = success, `code` -1 = fail. Read-back payloads live under `data`.
       - The shape of `data` differs per act; it may be an object, an array, a string,
         or an int. This is noted per message below.
+      - The vendor client accepts a reply only if its `act` equals the request act and
+        `code == 200`.
 
-    GENERIC ENVELOPE CODES (not modeled as channels): the `MessageAction` enum also
-    defines ERROR (10), EXCEPTION (11) and HEARTBEAT_PACKAGE (20). These are generic
-    envelope / transport codes rather than commands. On the tested device they were not
-    observed as separate frames; a failed request simply comes back with `code: -1` in
-    the reply envelope for the original `act`. The mock CoreBar (`mock-corebar/`) emits
-    `code: 11, msg: "exception"` in the reply envelope when a handler throws. A client
-    should treat any frame whose `act` is 10 / 11 / 20, or whose `code` is not 200, as a
-    failure of (or noise around) the correlated request, and must not hang waiting for
-    `code: 200`.
+    GENERIC ENVELOPE CODES: the `MessageAction` enum also defines ERROR (10) and
+    EXCEPTION (11). On the tested device they were not observed as separate frames; a
+    failed request simply comes back with `code: -1` in the reply envelope for the
+    original `act`. The mock CoreBar (`mock-corebar/`) emits `code: 11, msg: "exception"`
+    in the reply envelope when a handler throws. A client should treat any frame whose
+    `act` is 10 / 11, or whose `code` is not 200, as a failure of (or noise around) the
+    correlated request, and must not hang waiting for `code: 200`. HEARTBEAT_PACKAGE
+    (20) IS a real frame the vendor client sends (fire-and-forget, no reply).
+
+    DEVICE→CLIENT REQUESTS: PUSH_MESSAGE (1000000) is not a notification but a request
+    the PC must answer with the same `id` (see channel `push/message`). The vendor deploy
+    order is 30300 → 1108 → 1010 (per integration) → 30500 → HTTP /upload/zip → 1103.
+
+    ACTS NOT USED BY THE VENDOR CLIENT although the firmware handles them: 1300
+    GET_DEVICE, 1204, 1500–1502, 20100 SYS_REBOOT, 30701–30721, 30740 / 30741 / 30742.
+    They remain modeled here because Deckhand uses some of them.
 
     DIRECTION CONVENTION IN THIS DOCUMENT:
       The "application" is the PC/desktop client (Deckhand). Therefore:
@@ -50,9 +72,11 @@ info:
     DESTRUCTIVE-OP WARNING: BATCH_SAVE_PROFILE (1108), BATCH_CREATE_SCENE (30500), and
     the GATEWAY_CONFIG writes (SET_GATEWAY_CONFIG 30300 / SET_COREBAR_CONFIG 30741 with
     type GATEWAY_CONFIG) FULL-REPLACE the corresponding list on the device. There is no
-    "get profiles" / "get scenes" read op over :7431, so the client must own the
-    authoritative list and resend the complete array on every change, or it will wipe
-    existing entries.
+    "get profiles" / "get scenes" read op over :7431 (SCENE_DEPENDS_PROFILE 30710 lists
+    profile ids/names only), so the client must own the authoritative list and resend
+    the complete array on every change, or it will wipe existing entries. The vendor
+    client does exactly that (its project file is authoritative; "Deploy project"
+    rewrites everything), so the vendor app and Deckhand cannot co-own a device.
 
     The integer act code for each message is recorded in the `x-act` extension field.
   contact:
@@ -83,11 +107,16 @@ channels:
       description: |
         Begins pairing. The CoreBar replies with a token only AFTER the user taps
         "Approve" on the device. Store the token for subsequent AUTH (100).
+        CONFIRMED vendor payload: `data = {id:"550e8400-e29b-41d4-a716-446655440000",
+        name:"Ultra WorkSpace"}` — a fixed, hard-coded UUID and a display name; there is
+        NO `clientType` key (Deckhand's `clientType:"pc"` is ignored by the device). The
+        vendor waits 15 s ("authorize on the Core Bar within 15 seconds"); Deckhand 30 s.
       message:
         $ref: '#/components/messages/ReqAuthTokenRequest'
     subscribe:
       operationId: reqAuthTokenReply
       summary: Pairing token reply.
+      description: Success = `code 200` AND `data.state` truthy; the token is `data.token`.
       message:
         $ref: '#/components/messages/ReqAuthTokenReply'
 
@@ -96,6 +125,9 @@ channels:
     publish:
       operationId: auth
       summary: Client authenticates with a stored token (AUTH).
+      description: |
+        `data` is the bare token STRING (not an object). Vendor timeout 3 s; success is
+        `code == 200`.
       message:
         $ref: '#/components/messages/AuthRequest'
     subscribe:
@@ -103,6 +135,19 @@ channels:
       summary: Auth result (code 200 on success).
       message:
         $ref: '#/components/messages/GenericReply'
+
+  sys/heartbeat:
+    description: Keep-alive on a persistent connection (act 20).
+    publish:
+      operationId: heartbeat
+      summary: Heartbeat (HEARTBEAT_PACKAGE).
+      description: |
+        CONFIRMED from the vendor client: `{"act":20,"id":"<n>"}` with no `data`, sent
+        every 3 s when nothing was received for 1.5 s on its single persistent
+        connection; no reply is expected. The link is declared dead after 15 s without
+        any inbound frame. Deckhand does not send it (one connection per operation).
+      message:
+        $ref: '#/components/messages/HeartbeatRequest'
 
   device/get_device:
     description: List logical/integration devices (act 1300).
@@ -197,7 +242,10 @@ channels:
         Addresses a sub-device of a module endpoint. Value returns RAW in `data.result`
         (the client applies any scaling). See SenseCubeSensorMap in components for the
         SenseCube deviceId/propertyId table and scaling notes. For the VivoCube main
-        device, deviceId is 256.
+        device, deviceId is 256; its properties: 3 runTime, 4 screen (0/1), 6 Wi-Fi state,
+        7 Wi-Fi config (hex), 9 layerWidget = `(layerId << 16) | widgetId` — the layer /
+        widget the cube currently shows (CONFIRMED). Reading 4 and 9 is the first step of
+        black-screen diagnosis because the CoreBar caches both and re-applies them.
       message:
         $ref: '#/components/messages/ReadPropertyRequest'
     subscribe:
@@ -214,7 +262,14 @@ channels:
         Same addressing as read, plus `value`. Rejects serialNo "0000000000000000" and
         routes only to real CAN/Mesh gateway endpoints. Used for config (e.g. SenseCube
         min-report-interval propertyId 0; sensitivity), screen on/off (propertyId 4),
-        etc. Success reply strips the `result` field.
+        and VivoCube layer switching: propertyId 9, value `(layerId << 16) | widgetId`
+        on deviceId 256 (CONFIRMED — exactly what the firmware's VIVO_CUBE_TOGGLE scene
+        action writes; ids 1..65535; `widgetId` should exist in that layer of the
+        deployed package). The CoreBar CACHES the last written property 4 and 9 and
+        re-sends them whenever the module asks for status (after reboot/reconnect/config
+        apply): a stale "screen off" or a widget id missing from the newest package
+        keeps the cube black until overwritten (recovery: write 4 = 1 and 9 =
+        `(1<<16)|101`). Success reply strips the `result` field.
       message:
         $ref: '#/components/messages/WritePropertyRequest'
     subscribe:
@@ -228,9 +283,10 @@ channels:
       operationId: queryModuleState
       summary: Query module state (QUERY_MODULE_STATE).
       description: |
-        Static config read. NOTE: on the firmware tested this returns empty for physical
-        QuantumLink modules (like GET_DEVICE and GET_COREBAR_CONFIG). Enumeration is a
-        live scan instead. Exact request/reply payload shape is uncertain.
+        Online-state query. The vendor client sends `data` = ARRAY of module serial
+        strings (CONFIRMED) and uses the reply for its online badge. On the firmware
+        tested, Deckhand's earlier call shape returned empty for physical QuantumLink
+        modules, so enumeration is a live scan instead.
       message:
         $ref: '#/components/messages/QueryModuleStateRequest'
     subscribe:
@@ -278,14 +334,16 @@ channels:
       summary: Show media full-screen immediately (PREVIEW_SCREENSAVER).
       description: |
         Non-destructive: shows an image/video full-screen at once and changes no saved
-        state. The safe way to validate a 1424x280 upload + sizing/format. mediaType is
-        IMAGE or VIDEO (device also auto-detects VIDEO by extension).
+        state. The safe way to validate a 1424x280 render. mediaType is IMAGE or VIDEO
+        (device also auto-detects VIDEO by extension). CONFIRMED on hardware: `url` MUST
+        be an http(s) URL — the device fetches it with HttpURLConnection (10 s timeouts)
+        and silently dismisses anything else (relative paths, file://). The device does
+        NOT serve files uploaded via /upload/zip back, so Deckhand hosts the PNG itself
+        (UltraBarKit/PreviewServer.swift) and passes `http://<mac-ip>:<port>/<name>.png`.
+        The handler never replies: there is NO acknowledgement frame for 30742 — do not
+        wait for one. The vendor client never uses this act.
       message:
         $ref: '#/components/messages/PreviewScreensaverRequest'
-    subscribe:
-      operationId: previewScreensaverReply
-      message:
-        $ref: '#/components/messages/GenericReply'
 
   sys/reboot:
     description: Reboot the CoreBar (act 20100).
@@ -339,9 +397,12 @@ channels:
       operationId: getProfileWidget
       summary: Get placeable widgets (GET_PROFILE_WIDGET).
       description: |
-        `data` is a STRING parent id (e.g. "" for the top tree). Reply is the tree of
-        available WidgetProperty nodes (devices under iot, apps under apps, etc.) you can
-        drop into a profile.
+        `data` is a STRING parent id (roots `sys.widget.iot` and `sys.widget.apps`; "" for
+        the virtual top). Reply is the CATALOGUE of placeable WidgetProperty nodes (HA
+        devices, apps, countdowns, players) with `iconScale` stripped — NOT the stored
+        profiles. TIME / WEATHER / PC widgets are not in it; clients know them statically.
+        There is no act that returns stored profiles with widgets; see
+        `scene/depends_profile` (30710) for the id/name list.
       message:
         $ref: '#/components/messages/GetProfileWidgetRequest'
     subscribe:
@@ -355,7 +416,13 @@ channels:
       operationId: triggerProfileChange
       summary: Switch active profile (TRIGGER_PROFILE_CHANGE).
       description: |
-        `data` is a STRING = the profile id. Errors if the id is unknown.
+        `data` is a STRING = the profile id. Reply `{code:200, data:"ok"}` or
+        `{code:-1, msg:"profile id error"}` for an unknown id (CONFIRMED). Switches the
+        card strip, exits the screensaver and rebinds module key maps 500 ms later. The
+        device pushes NOTHING back on a profile change (neither for this call nor for
+        on-device switches), and the selection is kept in memory only (the default
+        profile returns after a reboot). The vendor client sends this last in its deploy
+        sequence with the currently selected profile.
       message:
         $ref: '#/components/messages/TriggerProfileChangeRequest'
     subscribe:
@@ -370,9 +437,15 @@ channels:
       summary: Save all profiles (BATCH_SAVE_PROFILE).
       description: |
         `data` is an ARRAY of ProfileDTO. DESTRUCTIVE / FULL-REPLACE: the device replaces
-        the entire profile list (no merge). There is no "list profiles" op, so the client
-        must own the authoritative array and always send it in full. Also used to set the
-        big-screen background (TIME widget `icon`) and to bind DotKey/KnobKey inputs.
+        the entire profile list (no merge). A MISSING or EMPTY `data` array saves an empty
+        list and wipes the home screen (CONFIRMED) — never send 1108 without the complete
+        array. Only `id` (non-empty) and `widget` (non-null array) are validated; a
+        validation error replies `{code:-1, msg:"profile id cannot be empty" | "item is
+        not null"}` and saves nothing. Success reply `data:"success"`. There is no "list
+        profiles" op (SCENE_DEPENDS_PROFILE 30710 lists ids/names only), so the client
+        must own the authoritative array. Also used to set the clock card's cover image
+        (TIME widget `icon`) and to bind DotKey/KnobKey inputs via `module[].config`.
+        Vendor timeout 8 s.
       message:
         $ref: '#/components/messages/BatchSaveProfileRequest'
     subscribe:
@@ -443,16 +516,34 @@ channels:
       message:
         $ref: '#/components/messages/SceneDependsReply'
 
+  scene/depends_profile:
+    description: List stored profile ids and names (act 30710).
+    publish:
+      operationId: sceneDependsProfile
+      summary: List profiles (SCENE_DEPENDS_PROFILE).
+      description: |
+        CONFIRMED: no input; reply `data:[{label:<profile name>, value:<profile id>,
+        last:true}, …]` over every stored profile. The only way to learn which profile
+        ids exist on the device (widgets cannot be read back). Use it before every 1108
+        to detect that another client re-deployed, and after one to verify the save.
+      message:
+        $ref: '#/components/messages/SceneDependsProfileRequest'
+    subscribe:
+      operationId: sceneDependsProfileReply
+      message:
+        $ref: '#/components/messages/SceneDependsReply'
+
   scene/action_v2:
     description: Get the available scene-action catalog (act 1205).
     publish:
       operationId: sceneActionV2
       summary: Get scene action catalog (SCENE_ACTION_V2).
       description: |
-        Returns the catalog of actions the device offers (e.g. CoreBar brightness
+        Returns the catalog tree of actions the device offers (e.g. CoreBar brightness
         action id "corebar"/"corebar.bright", volume, profile change, activity launch,
-        VivoCube toggle). Request `data` observed as empty string "". Reply payload shape
-        not fully modeled (uncertain).
+        VivoCube toggle). `data` is a STRING tree node id ("" for the root); the vendor
+        client walks it as `getSceneActionTree(parentId)` (CONFIRMED). Reply payload
+        shape not fully modeled (uncertain).
       message:
         $ref: '#/components/messages/SceneActionV2Request'
     subscribe:
@@ -460,18 +551,148 @@ channels:
       message:
         $ref: '#/components/messages/SceneActionV2Reply'
 
+  scene/get_trigger_param:
+    description: Automation trigger types and their child data (act 30700).
+    publish:
+      operationId: sceneGetTriggerParam
+      summary: Get trigger types (SCENE_GET_TRIGGER_PARAM).
+      description: |
+        Catalogue read used by the vendor automation editor (`getAutoTriggerTypes`, and
+        child queries via the same act). The vendor client only calls this root; the
+        30701–30721 children modeled above are not used by it. Payload shapes not
+        modeled (uncertain).
+      message:
+        $ref: '#/components/messages/SceneGetTriggerParamRequest'
+    subscribe:
+      operationId: sceneGetTriggerParamReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  knob/function_device:
+    description: Devices a KnobKey rotation can be bound to (act 1617).
+    publish:
+      operationId: getKnobFunctionDevice
+      summary: Knob binding target tree (GET_KNOB_FUNCTION_DEVICE).
+      description: |
+        `data` is a STRING tree node id. Reply items `{name, type, id}`; firmware
+        `KnobDevice{id, type}` with types PC_VOLUME, PC_BRIGHT, LOCAL_VOLUME,
+        AUDIO_PLAYER, LIGHT_*, AC, CURTAIN, FAN. The chosen `{deviceName, deviceId,
+        deviceType}` goes into the profile's KnobKey module config
+        (`knob.turnLeft / turnRight`). CONFIRMED (vendor `getKnobCtrlDeviceTree`).
+      message:
+        $ref: '#/components/messages/GetKnobFunctionDeviceRequest'
+    subscribe:
+      operationId: getKnobFunctionDeviceReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  app/capability:
+    description: Third-party app capability catalogue (acts 30750 / 30751 / 30752).
+    publish:
+      operationId: appCapability
+      summary: THREE_CAPABILITY_ACTION / PARAM / OPTION.
+      description: |
+        Vendor automation editor reads (CONFIRMED call shapes, reply shapes not modeled):
+        30750 `getAppCapabilityActions(packageName)`, 30751 `…Params {actionId,
+        packageName}`, 30752 `…ParamValues {actionId, packageName, describeId, cursor,
+        limit, params}`. Three acts share this channel; see `x-act` on the message.
+      message:
+        $ref: '#/components/messages/AppCapabilityRequest'
+    subscribe:
+      operationId: appCapabilityReply
+      message:
+        $ref: '#/components/messages/GenericReply'
+
+  app/manager:
+    description: Install / uninstall an app (act 30600) with progress pushes (act 30601).
+    publish:
+      operationId: appManager
+      summary: Install or uninstall an APK (APP_MANAGER).
+      description: |
+        Vendor: `{type:"INSTALL", appType, packageName, url…}` after a cloud
+        `fetchLastVerV3` lookup (`fileUrl`, `sha256`, `versionCode`); uninstall with
+        `type:"UNINSTALL"` (exact literal LIKELY). Progress arrives as pushed 30601 frames
+        `{packageName, type:"DOWNLOAD"|"INSTALL"|"STATUS", result}` with states
+        DOWNLOADING, INSTALLING, INSTALLED, NOT_INSTALLED, FAIL.
+      message:
+        $ref: '#/components/messages/AppManagerRequest'
+    subscribe:
+      operationId: appManagerProgress
+      summary: Install progress push (APP_MANAGER_PROGRESS_EVENT).
+      message:
+        $ref: '#/components/messages/AppManagerProgressPush'
+
+  module/ota_start:
+    description: Start a module firmware update (act 30400).
+    publish:
+      operationId: moduleOtaStart
+      summary: Begin OTA (MODULE_OAT_START).
+      description: |
+        CONFIRMED from the vendor client and firmware. `data = {gatewayType:"can"|"mesh",
+        epSn:"<module serial>", fileSize, packSize, fileMD5}`; vendor timeout 12 s. The
+        file is a `UBX-OTA-FILE` (64-byte header: [0:12] magic, [12:16] productId u32
+        BE — must match the module, [16:32] versionName, [32:36] versionCode u32 BE,
+        [36:52] MD5, [52:64] reserved) with MD5 = md5(file[0:36] + file[64:]). The
+        CoreBar reboots the endpoint, waits <= 8 s, then sends CAN cmd 17 with
+        `packSize` as u8 — so packSize <= 255 (vendor: 200 for can, 32 for mesh, LIKELY).
+        Reply `data = {epSn, err}`: 0 ok, 1 reboot timeout, 2 start timeout, 255 other.
+      message:
+        $ref: '#/components/messages/ModuleOtaStartRequest'
+    subscribe:
+      operationId: moduleOtaStartReply
+      message:
+        $ref: '#/components/messages/ModuleOtaReply'
+
+  module/ota_data:
+    description: Stream one OTA pack (act 30401).
+    publish:
+      operationId: moduleOtaData
+      summary: Send an OTA pack (MODULE_OAT_DATA).
+      description: |
+        `data = {gatewayType, packNumber:<0-based int>, isEndPack:<bool>, data:"<hex of
+        <= packSize bytes>"}`, sent sequentially; each pack is answered with `{epSn,
+        err}` (0 ok, 254 data timeout, 255 other; the vendor retries twice, 2 s per pack
+        and 5 s for the last one). Module firmware always streams this way; only
+        VivoCube layer packages are pulled by the module itself over HTTP.
+      message:
+        $ref: '#/components/messages/ModuleOtaDataRequest'
+    subscribe:
+      operationId: moduleOtaDataReply
+      message:
+        $ref: '#/components/messages/ModuleOtaReply'
+
   push/message:
-    description: Device-initiated push messages (act 1000000, device→client).
+    description: Device-initiated requests to the PC (act 1000000, device→client, MUST be answered).
     subscribe:
       operationId: pushMessage
-      summary: A device push (PUSH_MESSAGE).
+      summary: A device push (PUSH_MESSAGE) — a request the PC must reply to.
       description: |
-        The single device→client push act. Payload is `{type: PushType, payload}`. Starts
+        The single device→client act. Frame: `{act:1000000, id:"sys.push-<uuid>",
+        data:{type:<PushType name>, payload}}`. CONFIRMED: it is a REQUEST — the PC must
+        reply on the same connection with `{act:1000000, id:<same id>, code:200,
+        data:{type:<same type>, payload:<value>}}` (see the `publish` side). Starts
         flowing automatically once a relevant binding exists (e.g. a KnobKey direction
-        bound to PC_VOLUME) — no subscribe handshake. There is NO raw key/knob event; the
-        device only sends semantic, pre-mapped messages. See PushType enum + PushMessage.
+        bound to PC_VOLUME) — no subscribe handshake — but only on an OPEN connection,
+        so a client must keep one open (the vendor keeps a persistent one with a 3 s
+        heartbeat). There is NO raw key/knob event; the device only sends semantic,
+        pre-mapped messages. Hot-keys never arrive here (the CoreBar emits them itself as
+        USB-HID keystrokes). See PushType + PushMessage.
       message:
         $ref: '#/components/messages/PushMessagePush'
+    publish:
+      operationId: pushMessageReply
+      summary: The PC's reply to a PUSH_MESSAGE.
+      description: |
+        `{act:1000000, id:<same id as the push>, code:200, data:{type, payload}}`.
+        Reply payloads (vendor client, CONFIRMED): TEST → echo; PC_CONTROL → after
+        executing `payload.action` (openFile{path}, openBrowser{url}, startApp{path,
+        launchMode}, inputText{text}, execCmd{cmd}); GET/SET_VOLUME, GET/SET_MUTE,
+        GET/SET_BRIGHTNESS → the resulting int 0..100 (mute: bool); CPU / MEMORY /
+        STORAGE → usage numbers; NETWORK → `{totalReceived, totalSent}`. The device's
+        PcVolumeController sends GET_VOLUME at start and every 5 s and reads
+        `data.payload` of the reply.
+      message:
+        $ref: '#/components/messages/PushMessageReply'
 
 components:
   messages:
@@ -720,6 +941,84 @@ components:
       x-act: 1000000
       payload:
         $ref: '#/components/schemas/Push_PushMessage'
+    PushMessageReply:
+      name: pushMessageReply
+      title: PUSH_MESSAGE reply (PC → CoreBar)
+      contentType: application/json
+      x-act: 1000000
+      payload:
+        $ref: '#/components/schemas/Reply_PushMessage'
+    HeartbeatRequest:
+      name: heartbeatRequest
+      title: HEARTBEAT_PACKAGE
+      contentType: application/json
+      x-act: 20
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_NoData'
+    SceneDependsProfileRequest:
+      name: sceneDependsProfileRequest
+      title: SCENE_DEPENDS_PROFILE request
+      contentType: application/json
+      x-act: 30710
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_EmptyOrAbsent'
+    SceneGetTriggerParamRequest:
+      name: sceneGetTriggerParamRequest
+      title: SCENE_GET_TRIGGER_PARAM request
+      contentType: application/json
+      x-act: 30700
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_EmptyOrAbsent'
+    GetKnobFunctionDeviceRequest:
+      name: getKnobFunctionDeviceRequest
+      title: GET_KNOB_FUNCTION_DEVICE request
+      contentType: application/json
+      x-act: 1617
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_StringData'
+    AppCapabilityRequest:
+      name: appCapabilityRequest
+      title: THREE_CAPABILITY_ACTION / PARAM / OPTION request
+      contentType: application/json
+      x-act: 30750
+      x-acts: [30750, 30751, 30752]
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_EmptyOrAbsent'
+    AppManagerRequest:
+      name: appManagerRequest
+      title: APP_MANAGER request
+      contentType: application/json
+      x-act: 30600
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_AppManager'
+    AppManagerProgressPush:
+      name: appManagerProgressPush
+      title: APP_MANAGER_PROGRESS_EVENT push
+      contentType: application/json
+      x-act: 30601
+      payload:
+        $ref: '#/components/schemas/Push_AppManagerProgress'
+    ModuleOtaStartRequest:
+      name: moduleOtaStartRequest
+      title: MODULE_OAT_START request
+      contentType: application/json
+      x-act: 30400
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_OtaStart'
+    ModuleOtaDataRequest:
+      name: moduleOtaDataRequest
+      title: MODULE_OAT_DATA request
+      contentType: application/json
+      x-act: 30401
+      payload:
+        $ref: '#/components/schemas/RequestEnvelope_OtaData'
+    ModuleOtaReply:
+      name: moduleOtaReply
+      title: MODULE_OAT_* reply
+      contentType: application/json
+      x-act: 30400
+      payload:
+        $ref: '#/components/schemas/ReplyEnvelope_OtaResult'
     GenericReply:
       name: genericReply
       title: Generic reply envelope
@@ -785,6 +1084,137 @@ components:
               description: |
                 May be absent or empty. Exact body not strongly typed in sources.
 
+    RequestEnvelope_NoData:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+      description: Frame with only `act` and `id` (HEARTBEAT_PACKAGE).
+
+    RequestEnvelope_AppManager:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              description: Install/uninstall request (vendor literals partly LIKELY).
+              properties:
+                type:
+                  type: string
+                  description: '"INSTALL" (CONFIRMED) or "UNINSTALL" (LIKELY).'
+                appType:
+                  description: App category from the store listing (enum not recovered).
+                packageName:
+                  type: string
+                url:
+                  type: string
+                  description: APK download URL (`fileUrl` from the store lookup).
+
+    RequestEnvelope_OtaStart:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [gatewayType, epSn, fileSize, packSize, fileMD5]
+              properties:
+                gatewayType:
+                  type: string
+                  enum: [can, mesh]
+                epSn:
+                  type: string
+                  description: Target module serial.
+                fileSize:
+                  type: integer
+                  description: Total OTA file size in bytes (header + payload).
+                packSize:
+                  type: integer
+                  maximum: 255
+                  description: Bytes per 30401 pack; sent to the module as u8.
+                fileMD5:
+                  type: string
+                  description: Hex MD5 from the UBX-OTA-FILE header (md5(file[0:36] + file[64:])).
+
+    RequestEnvelope_OtaData:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [gatewayType, packNumber, isEndPack, data]
+              properties:
+                gatewayType:
+                  type: string
+                  enum: [can, mesh]
+                packNumber:
+                  type: integer
+                  description: 0-based pack index.
+                isEndPack:
+                  type: boolean
+                data:
+                  type: string
+                  description: Hex string of <= packSize bytes.
+
+    ReplyEnvelope_OtaResult:
+      allOf:
+        - $ref: '#/components/schemas/ReplyEnvelope_Generic'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                epSn:
+                  type: string
+                err:
+                  type: integer
+                  description: |
+                    0 ok; 30400: 1 reboot timeout, 2 start timeout, 255 other;
+                    30401: 254 data timeout, 255 other.
+
+    Push_AppManagerProgress:
+      type: object
+      description: Pushed install progress (act 30601).
+      required: [act, data]
+      properties:
+        act:
+          type: integer
+          const: 30601
+        id:
+          type: string
+        data:
+          type: object
+          properties:
+            packageName:
+              type: string
+            type:
+              type: string
+              enum: [DOWNLOAD, INSTALL, STATUS]
+            result:
+              description: Progress or state (DOWNLOADING, INSTALLING, INSTALLED, NOT_INSTALLED, FAIL).
+
+    Reply_PushMessage:
+      type: object
+      description: |
+        The PC's answer to a PUSH_MESSAGE, sent on the same connection with the SAME
+        `id` as the push (CONFIRMED vendor shape).
+      required: [act, id, code, data]
+      properties:
+        act:
+          type: integer
+          const: 1000000
+        id:
+          type: string
+          description: Must equal the push's id (`sys.push-<uuid>`).
+        code:
+          type: integer
+          const: 200
+        data:
+          $ref: '#/components/schemas/PushMessage'
+
     RequestEnvelope_StringData:
       allOf:
         - $ref: '#/components/schemas/RequestBase'
@@ -803,18 +1233,25 @@ components:
           properties:
             data:
               type: object
-              description: Pairing request body.
+              description: |
+                Pairing request body. CONFIRMED vendor value:
+                `{"id":"550e8400-e29b-41d4-a716-446655440000","name":"Ultra WorkSpace"}`.
+              required: [id, name]
               properties:
                 id:
                   type: string
-                  description: Client identifier.
-                clientType:
-                  type: string
-                  description: Client type, e.g. "pc".
-                  examples: ["pc"]
+                  description: |
+                    Client identifier. The vendor client sends one fixed, hard-coded UUID
+                    for every installation.
                 name:
                   type: string
                   description: Human-friendly client name shown on the Approve prompt.
+                clientType:
+                  type: string
+                  description: |
+                    NOT part of the vendor payload (no such key exists in its binary).
+                    Deckhand still sends "pc"; the device ignores it.
+                  examples: ["pc"]
 
     RequestEnvelope_AuthToken:
       allOf:
@@ -959,6 +1396,10 @@ components:
               type: object
               description: Only populated after the user taps Approve on the device.
               properties:
+                state:
+                  description: |
+                    Truthy (the vendor compares it with 1) when approved; the vendor
+                    client requires `code == 200` AND a truthy `state`.
                 token:
                   type: string
                   description: The auth token to store for subsequent AUTH (100).
@@ -1281,12 +1722,15 @@ components:
 
     PreviewMessage:
       type: object
-      description: PREVIEW_SCREENSAVER data — one-shot full-screen media.
+      description: PREVIEW_SCREENSAVER data — one-shot full-screen media. No reply is sent.
       required: [url, mediaType]
       properties:
         url:
           type: string
-          description: http URL, file://, or absolute path to the media.
+          description: |
+            MUST be an http(s) URL (CONFIRMED on hardware; the device fetches it with
+            HttpURLConnection and silently ignores file:// or relative paths). Deckhand
+            serves the file from the Mac (PreviewServer).
         mediaType:
           type: string
           enum: [IMAGE, VIDEO]
@@ -1297,9 +1741,17 @@ components:
     ProfileDTO:
       type: object
       description: |
-        A profile = a big-screen "page" (Stream-Deck-like). Sent in BATCH_SAVE_PROFILE
-        (1108) as a full array. On save, `widget[]` maps to the device's `homeData[]`.
-      required: [id]
+        A profile = a big-screen "page": a horizontal strip of fixed-size cards (NOT a
+        full-screen image — no such page type exists). Sent in BATCH_SAVE_PROFILE (1108)
+        as a full array. On save, `widget[]` maps to the device's `homeData[]`.
+        CONFIRMED wire DTO (vendor `makeDeployData` + launcher `ProfileManager.toProfile`):
+        `{id, name, showName, icon, iconScale, default, widget:[…], module:[{productId,
+        serialNo, config}]}`. Only `id` (non-empty, not "null") and `widget` (non-null
+        array, may be empty) are validated. The device's factory profile has id
+        "default". Fields the device IGNORES on input: `albumId` (dead — never read
+        anywhere in the launcher and never emitted by the vendor client), `player`,
+        `homeData`.
+      required: [id, widget]
       properties:
         id:
           type: string
@@ -1308,63 +1760,110 @@ components:
           type: string
         icon:
           type: string
+          description: |
+            Profile tile image in the on-device switcher: http URL, `resId://<name>`, a
+            relative path under the external files dir, or an absolute / file:// path.
         bgColor:
           type: string
+          description: Accepted, no reader found; never sent by the vendor.
         iconScale:
           type: integer
           description: <= 0 is coerced to 100.
+        default:
+          type: boolean
+          description: |
+            Profile shown on boot when none is selected. This is the key fastjson emits
+            for the bean's `isDefault`; `isDefault` is accepted on input too.
         isDefault:
           type: boolean
+          description: Alias of `default` (accepted on input via fastjson smartMatch).
         showName:
           type: boolean
+          default: true
         module:
           type: array
           description: |
-            Physical modules bound to this profile (ModuleConfig; DotKey = array of
-            KeyCodeConfig, KnobKey = KnobConfig.Detail). Shape not fully modeled here —
-            see PROTOCOL.md and input-events notes. Binding inputs to PC targets is done
-            by writing these.
+            Physical modules bound to this profile: `{productId: DOT_KEY | KNOB_KEY |
+            SENSE_CUBE | VIVO_CUBE | PC_BOOT (enum name), serialNo, config}`. `config`
+            per product (CONFIRMED key sets): KnobKey `{button:{…}, knob:{turnLeft:{enabled,
+            deviceName, deviceId, deviceType}, turnRight:{…}}}`; DotKey per button
+            `{keyCode, singleClick|doubleClick|longPress:{enabled, show, name, icon,
+            actions:[{type, name, objectParams, values:[{param,value}], deployData}]}}`;
+            SenseCube `{detail:[{mode:1..5, enabled, show, actions…}]}`; VivoCube per
+            widget `{uniqueId, widgetType, keyCode?, …}`. Binding inputs to PC targets is
+            done by writing these. Send `[]` when you have no modules.
           items:
             type: object
         widget:
           type: array
-          description: The on-screen widget strip (order = on-screen order; no x/y).
+          description: The on-screen card strip (order = on-screen order; no x/y).
           items:
             $ref: '#/components/schemas/WidgetProperty'
         albumId:
           type: string
+          deprecated: true
           description: |
-            Profile-level background resource id (default "time_image_10"). Whether this
-            alone repaints the background is UNCERTAIN; setting the TIME widget `icon` is
-            the confirmed path.
+            DEAD (CONFIRMED): exists on the device bean with default "time_image_10" but is
+            never read and never copied from the DTO. The clock card's background is the
+            TIME widget `icon`, full stop.
         player:
-          description: Audio player state (shape not modeled).
+          description: Ignored on input (stays SONOS).
 
     WidgetProperty:
       type: object
       description: |
-        A placeable widget / on-screen item (becomes HomeData on save). For a TIME widget,
-        `icon` doubles as the background image reference (http URL, resId://name, a
-        relative path under the device files dir, or an absolute/file:// path).
+        A card in the profile strip (becomes HomeData on save). CONFIRMED keys:
+        `{id, type, name, icon, iconScale, param}` (+ `bgColor`, `last`, unused). For a
+        TIME widget, `icon` is the clock card's cover image (shown as a rounded cover
+        plus a blurred copy behind the ~540x240 card): http URL, `resId://name`, a
+        relative path under the device external files dir (e.g. "deckhand/bg.png"
+        after /upload/zip?subDir=deckhand), or an absolute/file:// path. An EMPTY TIME
+        `icon` keeps whatever is stored on the device for the same profile id + widget
+        id (TimeParamConverter); reset with "resId://time_image_2".
+      required: [id, type]
       properties:
         id:
           type: string
+          description: |
+            Unique within the profile; keep stable across saves. Built-ins:
+            `sys.component.time` (TIME), `sys.component.weather` (WEATHER).
         name:
           type: string
         icon:
           type: string
-          description: Widget icon URL; for TIME, the background image reference.
+          description: |
+            Rendered for TIME (cover), PC_CONTROL, HOT_KEY_GROUP, SCENE and HA_SCENE
+            cards; ignored by the other types. The vendor rewrites local icons to
+            `file://…/CoreBarAssets/image/<uuid>.png`.
         bgColor:
           type: string
         iconScale:
           type: integer
+          description: Scales a custom PC_CONTROL icon; stripped from 1002 replies.
         type:
           $ref: '#/components/schemas/WidgetType'
         param:
           description: |
-            Type-specific config, converted per-type on the device (TimeParamConverter,
-            WeatherParamConverter, etc.). Exact per-type shape NOT modeled here (uncertain
-            — read the matching converter). Represented as an opaque object.
+            Type-specific config (CONFIRMED per-type schemas; always send an OBJECT for
+            the types that have one — a missing param is tolerated at save time but the
+            card may crash at render):
+              TIME: none.
+              WORLD_TIME: {offset:"GMT+0:00"}.
+              WEATHER: {lat:"<str>", lon:"<str>"} (empty → network location); API key
+                and units via INTEGRATED_CONFIG_SET 1010 {packageName:
+                "com.ultrabar.weather", config:{apiKey, isUnitFahrenheit, …}}.
+              TIMER: {time:"HH:MM:SS", startSceneId?, endSceneId?}.
+              SOUNDSCAPE: {id:"sys.app.soundscape.1"}.
+              PC_CONTROL: {output:5, keys:[<HID usage ids>]} = keystrokes the CoreBar
+                emits over USB-HID itself, or {output:10, payload:<any>} = pushed to the
+                PC as PUSH_MESSAGE type PC_CONTROL.
+              HOT_KEY_GROUP: {button:[<PC_CONTROL-like children>]}.
+              SCENE: {type:"ACTION"|"HA_SCENE"|"LOCAL_SCENE", actions:[ActionConfig…]}.
+              CPU / MEMORY / STORAGE / NETWORK: {data:"<string>"}; values come from
+                PUSH_MESSAGE queries the PC must answer.
+              SENSE_CUBE*, PC_BOOT: {uid:"<module uid>"}.
+              APPS: none (id = package name).
+              AUDIO_PLAYER: {source:…}.
           type: object
 
     WidgetType:
@@ -1405,6 +1904,7 @@ components:
         - SENSE_CUBE_TEMP
         - SENSE_CUBE_HUM
         - SENSE_CUBE_AUDIO
+        - HA_SCENE
         - UNSUPPORTED
 
     Scene:
@@ -1555,25 +2055,31 @@ components:
     PushMessage:
       type: object
       description: |
-        Body of a PUSH_MESSAGE (1000000). `type` is a PushType discriminator; `payload`
-        is type-specific. Observed payloads: SET_VOLUME/SET_BRIGHTNESS = integer 0..100;
-        GET_VOLUME/GET_BRIGHTNESS = null (poll, every ~5 s); PC_CONTROL = a scene-config
-        blob (shape not modeled); CPU/MEMORY/STORAGE/NETWORK = null (device asking the PC
-        for stats). The JSON encoding of `type` (name vs ordinal) is UNCERTAIN — capture a
-        live push to confirm.
+        Body of a PUSH_MESSAGE (1000000) and of the PC's reply to it. `type` is the
+        PushType enum NAME as a string (CONFIRMED from the vendor client's string
+        compares); `payload` is type-specific. Push payloads: SET_VOLUME / SET_BRIGHTNESS
+        / SET_MUTE = the value to apply (int 0..100, bool for mute); GET_* = null (poll,
+        GET_VOLUME every 5 s); PC_CONTROL = `{action, params}` with action openFile{path}
+        | openBrowser{url} | startApp{path, launchMode} | inputText{text} | execCmd{cmd};
+        CPU / MEMORY / STORAGE / NETWORK = null (device asking the PC for stats);
+        TEST = anything (echo it back). Reply payloads: the resulting value, or for
+        NETWORK `{totalReceived, totalSent}`.
       required: [type]
       properties:
         type:
           $ref: '#/components/schemas/PushType'
         payload:
-          description: Type-specific; often an integer or null (see description).
+          description: Type-specific (see description).
 
     PushType:
       type: string
       description: |
-        Push discriminator (PushType enum). ULTRA_KEY, ULTRA_KEY_SET, TEST are declared
+        Push discriminator (PushType enum name). ULTRA_KEY, ULTRA_KEY_SET are declared
         but never emitted by this launcher build (dead here). There is NO raw key/knob
-        event type.
+        event type. Types the vendor PC client answers: TEST, PC_CONTROL, GET_VOLUME,
+        SET_VOLUME, GET_MUTE, SET_MUTE, GET_BRIGHTNESS, SET_BRIGHTNESS, CPU, MEMORY,
+        STORAGE, NETWORK (CONFIRMED). METRIC / MODULE_STATE are internal names seen in
+        the launcher.
       enum:
         - ULTRA_KEY
         - ULTRA_KEY_SET
@@ -1585,6 +2091,8 @@ components:
         - GET_BRIGHTNESS
         - GET_VOLUME
         - SET_VOLUME
+        - GET_MUTE
+        - SET_MUTE
         - CPU
         - MEMORY
         - STORAGE

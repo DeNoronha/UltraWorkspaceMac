@@ -38,6 +38,8 @@ servers:
 tags:
   - name: upload
     description: Binary/asset upload endpoints.
+  - name: static
+    description: Read-only static mounts (cache dir, module backups).
   - name: widget
     description: Widget icon fetch.
 paths:
@@ -48,23 +50,43 @@ paths:
       summary: Upload a module layer package (.tgz) to a QuantumLink module
       description: |
         Pushes a gzip-compressed layer package to a specific QuantumLink module
-        (e.g. a VivoCube, rendered at 240x240). The module is addressed by its serial
-        via the `serialNo` query parameter. The server looks the module up and relays
-        the package to it over the magnetic/CAN bus.
+        (a VivoCube). The module is addressed by its serial via the `serialNo` query
+        parameter.
 
         This is the MODULE route. It is NOT the big-screen route — the CoreBar's own
         1424x280 screen has no serialNo and uses `/upload/zip` instead.
 
+        WHAT THE SERVER DOES (CONFIRMED from the launcher): it writes the body to
+        `<cacheDir>/tgz/<serial lowercased>.tgz` (deleting any previous file first;
+        `.tgz` extension required, 100 MB cap), then sends the module the QuantumLink
+        command CMD_UPDATE_CONF whose payload is the URL
+        `http://<corebar>:8080/tgz/<serial>.tgz`, and waits up to 5 s for the module's
+        status byte. The MODULE then downloads and unpacks the package itself over its
+        own Wi-Fi link (not over the magnetic bus) — the CoreBar never parses it.
+        Consequently the module must be on the CoreBar's hotspot or the same Wi-Fi, and
+        the reply only tells you the command was acknowledged, not that the new images
+        are showing (allow ~10 s before the next command).
+
+        There is NO queue, busy flag or rate limit on the CoreBar: a second upload
+        while the module is still fetching the previous one replaces the file under it,
+        and every accepted upload rewrites the module's flash copy of the images. Upload
+        one package holding ALL layers (max 6 layers x 6 widgets), then switch layers
+        with MODULE_PROPERTY_WRITE propertyId 9 over :7431 instead of re-uploading.
+
         Package format (see PROTOCOL.md "Layer package (tgz)"): a gzip-compressed ustar
-        tar containing, per layer, `com_res<widgetId>/default.bin`,
-        `com_res<widgetId>/pressed.bin`, and a `config.json`. Images are RGB565
-        (+ optional alpha) with an 8-byte header. The multipart filename observed by the
-        reference client is `<serialNo>.tgz` with Content-Type `application/gzip`.
+        tar containing, per widget, `com_res<widgetId>/default.bin` and
+        `com_res<widgetId>/pressed.bin` (LVGL v8 image: 8-byte header + RGB565
+        big-endian, optional alpha byte) plus `config.json`
+        `{"defaultLayer":L,"layers":[{"id":L,"items":[{"id":W,"type":1}]}]}` (items carry
+        only id + type; type must be 1 = Button). The server ignores the multipart
+        filename and content type: the vendor client sends `config.tgz` with
+        `application/octet-stream`, Deckhand sends `<serialNo>.tgz` with
+        `application/gzip`.
       parameters:
         - name: serialNo
           in: query
           required: true
-          description: Serial number of the target QuantumLink module.
+          description: Serial number of the target QuantumLink module (must be provisioned in the gateway config).
           schema:
             type: string
       requestBody:
@@ -79,55 +101,87 @@ paths:
                   type: string
                   format: binary
                   description: |
-                    The .tgz layer package. Sent as multipart field `file`; the reference
-                    client uses filename `<serialNo>.tgz` and Content-Type
-                    `application/gzip`.
+                    The .tgz layer package, multipart field `file`. Filename and part
+                    Content-Type are not checked.
       responses:
         '200':
           description: |
-            Upload accepted. Note the HTTP status is 200; success is also signalled in
-            the JSON body via `state`. "module not found" can be returned if the module
-            is not yet provisioned into the gateway config (over :7431); the reference
-            client then provisions once and retries.
+            The HTTP status is always 200; the outcome is in the JSON body `state`
+            (CONFIRMED mapping from the launcher and the vendor client's UI strings):
+              200 (data "")  — the module ACKNOWLEDGED the update command within 5 s.
+                               NOT downloaded, NOT applied yet ("Upload succeeded.
+                               Please wait for VivoCube to complete update.").
+              -1             — no reply from the module within 5 s (msg "write update
+                               command success,update timeout"), or a server-side error
+                               (msg: "serial required", module not found = not
+                               provisioned — Deckhand provisions once and retries,
+                               "hotspotIp ip address is empty", size > 100 MB, write
+                               failure).
+              1              — module busy ("VivoCube is currently busy.").
+              2, 4           — module not connected to a network ("VivoCube is not
+                               connected to the network." — fix the module's Wi-Fi).
+              3 / other N    — module error N (msg "reply error:N").
+            `data` is always the empty string on this route; an integer `data` only comes
+            from `/upload/zip`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UploadResult'
               examples:
                 ok:
+                  summary: Module acknowledged (not yet applied)
                   value:
                     state: 200
                     msg: ok
+                    data: ""
+                timeout:
+                  summary: No reply from the module within 5 s
+                  value:
+                    state: -1
+                    msg: write update command success,update timeout
+                    data: null
+                busy:
+                  summary: Module busy
+                  value:
+                    state: 1
+                    msg: reply error:1
+                    data: null
   /upload/zip:
     post:
       tags: [upload]
       operationId: uploadScreenZip
       summary: Upload a zip of image assets for the big screen
       description: |
-        Uploads a .zip of image files to the CoreBar's own external files directory.
-        Used to place big-screen assets (wallpaper album images, screensaver images)
-        onto the device filesystem. The device unzips into
-        `getExternalFilesDir(null)/<subDir>/...`, preserving folder structure.
-
-        After upload, images are referenced from a profile/widget or a screensaver config
-        (over :7431) by the relative path `"<subDir>/<file>"` (resolved against the
-        external files dir) or by absolute path.
+        Uploads a .zip of image files to the CoreBar's own external files directory
+        (`getExternalFilesDir(null)/<subDir>/...`, preserving the zip's folder
+        structure). These files are then referenced from a profile widget over :7431 by
+        the relative path `"<subDir>/<file>"` — in practice as the TIME widget's `icon`
+        (the clock card's cover image) or a PC_CONTROL / SCENE card icon. There is no
+        full-screen wallpaper page and no screensaver image folder reachable this way;
+        the device also never serves these files back over HTTP (see `/tgz` below).
 
         The unzip step only writes image files (jpg/jpeg/png/webp/gif), skips
-        `__MACOSX`/`.DS_Store`, and blocks path traversal. Target panel is 1424x280.
+        `__MACOSX`/`.DS_Store`, blocks path traversal, caps the zip at 50 MB, and then
+        emits ReloadProfileEvent so the current profile repaints (re-uploading the same
+        filename refreshes a card without a new BATCH_SAVE_PROFILE).
 
-        CAVEAT: the exact success JSON body for this route is NOT fully confirmed. The
-        handler returns `HttpResult.onSuccess(<fileCount>)`; whether the wire shape
-        matches the `{state,msg}` seen on `/upload` is an open question (see PROTOCOL.md
-        "Not yet implemented in the app"). Modeled below as the same
-        UploadResult shape with that uncertainty noted.
+        HAZARD (CONFIRMED): the vendor client POSTs `core_bar_assets.zip` here with NO
+        `subDir` and NO `isFull`. The server defaults are subDir "" and isFull true, so a
+        vendor "Deploy project" first deletes the WHOLE external-files directory — every
+        folder another client uploaded (e.g. Deckhand's `deckhand/`) is gone and the
+        TIME covers referencing it go blank. Therefore: always pass a `subDir`, use
+        `isFull=true` only on your own subdir, and re-upload your assets whenever you
+        (re)connect — there is no way to probe whether they still exist.
+
+        Deckhand uses this route today only for its one-shot preview flow's zip
+        (the preview image itself is served from the Mac, since 30742 needs an http URL).
       parameters:
         - name: subDir
           in: query
           required: false
           description: |
-            Subdirectory under the external files dir to extract into. Optional;
-            default is "" (the files dir root).
+            Subdirectory under the external files dir to extract into. Server default
+            is "" = the files dir ROOT. Clients must always set it (see HAZARD).
           schema:
             type: string
             default: ""
@@ -135,8 +189,9 @@ paths:
           in: query
           required: false
           description: |
-            If true, the target subdir is wiped before extracting (full replace). If
-            false, files are merged in. Server default is "true". Sent as a string.
+            If true, the target directory (`<externalFilesDir>/<subDir>`) is recursively
+            deleted before extracting. Server default is "true" — combined with an
+            empty subDir that wipes everything. Sent as a string.
           schema:
             type: boolean
             default: true
@@ -157,18 +212,76 @@ paths:
       responses:
         '200':
           description: |
-            Upload accepted and extracted. Exact JSON body shape unconfirmed for this
-            route (see description caveat).
+            Upload accepted and extracted. CONFIRMED body: `{"state":200,"msg":"ok",
+            "data":<number of image files written>}`; errors are
+            `{"state":-1,"msg":"<text>","data":null}` (HTTP status still 200).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UploadResult'
               examples:
                 ok:
-                  summary: Shape unconfirmed — mirrors /upload success for now
+                  summary: Three images extracted
                   value:
                     state: 200
                     msg: ok
+                    data: 3
+  /tgz/{path}:
+    get:
+      tags: [static]
+      operationId: getCacheFile
+      summary: Static mount of the CoreBar cache directory
+      description: |
+        CONFIRMED (`WebServerConfig`): `/tgz/**` serves `getCacheDir()` read-only, no
+        listing. This is how a VivoCube fetches its layer package: `/upload?serialNo=`
+        stores it at `<cacheDir>/tgz/<serial>.tgz`, so it is reachable here as
+        `/tgz/tgz/<serial>.tgz` (the module is told `http://<corebar>:8080/tgz/<serial>.tgz`
+        — the server's own mapping). Not usable as a general file host: writing requires
+        a provisioned module serial and triggers a module update. Files from
+        `/upload/zip` (external files dir) are NOT under this mount.
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The file.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Not found.
+  /module/{path}:
+    get:
+      tags: [static]
+      operationId: getModuleBackupFile
+      summary: Static mount of the module backup directory
+      description: |
+        CONFIRMED (`WebServerConfig`): `/module/**` serves `getFilesDir()/backup/module`
+        read-only. Contents not examined; listed for completeness. These two mounts
+        (`/tgz`, `/module`) are the ONLY static routes — nothing serves the external
+        files dir, which is why PREVIEW_SCREENSAVER (30742) needs an http URL hosted
+        elsewhere (Deckhand hosts it on the Mac).
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The file.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Not found.
   /widget/icon:
     get:
       tags: [widget]
@@ -177,8 +290,10 @@ paths:
       description: |
         Returns a widget icon image. Icon URLs of the form
         `http://<ip>:8080/widget/icon?id=...&type=...&scheme=...` are built by the
-        launcher (`ProfileManager.getAppICON`/`getICON`) and appear as widget `icon`
-        fields. This confirms the :8080 base and the shape of widget icon URLs.
+        launcher (`ProfileManager.getAppICON`/`getICON`, schemes ID / HOME_TYPE /
+        APPLICATION / PLAYER) and appear as widget `icon` fields in the 1002 catalogue.
+        It serves only built-in drawables, `assets/static/icon/<id>.png` and installed
+        app icons — never uploaded files. The vendor client does not call it.
 
         The exact meaning of each parameter and the returned content type are not fully
         documented in the sources (see description caveats on the parameters).
@@ -220,14 +335,24 @@ components:
     UploadResult:
       type: object
       description: |
-        Success body returned by `/upload`. Confirmed shape for the module route; the
-        `/upload/zip` body shape is unconfirmed (see that route's description).
+        Body returned by both upload routes (`HttpResult`), always with HTTP status 200.
+        CONFIRMED: `/upload?serialNo=` → `state` 200 with `data:""` (module
+        acknowledged), -1 (no reply / server error), or the module's status byte
+        (1 busy, 2/4 no network, other error). `/upload/zip` → `state` 200 with
+        `data:<int image count>`, or -1 with `data:null`.
+      required: [state, msg]
       properties:
         state:
           type: integer
-          description: Status code in the body; 200 = ok.
-          examples: [200]
+          description: 200 = ok; -1 = timeout or server-side error; 1..255 = module status byte (module route).
+          examples: [200, -1, 1, 2]
         msg:
           type: string
-          description: Human-readable status; "ok" on success.
+          description: '"ok" on success; otherwise the error text (e.g. "reply error:1", "write update command success,update timeout").'
           examples: ["ok"]
+        data:
+          description: '"" on the module route; integer count of extracted images on /upload/zip; null on errors.'
+          oneOf:
+            - type: string
+            - type: integer
+            - type: 'null'

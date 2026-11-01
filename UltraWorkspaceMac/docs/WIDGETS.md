@@ -1,6 +1,6 @@
 # Deckhand widgets — how they work, and how to build one
 
-A widget renders a small card that Deckhand pushes to a display: a VivoCube (240×240, round) or the CoreBar screen (1424×280, wide). On a VivoCube, widgets can be shown statically or rotated. On the CoreBar screen only the one-shot preview exists today ("Show this on the CoreBar screen now", `PREVIEW_SCREENSAVER`), it renders the weather-only wide layout, and rotation / persistent pages are not implemented (they need `BATCH_SAVE_PROFILE`; see ROADMAP.md).
+A widget renders a small card that Deckhand pushes to a display: a VivoCube (240×240 today — that is the vendor's 100 % icon size; the square panel itself is probably larger and is being measured with the *Panel size test*) or the CoreBar screen. On a VivoCube, widgets are shown statically or rotated: Deckhand renders every ticked widget into its own layer of one package (max 6), uploads it once and then switches layers with property 9, exactly like the vendor client's `VIVO_CUBE_TOGGLE`. On the CoreBar screen only the one-shot full-screen preview exists today ("Show this on the CoreBar screen now", `PREVIEW_SCREENSAVER`, weather-only wide layout). Persistent CoreBar pages will **not** be full-screen images: a page is a strip of the vendor's own cards, and Deckhand's rendered image can only be the clock (TIME) card's cover (≈540×240 card, rounded cover plus a blurred copy behind it). So the "wide" widget target is really a small cover image plus vendor cards configured from the Mac; see ROADMAP.md and PROTOCOL.md.
 
 ## How built-in widgets work today
 
@@ -10,7 +10,7 @@ Each built-in widget is a tiny, self-contained Swift renderer in `Sources/UltraW
 - An optional data source `XxxStats` / `XxxSource` (a small `Sendable` type that samples system/network/API data).
 - Registration: a case in `Theme` (title + SF Symbol), a branch in `AppModel.renderTheme`, and a one-line description in the Widgets pane.
 
-Deckhand converts the RGBA to the device format: RGB565(+alpha) + tar/gzip for a VivoCube module, or an ordinary PNG in a zip for the CoreBar screen.
+Deckhand converts the RGBA to the device format: an LVGL v8 image (RGB565, **opaque by default** — `DeviceImage.encode(allowAlpha:)` is opt-in because the vendor encoder expects straight, not premultiplied, alpha) inside a tar/gzip layer package for a VivoCube module, or an ordinary PNG for the CoreBar screen (served from the Mac for the preview; later uploaded in a zip under `subDir=deckhand` as a TIME-card cover).
 
 This is great for built-ins but is **macOS-only and requires recompiling the app** — not suitable for a community marketplace. That's the open decision below.
 
@@ -18,7 +18,7 @@ This is great for built-ins but is **macOS-only and requires recompiling the app
 
 To "build a widget once, run on macOS and Windows", a widget can't be compiled Swift. Full option set:
 
-1. **HTML/CSS/JS, authored in TypeScript, rendered headlessly to an image** — CHOSEN. A widget is a folder with `manifest.json` + a built `index.html`/`bundle.js` (authored in TypeScript, compiled to JS) + assets. Deckhand loads it in an offscreen web view (WKWebView on macOS, WebView2 on Windows), hands it data via a typed JS bridge, and snapshots to the target resolution (240×240 or 1424×280). Pros: truly write-once, the largest author pool, TypeScript gives authors types + tooling, easy styling/animation/Canvas/SVG, sandboxable (no filesystem/native access — only the data we inject). Cons: a web runtime per render (fine at a 10–60 s cadence). We publish an official `@deckhand/widget-sdk` TypeScript package with the typed data API and a local preview harness.
+1. **HTML/CSS/JS, authored in TypeScript, rendered headlessly to an image** — CHOSEN. A widget is a folder with `manifest.json` + a built `index.html`/`bundle.js` (authored in TypeScript, compiled to JS) + assets. Deckhand loads it in an offscreen web view (WKWebView on macOS, WebView2 on Windows), hands it data via a typed JS bridge, and snapshots to the target size (the VivoCube canvas — 240×240 today — or the CoreBar clock-cover size; the full 1424×280 is only used by the one-shot preview). Pros: truly write-once, the largest author pool, TypeScript gives authors types + tooling, easy styling/animation/Canvas/SVG, sandboxable (no filesystem/native access — only the data we inject). Cons: a web runtime per render (fine at a 10–60 s cadence). We publish an official `@deckhand/widget-sdk` TypeScript package with the typed data API and a local preview harness.
 2. **Declarative JSON/YAML spec** (layout + data bindings, no code). Safest and tiny, renders natively on each platform, but limited expressiveness (no custom charts/animation); good as a *simple* widget tier layered on top of option 1 later.
 3. **WASM module** (write in Rust/AssemblyScript/TinyGo, run anywhere). Very sandboxable and fast, but a much smaller author pool and more toolchain friction than TS — overkill for drawing a card.
 4. **Lua / QuickJS embedded script** (a small scripting runtime drawing to a canvas). Lighter than a full web view, but a bespoke API few people know; weaker ecosystem than TS.
@@ -34,7 +34,7 @@ Proposed manifest sketch (format 1):
   "name": "Weather Pro",
   "version": "1.0.0",
   "author": "name <email>",
-  "sizes": ["240x240", "1424x280"],
+  "sizes": ["240x240", "cover"],
   "refreshSeconds": 600,
   "permissions": ["weather", "clock"],
   "entry": "index.html"

@@ -76,22 +76,27 @@ Deckhand is one window with a sidebar on the left:
 - **About Deckhand** at the bottom. The **Settings** gear and **About** are also in the toolbar.
 
 ### CoreBar → Overview
-- **CoreBar screen** — a live preview of what the big (1424 × 280) screen would show, and the button **Show this on the CoreBar screen now**. This is a one-shot, non-destructive preview: the CoreBar displays the image full-screen immediately, nothing is saved, and your pages on the device are untouched. Today the preview shows the weather-only wide layout.
-- **Widget rotation (CoreBar)** — the controls are visible, but publishing widgets persistently to the big screen is not implemented yet; your selection is saved for when it is.
+- **CoreBar screen** — a live preview of what the big (1424 × 280) screen would show, and the button **Show this on the CoreBar screen now**. This is a one-shot, non-destructive preview: Deckhand serves the image from your Mac over the local network (the CoreBar can only fetch http addresses), the CoreBar displays it full-screen immediately, nothing is saved, and your pages on the device are untouched. The CoreBar sends no confirmation for this, so the app cannot tell you whether it was shown — look at the screen; if nothing appears, make sure your Mac's firewall allows incoming connections for Deckhand and that both are on the same network. Today the preview shows the weather-only wide layout.
+- **Widget rotation (CoreBar)** — the controls are visible, but publishing to the big screen persistently is not implemented yet; your selection is saved for when it is. Note that the CoreBar's pages are strips of its own cards (clock, weather, buttons…), not full-screen pictures: when this lands, Deckhand's image will appear as the clock card's picture, and full-screen stays a one-shot preview.
 - **Modules** — every module the CoreBar reports, with a green dot for online, and an **Open** link to its page. **Refresh / set up** re-scans (see section 4).
 - An activity log on the right shows what the app is doing.
 
+> ⚠️ **If you also use the official UltraWorkSpace app**: its *Deploy project* rewrites the whole CoreBar — pages, automations, module setup — and deletes every image file other apps uploaded to it, including Deckhand's. Likewise, once Deckhand writes pages it will replace what the official app deployed. Use one app per CoreBar, or expect to re-publish from Deckhand after each official deploy.
+
 ### VivoCube
 - A live preview of the current widget.
-- **Display** — **Screen On**, **Screen Off**, **Reboot**.
-- **Widget rotation** — tick the widgets you want on this cube and set the interval (15 s, 30 s, 1 min, 3 min). With one widget ticked the button reads **Publish to VivoCube**; with several it reads **Publish & rotate** and a **Stop** button appears while the rotation runs.
-- **Push a custom image** — **Choose image…** picks any picture; it's rendered to the cube's pixel format and uploaded. If a module isn't registered yet, the app provisions it automatically and retries.
+- **Display** — **Screen On**, **Screen Off**, **Reboot**, **Recover display**.
+  - **Screen Off** is remembered by the CoreBar: it re-applies it to the cube after every reboot, reconnect or widget update until you press **Screen On** again. So don't use Screen Off while a rotation is running, or the cube stays dark.
+  - **Recover display** is for a cube that stays black: the CoreBar also remembers which layer/widget the cube should show, and if that no longer exists in the last package it keeps re-selecting nothing. The button reads back that state, turns the screen on and points the cube at the first widget again. Use it before re-publishing.
+- **Panel size test…** (experiment) — pushes a test pattern of a chosen size (240 … 480 px) with a red frame at the very edge. If the frame is visible on all four sides about 10 seconds later, the cube's panel is at least that big. Deckhand renders at 240 × 240 today because that is the size the official app uses, but the panel itself is probably larger; this test is how we find out. Publish a widget again afterwards to restore the normal display.
+- **Widget rotation** — tick the widgets you want on this cube and set the interval (15 s, 30 s, 1 min, 3 min). With one widget ticked the button reads **Publish to VivoCube**; with several it reads **Publish & rotate** and a **Stop** button appears while the rotation runs. How it works: all ticked widgets (up to 6) are sent to the cube **once** as separate layers; after about 10 seconds for the cube to apply them, Deckhand only tells it which layer to show at each interval — the cube isn't re-flashed every step. The contents (weather, music…) are refreshed every few minutes. The log line "Package accepted — waiting 10 s" is normal: the CoreBar acknowledges the upload immediately, the cube then downloads and applies it itself over Wi-Fi.
+- **Push a custom image** — **Choose image…** picks any picture; it's rendered to the cube's pixel format (opaque; transparency is flattened) and uploaded. If a module isn't registered yet, the app provisions it automatically and retries. If the upload is refused with "busy" or "not connected to the network", the cube's own Wi-Fi link is the problem, not the image: the cube fetches new images over Wi-Fi, not over the magnetic connector.
 
 ### SenseCube
 Shows the live **temperature**, **humidity** and **ambient light** read from the sensor, polled every 5 seconds while the page is open (there is also a **Refresh** button). Presence (mmWave radar), sound level and vibration are handled on the device only and cannot be read over the network protocol, so they are not shown.
 
 ### KnobKey and DotKey
-Information pages for now. The CoreBar does not send raw knob or key events to the Mac; it only sends pre-mapped messages once a control is bound to a "PC" target in the device profile. Writing that profile from Deckhand is on the roadmap, so **KnobKey → volume** and **DotKey → Mac actions** are not available yet.
+Information pages for now. The CoreBar does not send raw knob or key events to the Mac; it only sends pre-mapped requests (volume up/down, "run this on the PC", "how busy is the CPU?") once a control is bound to a "PC" target in the device profile, and the Mac has to answer each of them over a connection it keeps open. Hot-key combinations never go through the Mac app at all — the CoreBar types them itself as a USB keyboard over the PC-LINK cable. Writing that profile and keeping that connection open are on the roadmap, so **KnobKey → volume** and **DotKey → Mac actions** are not available yet.
 
 ### Widgets
 Pick a widget on the left to see its description and settings. All 13 widgets ship today: **Weather & time**, **Music (album art)**, **Claude Code monitor**, **CPU & memory**, **Network**, **Battery & power**, **Storage**, **World clock**, **Crypto ticker**, **Calendar**, **Disk I/O**, **Top CPU**, **Uptime**.
@@ -135,7 +140,11 @@ This is independent of the CoreBar's own built-in AccuWeather widget, which need
 - **App won't open (unidentified developer)** — right-click → Open (see Install), once.
 - **A module is missing after a scan** — tap the CoreBar screen to wake everything, make sure the module is attached and powered, then press **Refresh / set up** (see section 4).
 - **"Module not accepted" on an image push** — the app auto-provisions and retries; if it still fails, re-scan modules first.
-- **Pushed image looks off** — re-publish the widget; if a custom image still looks wrong, try a square source image (the cube is 240 × 240).
+- **VivoCube upload says "busy" or "not connected to the network"** — the cube downloads new images over its own Wi-Fi link. Check the cube's Wi-Fi in the official app or on the CoreBar, then try again; wait at least 10 seconds between uploads.
+- **VivoCube stays black** — press **Recover display** on the VivoCube page (then re-publish if needed). Avoid **Screen Off** while a rotation runs. If it is still black, press **Reboot** on the VivoCube page and publish again.
+- **Pushed image looks off** — re-publish the widget; if a custom image still looks wrong, try a square source image (Deckhand renders 240 × 240; transparency is flattened).
+- **The CoreBar preview does nothing** — the CoreBar fetches the preview image from your Mac; allow Deckhand through the macOS firewall (System Settings → Network → Firewall) and keep both devices on the same network. There is no error message because the CoreBar does not acknowledge previews.
+- **My CoreBar images / pages disappeared** — most likely the official UltraWorkSpace app deployed in between; it erases other apps' files. Re-publish from Deckhand.
 - **CoreBar clock wrong** — set time/timezone on the CoreBar itself (it uses NTP); the Mac app can't push time.
 - **Weather shows the wrong place** — allow Location access, or set a manual city in **Widgets → Weather & time**.
 
@@ -143,6 +152,6 @@ This is independent of the CoreBar's own built-in AccuWeather widget, which need
 
 ## 8. What's next (roadmap)
 
-Persistent pages and widget rotation on the CoreBar's big screen, KnobKey → volume and DotKey → Mac actions (both need the profile-write path), presence-based wake, module OTA firmware updates, a notarized release, and a Stream-Deck-style widget marketplace. This section can lag behind the code; the current status is in `docs/ROADMAP.md` in the repository.
+Persistent pages on the CoreBar's big screen (the CoreBar's own cards configured from the Mac, with Deckhand's image as the clock card's picture), KnobKey → volume and DotKey → Mac actions (both need the profile-write path and a permanently open connection), presence-based wake, module OTA firmware updates, measuring the VivoCube's real panel size, a notarized release, and a Stream-Deck-style widget marketplace. This section can lag behind the code; the current status is in `docs/ROADMAP.md` in the repository.
 
 Support: this is community software — file issues at https://github.com/DeNoronha/UltraWorkspaceMac/issues.

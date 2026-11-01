@@ -22,15 +22,15 @@ Deckhand talks to the CoreBar over **Wi-Fi / your LAN**, not over USB; the cable
 ## Hardware it talks to
 
 - **CoreBar** — the hub: a 5:1 ultrawide touch display (1424 × 280), running LineOS (an Android variant), with a built-in speaker and PC-monitoring. Everything this app does goes through the CoreBar, which relays to its attached modules.
-- **QuantumLink modules** — magnetic snap-on units on the CoreBar's bus: **VivoCube** (2.0" round AMOLED, 240 × 240), **SenseCube** (sensors), **KnobKey** (rotary encoder), **DotKey** (key array), and the **PC-Boot card**.
+- **QuantumLink modules** — magnetic snap-on units on the CoreBar's bus: **VivoCube** (2.0" square AMOLED; Deckhand renders 240 × 240, the vendor's 100 % icon size — the panel's real resolution is still being measured), **SenseCube** (sensors), **KnobKey** (rotary encoder), **DotKey** (key array), and the **PC-Boot card**.
 
 ## Status — what works today
 
 **Device connection**
-- **Discovery** — finds CoreBars on the LAN over UDP broadcast (port 5319, probe `{"act":"discover"}`, 8 s scan).
+- **Discovery** — finds CoreBars on the LAN over UDP broadcast (port 5319, probe `{"act":"discover"}`, 8 s scan). The vendor client sends the plain string `discovery.ultrabar` instead; the firmware answers both.
 - **Add CoreBar by IP** — sidebar → CoreBars → **Add by IP…** sends the same discovery probe as a unicast to one address. Use it when broadcast can't reach the device (other subnet, VPN, or the mock CoreBar running in Docker — see *Testing without hardware*).
-- **Pairing** — pairs with a CoreBar (`REQ_AUTH_TOKEN` / act 101); the user taps *Approve* on the CoreBar within ~30 s and a token comes back. The token is stored in a `0600` file in Application Support (not the Keychain — see Limitations). The CoreBar's self-signed certificate is pinned on first use (trust-on-first-use); a later certificate mismatch aborts *before* the token is ever sent.
-- **Control channel** — one TLS connection per operation (line-delimited JSON, port 7431, SNI `ultrabar.local`; the device negotiates TLS 1.3, the client allows ≥ 1.2).
+- **Pairing** — pairs with a CoreBar (`REQ_AUTH_TOKEN` / act 101 with `{id, name}`); the user taps *Approve* on the CoreBar within ~30 s and a token comes back. The token is stored in a `0600` file in Application Support (not the Keychain — see Limitations). The CoreBar's self-signed certificate is pinned on first use (trust-on-first-use); a later certificate mismatch aborts *before* the token is ever sent. (The vendor client verifies nothing at all — see `docs/SECURITY.md`.)
+- **Control channel** — one TLS connection per operation (line-delimited JSON, port 7431, SNI `ultrabar.local`; the device negotiates TLS 1.3, the client allows ≥ 1.2). The vendor client keeps one persistent connection with a 3 s heartbeat instead; Deckhand will need the same once it answers the device's `PUSH_MESSAGE` requests (inputs).
 
 **Module enumeration & provisioning**
 - **Module listing** — the app first tries the gateway-config read (`GET_COREBAR_CONFIG` 30740 with `{type:"GATEWAY_CONFIG"}`, which returns null on the firmware tested but is kept for firmwares that answer), then runs a **live bus scan**: it fires `MODULE_START_DISCOVERY` (act 30100) on both buses (`"can"` for the magnetic QuantumLink bus, `"mesh"` for wireless) and collects the `MODULE_START_DISCOVERY_REPLAY` (act 30102) messages the CoreBar pushes back, one per found module. Only if that finds nothing does it fall back to `GET_DEVICE` (1300, logical/integration devices). On the tested firmware the scan is the source of truth.
@@ -39,7 +39,7 @@ Deckhand talks to the CoreBar over **Wi-Fi / your LAN**, not over USB; the cable
 - **Auto-provision on upload** — if an image push is rejected with "module not found", the app provisions once and retries automatically.
 
 **VivoCube widgets**
-Each widget renders a 240 × 240 image on the Mac, which is encoded to the module pixel format and pushed over HTTP. Widgets can be published one at a time or rotated at a configurable interval (15 s – 3 min). All 13 ship today (`Theme.swift`):
+Each widget renders a 240 × 240 image on the Mac, which is encoded to the module pixel format and pushed over HTTP. Widgets can be published one at a time or rotated at a configurable interval (15 s – 3 min). Rotation follows the vendor's own model: all ticked widgets (max 6) go into **one** multi-layer package (layer *n* → widget `100+n`), uploaded once; after a 10 s settle the app switches layers by writing property 9 (`(layer<<16)|widget`) instead of re-flashing the cube each step, and re-uploads contents only every few minutes. The VivoCube page also has **Recover display** (screen on + layer 1 / widget 101, for the CoreBar's cached-state black screen) and a **Panel size test…** menu (240 … 480 px test patterns to measure the real panel). All 13 widgets ship today (`Theme.swift`):
 - **Weather & time** — Open-Meteo (free, no API key). Location fallback order: macOS Location → the manual city/coordinates you entered → IP geolocation (ipwho.is).
 - **Music (album art)** — album art plus title/artist from Music.app.
 - **Claude Code monitor** — tokens used today and active sessions, read from `~/.claude`.
@@ -48,11 +48,12 @@ Each widget renders a 240 × 240 image on the Mac, which is encoded to the modul
 - **World clock** (Amsterdam / New York / Tokyo), **Calendar** (next events; needs Calendar access), **Crypto ticker** (BTC/ETH via CoinGecko, no API key).
 
 **CoreBar big screen (1424 × 280)**
-- **One-shot preview works**: the CoreBar page's **"Show this on the CoreBar screen now"** uploads a 1424 × 280 PNG in a zip (`POST /upload/zip`) and shows it with `PREVIEW_SCREENSAVER` (30742). It is non-destructive — it changes no saved pages — and currently renders the weather-only wide layout.
-- **Not yet**: persistent pages/wallpaper and widget rotation on the big screen (needs `BATCH_SAVE_PROFILE` 1108, which replaces the whole profile list). The CoreBar rotation controls are present but disabled.
+- **One-shot preview works (confirmed on hardware)**: the CoreBar page's **"Show this on the CoreBar screen now"** renders a 1424 × 280 PNG, serves it from the Mac over HTTP (`UltraBarKit/PreviewServer.swift`, ephemeral port — the device only accepts http(s) URLs and does not serve uploaded files back) and shows it with `PREVIEW_SCREENSAVER` (30742). The device never acknowledges 30742. It is non-destructive — it changes no saved pages — and currently renders the weather-only wide layout.
+- **Not yet, and re-scoped**: persistent pages via `BATCH_SAVE_PROFILE` (1108). The vendor-client analysis shows there is **no wallpaper / full-screen image page**: a page is a strip of the CoreBar's own cards, and Deckhand's image can only be the clock card's cover. So the plan is "vendor widgets configured from the Mac + our image as the clock cover" (see `docs/ROADMAP.md`). The CoreBar rotation controls are present but disabled.
+- **Warning**: the official UltraWorkSpace app's *Deploy project* uploads its assets with a request that wipes the CoreBar's entire external files directory and replaces all profiles — anything Deckhand put there is gone. The two apps cannot co-own a CoreBar.
 
 **Image push**
-Pick any image (or let a widget render one); it is encoded to RGB565 (plus an alpha byte per pixel when the image isn't fully opaque) with an 8-byte header, wrapped in a ustar tar + gzip "deploy package", and POSTed to `http://<corebar>:8080/upload?serialNo=<serial>` as multipart form data. A successful push returns `{"state":200,"msg":"ok"}`.
+Pick any image (or let a widget render one); it is encoded as an LVGL v8 image — RGB565 big-endian with an 8-byte header, opaque by default (`DeviceImage.encode(allowAlpha:)` is an opt-in; the vendor encoder expects straight alpha) — wrapped in a ustar tar + gzip layer package with `config.json`, and POSTed to `http://<corebar>:8080/upload?serialNo=<serial>` as multipart form data. `{"state":200,"msg":"ok","data":""}` means the CoreBar stored the package and the cube **acknowledged** the update command; the cube then downloads it from the CoreBar over its own Wi-Fi and applies it a few seconds later (`state` 1 = busy, 2/4 = cube not on Wi-Fi, -1 = no reply in 5 s).
 
 **SenseCube** — temperature, humidity and ambient light are read live over the protocol (`MODULE_PROPERTY_READ` 30200, polled every 5 s on the SenseCube page). Presence, sound and vibration are event-only on the device and are not readable over the protocol.
 
@@ -67,7 +68,7 @@ Pick any image (or let a widget render one); it is encoded to RGB565 (plus an al
 Deckhand is a single window with a sidebar:
 
 - **CoreBars** — discovered and paired CoreBars, **Scan for CoreBars**, **Add by IP…**.
-- **Device section** (the selected CoreBar) — **Overview** (big-screen preview, CoreBar rotation placeholder, module list, activity log, **Refresh / set up**) and one page per module: **VivoCube** (screen on/off, reboot, widget rotation, custom image), **SenseCube** (live readings), **KnobKey** and **DotKey** (info-only for now).
+- **Device section** (the selected CoreBar) — **Overview** (big-screen preview, CoreBar rotation placeholder, module list, activity log, **Refresh / set up**) and one page per module: **VivoCube** (screen on/off, reboot, Recover display, panel size test, widget rotation, custom image), **SenseCube** (live readings), **KnobKey** and **DotKey** (info-only for now).
 - **Configure** — **Widgets** (per-widget settings, including weather location/units and the Music transport), **People**, **Logs** (every Mac↔CoreBar message, token redacted).
 - **About Deckhand** at the bottom of the sidebar; the **Settings** gear (toolbar) holds the CoreBar summary, the connection/USB-port guidance, and what has to be set on the CoreBar itself.
 
@@ -100,7 +101,7 @@ cd mock-corebar && npm install && npm run dev     # or: docker compose up --buil
 ```
 
 - With Docker on macOS, UDP broadcast doesn't cross Docker's NAT, so in Deckhand use **CoreBars → Add by IP… → 127.0.0.1**. Running natively (`npm run dev`) supports broadcast discovery.
-- The mock auto-approves pairing after about 1 s (a real device waits for you to tap Approve within 30 s).
+- The mock auto-approves pairing after about 1 s (a real device waits for you to tap Approve within 30 s), answers the vendor's `discovery.ultrabar` probe too (so the official app can be pointed at it), emulates the CoreBar's cached screen/layer properties, and writes every upload to `mock-corebar/captures/`.
 - `kitcheck e2e` drives the whole UltraBarKit protocol path against the mock and exits non-zero on any failure (see *Project layout*).
 
 ## Limitations
@@ -125,9 +126,10 @@ Teams / FaceTime / Mail actions on the People page open deep links in the respec
   - `Models` — protocol constants (`Proto`): ports, act codes, property ids, QuantumLink product ids, and the `CoreBar` / `AttachedModule` types.
   - `Discovery` — UDP LAN discovery (broadcast `listen` and unicast `probe(ip:)` for Add-by-IP).
   - `CoreBarClient` — one TLS control connection; line-delimited JSON; pairing, auth, request/reply correlation; TOFU certificate pinning.
-  - `CoreBarSession` — high-level operations over fresh connections: module listing, provisioning (`SET_GATEWAY_CONFIG`), property read/write, screen/reboot, SenseCube reads, the module HTTP upload, and the big-screen zip upload + preview.
-  - `DeviceImage` — image → RGB565(+alpha) encoder.
-  - `DeployPackager` — ustar + gzip deploy-package builder.
+  - `CoreBarSession` — high-level operations over fresh connections: module listing, provisioning (`SET_GATEWAY_CONFIG`), property read/write, screen/reboot, VivoCube layer switching and recovery (`setLayer`, `readLayerWidget`, `recoverDisplay`), SenseCube reads, the module HTTP upload, and the big-screen zip upload + preview.
+  - `PreviewServer` — a tiny HTTP server on the Mac that hosts the big-screen preview PNG for `PREVIEW_SCREENSAVER`.
+  - `DeviceImage` — image → LVGL v8 RGB565 encoder (opaque by default, alpha opt-in).
+  - `DeployPackager` — ustar + gzip multi-layer package builder.
   - `ZipWriter` — minimal zip writer for the big-screen `/upload/zip` route.
   - `Store` — file-based token store plus per-CoreBar metadata (cert pin, last IP) and the gateway-endpoint cache, all in Application Support.
   - `OpenMeteo`, `SystemStats`, `NetworkStats`, `ClaudeUsage` — data sources for the widgets.
@@ -163,16 +165,17 @@ The local CoreBar protocol was recovered by decompiling the independent ClickOnc
 Mirrors [`docs/ROADMAP.md`](docs/ROADMAP.md); that file is authoritative.
 
 **Done**
-- Discovery, pairing, TOFU pinning, live bus scan + provisioning with the asleep-module cache, 13 VivoCube widgets with per-device rotation.
+- Discovery, pairing, TOFU pinning, live bus scan + provisioning with the asleep-module cache, 13 VivoCube widgets with per-device rotation using the vendor's layer model (one package, property-9 switching), Recover display, panel size test.
 - **SenseCube** temperature / humidity / light, live on the SenseCube page.
-- **CoreBar big-screen preview** (zip upload + `PREVIEW_SCREENSAVER`), non-destructive.
-- The inbound **`PUSH_MESSAGE` (1000000)** path for KnobKey/DotKey is mapped in `PROTOCOL.md` (the device pushes semantic `SET_VOLUME` / `PC_CONTROL` messages once a control is bound to a PC target in the profile).
+- **CoreBar big-screen preview** (Mac-hosted image + `PREVIEW_SCREENSAVER`), non-destructive, confirmed on hardware.
+- The inbound **`PUSH_MESSAGE` (1000000)** request/reply contract for KnobKey/DotKey is fully mapped in `PROTOCOL.md` (confirmed from the vendor client).
 
 **Pending**
-- **CoreBar pages / wallpaper / widget rotation** on the big screen via `BATCH_SAVE_PROFILE` (1108) — needs a safe read-modify-write of the full profile list; wide layouts for widgets other than weather.
-- **KnobKey → volume** and **DotKey → Mac actions** — understood, not implemented; both need the profile-write path above and a listener for act 1000000.
+- **CoreBar pages** via `BATCH_SAVE_PROFILE` (1108) — vendor cards configured from the Mac plus our image as the clock-card cover (there is no wallpaper page); needs the authoritative local profile list, the 30710 id check, and the vendor-wipe warning.
+- **KnobKey → volume** and **DotKey → Mac actions** — understood, not implemented; need the profile-write path above plus a persistent connection (heartbeat act 20) that answers act 1000000.
 - **Presence → wake** via an on-device scene (`BATCH_CREATE_SCENE`) — understood, not implemented.
-- **Module OTA firmware flashing** (`.bin`, `MODULE_OAT_*`).
+- **Module OTA firmware flashing** (`UBX-OTA-FILE` `.bin`, `MODULE_OAT_START` / `DATA` — framing fully specified in `PROTOCOL.md`).
+- **VivoCube panel size** — measure with the panel size test and raise the 240 px canvas if the panel is larger.
 - A Stream-Deck-style **widget marketplace** (web/TypeScript widget format, see `docs/WIDGETS.md`), and a notarized / Developer-ID signed release.
 
 ## Ecosystem features (reference / backlog)
@@ -190,7 +193,7 @@ What the UltraBar X ecosystem advertises across its sources — the target surfa
 
 **Software (official UltraWorkSpace + LineOS)**
 - Positioned as "**Stream Deck + macro keyboard + secondary display**, combined" — a highly customizable macro/shortcut engine plus real-time PC monitoring (CPU/memory).
-- Profiles, multi-layer VivoCube canvas (up to 6 layers × 3 widget slots), widgets (clock, gauges, image/GIF, humidity/light/radar/sound, WebUI).
+- Profiles, multi-layer VivoCube canvas (marketing says 6 layers × 3 widget slots; the 1.0.1.0 client enforces 6 layers × 6 widgets, button widgets only), widgets (clock, gauges, image/GIF, humidity/light/radar/sound, WebUI).
 - **SceneShift™ AI** — context-aware engine that adapts layouts/controls to the active app/workflow.
 - **Voice Assistant** (added during the campaign) — voice commands to adjust lighting, trigger scenes, switch work modes, check system performance, launch apps.
 - Mesh device search/pair/replace incl. boot cards; automations with third-party app actions; app marketplace (install/update/uninstall).
@@ -249,9 +252,8 @@ Physical, device-level facts: ABS+PC shell, N52 magnetic cores, 0.3 s magnetic r
 - Author: TheDeveloperIncognito@gmail.com
 
 **Cloud backend used by the official app** (from binary strings — not a developer API)
-- API gateway: https://gatewayssl.dev.aiks360.com
-  (paths seen: `/api/v1/base-service/pub/apps/100/fetchListV2`, `/icon/tags/locales/allGrouped`, `/icon/v2/page`, `/plugin/page`)
-- `sys.widget.io`
+- API gateway: https://gatewayssl.dev.aiks360.com — `/api/v1/base-service/pub/icon/tags/locales/allGrouped` and `…/pub/icon/v2/page` (icon library), `…/pub/apps/100/fetchListV2` and `…/pub/apps/100/<id>/fetchLastVerV3` (CoreBar app store; APK `fileUrl` + `sha256`), `…/pub/plugin/page` (PC plugin store). The launcher's cleartext config backup goes to `http://gateway.dev.aiks360.com` (see `docs/SECURITY.md`).
+- The vendor client's project files are `*.umpf` (SQLite); its pairing token lives there, encrypted with a custom cipher.
 
 **Third-party APIs used by the tooling**
 - Open-Meteo: https://api.open-meteo.com/v1/forecast · https://geocoding-api.open-meteo.com/v1/search · https://air-quality-api.open-meteo.com/v1/air-quality
