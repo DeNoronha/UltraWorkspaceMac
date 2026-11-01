@@ -1,0 +1,88 @@
+{
+	"data":{
+		"group":[
+			{
+				"id":1516,
+				"tag":"Function"
+			},
+			{
+				"id":1525,
+				"tag":"Brands"
+			},
+			{
+				"id":1527,
+				"tag":"UI Elements"
+			},
+			{
+				"id":1533,
+				"tag":"Apps"
+			},
+			{
+				"id":3045,
+				"tag":"Development"
+			}
+		],
+		"category":[
+			{
+				"id":1517,
+				"tag":"Key Actions"
+			},
+			{
+				"id":1534,
+				"tag":"Apps · Color"
+			},
+			{
+				"id":3035,
+				"tag":"Brands · Official Color"
+			},
+			{
+				"id":3038,
+				"tag":"Brands · Color"
+			},
+			{
+				"id":3040,
+				"tag":"Web Apps"
+			},
+			{
+				"id":3041,
+				"tag":"Work Apps"
+			},
+			{
+				"id":3043,
+				"tag":"General"
+			},
+			{
+				"id":3046,
+				"tag":"Development"
+			},
+			{
+				"id":3047,
+				"tag":"Apps · Mono Line"
+			},
+			{
+				"id":3049,
+				"tag":"Brands · Mono"
+			},
+			{
+				"id":3051,
+				"tag":"UI · Line"
+			},
+			{
+				"id":3053,
+				"tag":"UI · Fill"
+			}
+		],
+		"iconStyle":[
+			{
+				"id":1519,
+				"tag":"Monochrome"
+			},
+			{
+				"id":1529,
+				"tag":"Color"
+			}
+		]
+	},
+	"msg":"ok",
+	"state":200
+}

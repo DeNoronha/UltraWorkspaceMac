@@ -1,0 +1,10 @@
+# Vendor cloud catalogues (snapshot 2026-11-01)
+
+Public, unauthenticated endpoints of the vendor backend `https://gatewayssl.dev.aiks360.com/api/v1/base-service/pub/` (operated by 深圳埃克思科技有限公司 / Shenzhen AIKS Technology, the smart-home ODM behind Sanytron's LineOS). Fetched with plain GET/POST, no token.
+
+- `plugin-catalog.json` — `GET plugin/page?pi=1&ps=100`: the "plugin store" of the official desktop client (9 packs: Zoom/OBS hotkeys, Photoshop, Word, Excel, Windows, Emoji, Website, AI Website). Each record has `file` (zip on `sslcdn.lifex360.com`), `sha256`, `icon`, `preview[]`, `regionIds`.
+- `plugin-example-zoom-config.json` — `config.json` from the Zoom pack. A plugin is a zip with `config.json` + `icon/*.png`: `{identifier, name, icon, homepage, versionName, versionCode, author, description, button:[{id, name, icon:"file://icon/x.png", type:"PC_CONTROL", spanSize, param:{output:5, keys:[HID usage codes]}}]}` — i.e. a HOT_KEY_GROUP for the CoreBar (keys are USB HID usages sent by the CoreBar as a keyboard; 226 = Left Alt).
+- `app-catalog.json` — `POST apps/100/fetchListV2 {"pi":1,"ps":200}`: the device app store (APKs the CoreBar installs via APP_MANAGER 30600): Sonos, HomeAssistant, Whitenoise, Calculator, Alarmclock, UltraBar Files, UltraNotes, UltraRadio, **UltraAgent (`com.ultraagent.shell`)**. Fields: appName, application, versionName/Code, fileUrl, md5, sha256, changeLog, desc, icon. No launcher (LineOS) update is listed here; the launcher APK ships via the GitHub release only.
+- `icon-tags.json` — `GET icon/tags/locales/allGrouped`: tag groups of the icon library (`icon/v2/page` pages through it).
+
+Relevance for Deckhand: the plugin zip format is a ready-made spec for "hotkey packs" we can import 1:1 as HOT_KEY_GROUP / PC_CONTROL cards; the app catalogue tells which screensaver/whitenoise/radio packages exist for `GET_APP_LIST` / screensaver config. Treat all of it as third-party data.

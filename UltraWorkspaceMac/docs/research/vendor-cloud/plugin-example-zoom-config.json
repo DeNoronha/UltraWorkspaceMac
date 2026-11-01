@@ -1,0 +1,195 @@
+{
+    "button": [
+        {
+            "id": "iZ6iU2xQ4fW3yE1aH9mT4gF6fD4eR5nL",
+            "icon": "file://icon/shiping.png",
+            "type": "PC_CONTROL",
+            "name": "Start/stop video",
+            "spanSize": 2,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+                    25
+                ]
+            }
+        },
+        {
+            "id": "mV9iM1lS9fR8fB8jG2qW6mE5yU0uB4fS",
+            "icon": "file://icon/mute.png",
+            "type": "PC_CONTROL",
+            "name": "Mute/unmute audio",
+            "spanSize": 2,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+                    4
+                ]
+            }
+        },
+        {
+            "id": "sD6yC0wU0oJ1bA4nQ6uQ4nK9nR6yL4aV",
+            "icon": "file://icon/share.png",
+            "type": "PC_CONTROL",
+            "name": "Start/Stop Screen Share",
+            "spanSize": 2,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+					22
+                ]
+            }
+        },
+        {
+            "id": "mY4yA0vZ9hI6sK0mW8gT5tS9jY8yV1rJ",
+            "icon": "file://icon/jushou.png",
+            "type": "PC_CONTROL",
+            "name": "Raise/Lower Hand",
+            "spanSize": 1,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+                    28
+                ]
+            }
+        },
+        {
+            "id": "tC1oP7eK4qZ0oG0pA3pB0aV8kF2qT9oN",
+            "icon": "file://icon/switch-camera.png",
+            "type": "PC_CONTROL",
+            "name": "Switch camera",
+            "spanSize": 1,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+                    17
+                ]
+            }
+        },
+        {
+            "id": "yF3rD5iQ2hN5uB3mI7yZ4nL9kS9gG2rN",
+            "icon": "file://icon/bendi.png",
+            "type": "PC_CONTROL",
+            "name": "Start/Stop Local Recording",
+            "spanSize": 1,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+                    21
+                ]
+            }
+        },
+        {
+            "id": "gW3sR8gW9eO1tZ4dE4pS5eA4lC7bK8sM",
+            "icon": "file://icon/yunduan.png",
+            "type": "PC_CONTROL",
+            "name": "Start/stop cloud recording",
+            "spanSize": 1,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+                    6
+                ]
+            }
+        },
+        {
+            "id": "oO6cC6qO3kS8tA8yN8mU3sI5iO0iU1mF",
+            "icon": "file://icon/canhuizhe.png",
+            "type": "PC_CONTROL",
+            "name": "Show/Hide Participants Panel",
+            "spanSize": 1,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+                    24
+                ]
+            }
+        },
+        {
+            "id": "sP8bL8yE2qE8qQ9lG0lK9hD1kK5oM7zE",
+            "icon": "file://icon/mianban.png",
+            "type": "PC_CONTROL",
+            "name": "Show/Hide In-Meeting Chat Panel",
+            "spanSize": 1,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+                    11
+                ]
+            }
+        },
+        {
+            "id": "qU3iY4sZ8eR3jC1gE9wM0cB9uG7oC9oW",
+            "icon": "file://icon/quanping.png",
+            "type": "PC_CONTROL",
+            "name": "Enter/Exit Full Screen",
+            "spanSize": 1,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+                    9
+                ]
+            }
+        },
+        {
+            "id": "rJ3nH5yX1lD9qL2sR0xC0vJ0uM4gF0dW",
+            "icon": "file://icon/yanjiangzhe.png",
+            "type": "PC_CONTROL",
+            "name": "Switch to Speaker View",
+            "spanSize": 1,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+                    58
+                ]
+            }
+        },
+        {
+            "id": "jP3pN9wP2hM0kZ5xK6wM1kN1dU7xU9cW",
+            "icon": "file://icon/yaoqing.png",
+            "type": "PC_CONTROL",
+            "name": "Open invite window",
+            "spanSize": 1,
+            "param": {
+                "output": 5,
+                "keys": [
+                    226,
+                    12
+                ]
+            }
+        },
+        {
+            "id": "iE3dJ2iA7kS8cU2rQ9oX4oR9lE9cA8iQ",
+            "icon": "file://icon/353.png",
+            "type": "PC_CONTROL",
+            "name": "Push to Talk",
+            "spanSize": 1,
+            "param": {
+                "output": 5,
+                "keys": [
+                    44
+                ]
+            }
+        }
+       
+       
+    ],
+    "identifier": "zG0pN6aV1pF6yM5uX2qV0cH1cC0aK5gJ",
+    "name": "ZOOM Hotkey Plugin",
+    "icon": "http://cdn.lifex360.com/icon/2026/05/3l5gro08air6lnzf6z55.png",
+    "homepage": "",
+    "versionName": "v1.0.0",
+    "versionCode": 1,
+    "author": "Sanytron",
+    "description": "Global Hotkeys for ZOOM."
+}
