@@ -115,9 +115,15 @@ public struct CoreBarSession: Sendable {
         defer { Task { await client.close() } }
         let canData = try JSONSerialization.data(withJSONObject: "can", options: [.fragmentsAllowed])
         let meshData = try JSONSerialization.data(withJSONObject: "mesh", options: [.fragmentsAllowed])
-        try await client.fire(act: Proto.actModuleStartDiscovery, dataJSON: canData)
-        try await client.fire(act: Proto.actModuleStartDiscovery, dataJSON: meshData)
-        let found = await client.collect(act: Proto.actModuleDiscoveryReplay, duration: scanSeconds)
+        // Re-trigger discovery several times across the window: a module that is
+        // asleep (often the DotKey) may only answer a later round.
+        var found: [Data] = []
+        let rounds = max(1, Int(scanSeconds / 5))
+        for _ in 0..<rounds {
+            try await client.fire(act: Proto.actModuleStartDiscovery, dataJSON: canData)
+            try await client.fire(act: Proto.actModuleStartDiscovery, dataJSON: meshData)
+            found += await client.collect(act: Proto.actModuleDiscoveryReplay, duration: 5)
+        }
 
         // Start from the previously-written endpoints so a module that is asleep
         // during this scan (common for the DotKey) is not dropped from the config.
@@ -165,6 +171,13 @@ public struct CoreBarSession: Sendable {
 
     private static func serialOf(_ d: [String: Any]) -> String {
         (d["serialNumber"] as? String) ?? (d["serialNo"] as? String) ?? (d["uid"] as? String) ?? ""
+    }
+
+    /// Decode a cached endpoints blob (as produced by `provision`) into modules,
+    /// so the app can show the last-known modules instantly, without a bus scan.
+    public static func modulesFromEndpoints(_ data: Data) -> [AttachedModule] {
+        guard let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        return arr.map { endpoint($0) }
     }
 
     private static func endpoint(_ e: [String: Any]) -> AttachedModule {

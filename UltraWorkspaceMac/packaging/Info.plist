@@ -30,6 +30,10 @@
     <string>UltraWorkspace controls Apple Music (play/pause, skip, volume) and reads the current track to show it on your VivoCube.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>UltraWorkspace uses your location to show local weather on your UltraBar when "Same as this Mac" is selected.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>UltraWorkspace shows your next calendar events on the connected display.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>UltraWorkspace shows your next calendar events on the connected display.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>

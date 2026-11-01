@@ -43,7 +43,9 @@ private struct SidebarView: View {
         List(selection: Binding(get: { model.nav as NavItem? },
                                 set: { if let v = $0 { model.nav = v } })) {
             Section("CoreBars") {
-                if model.paired.isEmpty { Text("None paired").foregroundStyle(.secondary) }
+                if model.paired.isEmpty && model.discovered.isEmpty {
+                    Text("None yet — press Scan ↻").foregroundStyle(.secondary)
+                }
                 ForEach(model.paired) { bar in
                     Button { selectCoreBar(bar) } label: {
                         HStack {
@@ -59,6 +61,21 @@ private struct SidebarView: View {
                     .buttonStyle(.plain)
                     .contextMenu { Button("Remove / Unpair", role: .destructive) { model.unpair(bar) } }
                 }
+                // Discovered-but-not-yet-paired CoreBars show up here to pair.
+                ForEach(model.discovered.filter { d in !model.paired.contains { $0.serialNo == d.serialNo } }) { bar in
+                    HStack {
+                        Image(systemName: "rectangle.on.rectangle.angled").foregroundStyle(.secondary)
+                        VStack(alignment: .leading) {
+                            Text(bar.name.isEmpty ? bar.serialNo : bar.name)
+                            Text("\(bar.ip) · v\(bar.version)").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Pair") { model.pair(bar) }.buttonStyle(.borderless)
+                    }
+                }
+                Button { model.scan() } label: {
+                    Label(model.isScanning ? "Scanning…" : "Scan for CoreBars", systemImage: "antenna.radiowaves.left.and.right")
+                }.buttonStyle(.borderless).disabled(model.isScanning)
             }
 
             if model.selectedCoreBar != nil {
@@ -75,25 +92,9 @@ private struct SidebarView: View {
             }
 
             Section("Configure") {
-                Label("Add-ons", systemImage: "puzzlepiece.extension").tag(NavItem.addons)
+                Label("Widgets", systemImage: "puzzlepiece.extension").tag(NavItem.addons)
                 Label("People", systemImage: "person.2").tag(NavItem.people)
                 Label("Logs", systemImage: "doc.text.magnifyingglass").tag(NavItem.logs)
-            }
-
-            Section("Discovered") {
-                if model.discovered.isEmpty { Text(model.isScanning ? "Scanning…" : "Press Scan").foregroundStyle(.secondary) }
-                ForEach(model.discovered) { bar in
-                    let isPaired = model.paired.contains { $0.serialNo == bar.serialNo }
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(bar.name.isEmpty ? bar.serialNo : bar.name)
-                            Text("\(bar.ip) · v\(bar.version)").font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if isPaired { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
-                        else { Button("Pair") { model.pair(bar) }.buttonStyle(.borderless) }
-                    }
-                }
             }
         }
         .listStyle(.sidebar)
@@ -103,7 +104,9 @@ private struct SidebarView: View {
         model.selectedSerial = bar.serialNo
         model.nav = .coreBar
         model.modules = []
-        model.refreshModules()
+        // Show the last-known modules instantly from the local cache; the user
+        // presses Refresh to rescan the bus. No scan needed on every selection.
+        model.loadCachedModules()
     }
 
     private func iconFor(_ type: String) -> String {
@@ -159,15 +162,14 @@ private struct CoreBarView: View {
             Header(title: model.selectedCoreBar?.name ?? "CoreBar",
                    subtitle: "\(model.selectedCoreBar?.serialNo ?? "") · \(model.ipForSelected() ?? "")",
                    trailing: AnyView(HStack {
-                       Button { model.provisionModules() } label: { Label("Set up modules", systemImage: "square.and.arrow.down.on.square") }.disabled(model.isWorking)
-                       Button { model.refreshModules() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(model.isWorking)
+                       Button { model.refreshModules() } label: { Label(model.isWorking ? "Scanning…" : "Refresh / set up", systemImage: "arrow.clockwise") }.disabled(model.isWorking)
                    }))
             Divider()
             HSplitView {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Modules").font(.headline)
                     if model.modules.isEmpty {
-                        Text("No modules yet. Press “Set up modules” (first time) or “Refresh”.").foregroundStyle(.secondary)
+                        Text("No modules yet. Tap the CoreBar's screen to wake the modules, then press “Refresh / set up”.").foregroundStyle(.secondary)
                     } else {
                         ForEach(model.modules) { m in
                             HStack {
@@ -213,8 +215,8 @@ private struct VivoCubeView: View {
                         }
 
                         Divider()
-                        Text("Publish an add-on").font(.headline)
-                        Picker("Add-on", selection: $model.selectedAddon) {
+                        Text("Publish a widget").font(.headline)
+                        Picker("Widget", selection: $model.selectedAddon) {
                             ForEach(Theme.allCases) { Label($0.title, systemImage: $0.icon).tag($0) }
                         }.pickerStyle(.radioGroup)
                         Button {
@@ -223,7 +225,7 @@ private struct VivoCubeView: View {
 
                         Divider()
                         Text("Auto-rotate").font(.headline)
-                        Text("Rotate through the add-ons enabled in the Add-ons section, every \(settings.rotateSeconds)s.")
+                        Text("Cycle through the widgets you enabled in the Widgets section — each stays on screen for \(settings.rotateSeconds)s before the next.")
                             .font(.caption).foregroundStyle(.secondary)
                         HStack {
                             if model.themeRunning {
@@ -314,7 +316,7 @@ private struct AddonsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Header(title: "Add-ons", subtitle: "Configure, then publish from a VivoCube", trailing: nil)
+            Header(title: "Widgets", subtitle: "Configure, then publish from a VivoCube", trailing: nil)
             Divider()
             HSplitView {
                 List(selection: Binding(get: { model.selectedAddon as Theme? },
@@ -337,10 +339,11 @@ private struct AddonsView: View {
                         addonSettings(model.selectedAddon)
                         Divider()
                         HStack {
-                            Text("Rotate every")
+                            Text("Show each widget for")
                             Picker("", selection: $settings.rotateSeconds) {
                                 Text("15s").tag(15); Text("30s").tag(30); Text("1 min").tag(60); Text("3 min").tag(180)
                             }.labelsHidden().frame(width: 90)
+                            Text("(only when rotating ≥2 widgets)").font(.caption).foregroundStyle(.secondary)
                         }
                         Text("Publish happens from a VivoCube (pick a module in the sidebar → Publish).")
                             .font(.caption).foregroundStyle(.secondary)
@@ -380,6 +383,16 @@ private struct AddonsView: View {
             Text("Network throughput of this Mac: download and upload per second.").font(.callout).foregroundStyle(.secondary)
         case .claude:
             Text("Claude Code activity: tokens used today and active sessions, read from ~/.claude.").font(.callout).foregroundStyle(.secondary)
+        case .battery:
+            Text("This Mac's battery charge and power state (a desktop Mac shows “On AC power”).").font(.callout).foregroundStyle(.secondary)
+        case .disk:
+            Text("Startup-disk usage: how full the drive is, with free/total space.").font(.callout).foregroundStyle(.secondary)
+        case .worldclock:
+            Text("Current time in Amsterdam, New York and Tokyo.").font(.callout).foregroundStyle(.secondary)
+        case .crypto:
+            Text("Bitcoin and Ethereum price with 24-hour change (CoinGecko, in EUR — no API key).").font(.callout).foregroundStyle(.secondary)
+        case .calendar:
+            Text("Your next calendar events. Needs Calendar access (macOS will ask the first time).").font(.callout).foregroundStyle(.secondary)
         }
     }
 }

@@ -79,9 +79,11 @@ public enum OpenMeteo {
             .init(name: "wind_speed_unit", value: metric ? "kmh" : "mph"),
             .init(name: "timezone", value: "auto"),
         ]
+        WireLog.shared.event("weather GET forecast lat=\(latitude) lon=\(longitude)")
         let (data, _) = try await URLSession.shared.data(from: c.url!)
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let cur = obj["current"] as? [String: Any] else {
+            WireLog.shared.event("weather: bad response (\(data.count) B)")
             throw UltraBarError.protocolError("weather: bad response")
         }
         func dbl(_ k: String) -> Double? { (cur[k] as? Double) ?? (cur[k] as? NSNumber)?.doubleValue }
@@ -111,7 +113,9 @@ public enum OpenMeteo {
               (obj["success"] as? Bool) != false else { return nil }
         func dbl(_ k: String) -> Double? { (obj[k] as? Double) ?? (obj[k] as? NSNumber)?.doubleValue }
         guard let lat = dbl("latitude"), let lon = dbl("longitude") else { return nil }
-        return IPLoc(lat: lat, lon: lon, city: (obj["city"] as? String) ?? "")
+        let city = (obj["city"] as? String) ?? ""
+        WireLog.shared.event("weather: IP geolocation → \(city.isEmpty ? "?" : city) (\(lat),\(lon))")
+        return IPLoc(lat: lat, lon: lon, city: city)
     }
 
     public static func sky(for code: Int) -> Sky {

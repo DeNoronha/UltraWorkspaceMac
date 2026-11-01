@@ -52,6 +52,26 @@ final class AppModel: ObservableObject {
         let text: String
     }
 
+    init() {
+        // Auto-select the first paired CoreBar and show its last-known modules
+        // from the local cache, so there's no need to scan on every launch.
+        if selectedSerial == nil, let first = paired.first { selectedSerial = first.serialNo }
+        loadCachedModules()
+    }
+
+    /// Populate `modules` from the on-disk endpoint cache (written by the last
+    /// successful provision), without touching the CoreBar. Refresh re-scans.
+    func loadCachedModules() {
+        guard let bar = selectedCoreBar, let data = Store.shared.loadEndpoints(serial: bar.serialNo) else { return }
+        let mods = CoreBarSession.modulesFromEndpoints(data)
+        guard !mods.isEmpty else { return }
+        self.modules = mods
+        if selectedModuleSerial == nil || !mods.contains(where: { $0.serial == selectedModuleSerial }) {
+            selectedModuleSerial = (mods.first(where: { $0.isVivoCube }) ?? mods.first)?.serial
+        }
+        say("Loaded \(mods.count) saved module\(mods.count == 1 ? "" : "s") from cache. Refresh to rescan.")
+    }
+
     func say(_ s: String) {
         statusLine = s
         log.insert(LogEntry(text: s), at: 0)

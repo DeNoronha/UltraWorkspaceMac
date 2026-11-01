@@ -1,0 +1,117 @@
+import Foundation
+import EventKit
+import CoreGraphics
+
+/// Calendar / upcoming-event source backed by EventKit.
+///
+/// Degrades gracefully when access has not been granted: `authStatus()` reports
+/// the current permission, and `upcoming(_:)` returns `[]` whenever it is not
+/// authorized or anything goes wrong. The app's Info.plist must carry an
+/// `NSCalendarsUsageDescription` string (added by the integrator) for the
+/// system access prompt to appear.
+enum CalAuth: Sendable {
+    case authorized
+    case denied
+    case notDetermined
+}
+
+/// A single upcoming calendar event, flattened into `Sendable` value types so it
+/// can cross actor/task boundaries. `calendarColorRGBA` is the owning calendar's
+/// color as a straight (r,g,b) tuple in 0...1.
+struct CalEvent: Sendable {
+    var title: String
+    var start: Date
+    var end: Date
+    var isAllDay: Bool
+    var calendarColorRGBA: (Double, Double, Double)
+}
+
+@MainActor
+final class CalendarSource {
+
+    /// Current EventKit authorization mapped to `CalAuth`.
+    static func authStatus() -> CalAuth {
+        let status = EKEventStore.authorizationStatus(for: .event)
+        switch status {
+        case .fullAccess:
+            return .authorized
+        case .authorized:
+            // Deprecated on macOS 14+ but still the value on older systems.
+            return .authorized
+        case .restricted, .denied:
+            return .denied
+        case .notDetermined:
+            return .notDetermined
+        case .writeOnly:
+            // Write-only can't read events; treat as not usable for display.
+            return .denied
+        @unknown default:
+            return .notDetermined
+        }
+    }
+
+    /// Requests read access to events. Uses the macOS 14+ full-access API when
+    /// available, otherwise falls back to the legacy request. Returns whether
+    /// access was granted.
+    static func requestAccess() async -> Bool {
+        let store = EKEventStore()
+        if #available(macOS 14.0, *) {
+            do {
+                return try await store.requestFullAccessToEvents()
+            } catch {
+                return false
+            }
+        } else {
+            return await withCheckedContinuation { continuation in
+                store.requestAccess(to: .event) { granted, _ in
+                    continuation.resume(returning: granted)
+                }
+            }
+        }
+    }
+
+    /// Events from now through the next 24 hours, sorted by start, mapped to
+    /// `CalEvent`. Returns `[]` if not authorized or on any error.
+    static func upcoming(limit: Int = 3) async -> [CalEvent] {
+        guard authStatus() == .authorized else { return [] }
+
+        let store = EKEventStore()
+        let now = Date()
+        let end = now.addingTimeInterval(24 * 60 * 60)
+
+        let predicate = store.predicateForEvents(withStart: now, end: end, calendars: nil)
+        let events = store.events(matching: predicate)
+
+        let mapped = events
+            .sorted { $0.startDate < $1.startDate }
+            .prefix(limit)
+            .map { ev -> CalEvent in
+                CalEvent(
+                    title: ev.title ?? "(No title)",
+                    start: ev.startDate ?? now,
+                    end: ev.endDate ?? (ev.startDate ?? now),
+                    isAllDay: ev.isAllDay,
+                    calendarColorRGBA: rgb(from: ev.calendar?.cgColor)
+                )
+            }
+        return Array(mapped)
+    }
+
+    /// Extracts a straight (r,g,b) tuple in 0...1 from a calendar's CGColor,
+    /// converting through device RGB when needed. Falls back to a neutral blue.
+    private static func rgb(from cgColor: CGColor?) -> (Double, Double, Double) {
+        guard let cgColor else { return (0.35, 0.60, 0.95) }
+
+        if let comps = cgColor.components, cgColor.numberOfComponents >= 3 {
+            return (Double(comps[0]), Double(comps[1]), Double(comps[2]))
+        }
+
+        // Grayscale or an unexpected model: convert to device RGB.
+        let rgbSpace = CGColorSpaceCreateDeviceRGB()
+        if let converted = cgColor.converted(to: rgbSpace, intent: .defaultIntent, options: nil),
+           let comps = converted.components, converted.numberOfComponents >= 3 {
+            return (Double(comps[0]), Double(comps[1]), Double(comps[2]))
+        }
+        return (0.35, 0.60, 0.95)
+    }
+}

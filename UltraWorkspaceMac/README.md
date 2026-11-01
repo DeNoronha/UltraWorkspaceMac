@@ -1,87 +1,110 @@
 # UltraWorkspace for Mac
 
-A native, open macOS client for Sanytron **UltraBar X** hardware (CoreBar + QuantumLink modules: VivoCube, SenseCube, KnobKey, DotKey). Built in Swift/SwiftUI, with no .NET or Qt runtime. The long-term goal is a full replacement for the official UltraWorkSpace desktop app on macOS.
+A native, open macOS client for Sanytron **UltraBar X** hardware (CoreBar + QuantumLink modules: VivoCube, SenseCube, KnobKey, DotKey, PC-Boot card). Built in Swift/SwiftUI, with no .NET or Qt runtime. The long-term goal is a full replacement for the official UltraWorkSpace desktop app on macOS.
 
 This is independent, community software. Not affiliated with Sanytron.
 
-## Status — v0.2
+## Hardware it talks to
 
-What works today:
+- **CoreBar** — the hub: a 5:1 ultrawide touch display (1424 × 280), running LineOS (an Android variant), with a built-in speaker and PC-monitoring. Everything this app does goes through the CoreBar, which relays to its attached modules.
+- **QuantumLink modules** — magnetic snap-on units on the CoreBar's bus: **VivoCube** (2.0" round AMOLED, 240 × 240), **SenseCube** (sensors), **KnobKey** (rotary encoder), **DotKey** (key array), and the **PC-Boot card**.
 
-**Device**
-- **Discovery** — finds CoreBars on the LAN (UDP broadcast, port 5319).
-- **Pairing** — pairs with a CoreBar (tap *Approve* on the device) and stores the token in the macOS **Keychain**. The CoreBar's self-signed certificate is pinned on first use (trust-on-first-use); a later certificate mismatch aborts *before* the token is sent.
-- **Module list** — lists attached VivoCubes with their uptime.
-- **Display control** — screen on/off, reboot.
-- **Image push** — pick any image, it is rendered to the module's pixel format (RGB565, +alpha when needed) and uploaded as the device's `tgz` layer package.
+## Status — what works today
+
+**Device connection**
+- **Discovery** — finds CoreBars on the LAN over UDP broadcast (port 5319, probe `{"act":"discover"}`).
+- **Pairing** — pairs with a CoreBar (`REQ_AUTH_TOKEN` / act 101); the user taps *Approve* on the CoreBar within ~30 s and a token comes back. The token is stored in a `0600` file in Application Support (not the Keychain — see Limitations). The CoreBar's self-signed certificate is pinned on first use (trust-on-first-use); a later certificate mismatch aborts *before* the token is ever sent.
+- **Control channel** — one TLS connection per operation (line-delimited JSON, port 7431, SNI `ultrabar.local`).
+
+**Module enumeration & provisioning**
+- **Live bus scan** — enumerating modules is a real scan, not a config read: the app fires `MODULE_START_DISCOVERY` (act 30100) on both buses (`"can"` for the magnetic QuantumLink bus, `"mesh"` for wireless) and collects the `MODULE_START_DISCOVERY_REPLAY` (act 30102) messages the CoreBar pushes back, one per found module. On this firmware the static config reads (`GET_DEVICE` 1300, `QUERY_MODULE_STATE` 30730, `GET_COREBAR_CONFIG` 30740) come back empty, so the scan is the source of truth.
+- **Provisioning** — to make modules controllable the app writes the discovered endpoints into the gateway config with `SET_GATEWAY_CONFIG` (act 30300; the message body *is* the CoreBar configuration). The older `SET_COREBAR_CONFIG` (30741) is not used — it fails server-side with a `ClassCastException`.
+- **Asleep-module merge** — each provision merges freshly-discovered modules with the set last written to that CoreBar (cached per CoreBar in Application Support), so a module that happens to be asleep during a scan (often the DotKey) is not dropped from the config.
+- **Auto-provision on upload** — if an image push is rejected with "module not found", the app provisions once and retries automatically.
+
+**VivoCube widgets (cards)**
+Each card renders a 240 × 240 image on the Mac, which is encoded to the module pixel format and pushed over HTTP. Cards can be shown one at a time or rotated on a carousel at a configurable interval. Shipping cards:
+- **Weather & time** — Open-Meteo (free, no API key), with an IP-geolocation fallback when macOS Location access is unavailable.
+- **Music / now-playing** — album art plus title/artist from Music.app.
+- **Claude Code usage monitor**.
+- **CPU & memory**.
+- **Network up/down**.
+
+New / experimental cards (rendering in place, being wired into the rotation):
+- **Battery**.
+- **Storage / Disk**.
+- **World Clock**.
+- **Calendar / next event**.
+- **Crypto ticker** (planned).
+
+**Image push**
+Pick any image (or let a card render one); it is encoded to RGB565 (plus an alpha byte per pixel when the image isn't fully opaque) with an 8-byte header, wrapped in a ustar tar + gzip "deploy package", and POSTed to `http://<corebar>:8080/upload?serialNo=<serial>` as multipart form data. A successful push returns `{"state":200,"msg":"ok"}`.
 
 **Music tab — Apple Music remote (runs on the Mac)**
 - Transport: play/pause, next, previous, volume ±.
 - Live now-playing (title / artist / album), polled from Music.app.
-- **Push now-playing to a VivoCube**: album art + track are composed into a card on the Mac and pushed to the selected module; optional auto-update when the track changes.
+- Push the now-playing card to a VivoCube; optional auto-update when the track changes.
 
 **People tab — per-person quick actions**
 - Save contacts; each gets one-tap **Teams chat**, **Teams call**, **FaceTime**, and **Mail** (via deep links). Stored locally.
 
-The byte-level formats (image encoding, tar+gzip packaging) are verified against known-answer tests — run `swift run kitcheck` (all pass).
+The byte-level formats (image encoding, tar + gzip packaging) are verified against known-answer tests — run `swift run kitcheck` (all pass).
 
-> First use of the Music tab triggers a macOS **Automation** permission prompt (to control Music.app) — allow it.
+> First use of the Music tab triggers a macOS **Automation** permission prompt (to control Music.app) — allow it. First scan triggers a **Local Network** prompt — allow it, or the Mac can't see the CoreBar.
 
 ## Build & run
 
-Requirements: macOS 13+, Swift 6 toolchain (Xcode or Command-Line Tools).
+Requirements: macOS 13+, a Swift 6 toolchain. This project is built with **Swift + the Command-Line Tools only** (no Xcode.app required).
 
 ```bash
 cd UltraWorkspaceMac
-./packaging/make-app.sh release     # produces dist/UltraWorkspace.app
+swift build                               # compile everything
+swift run UltraWorkspaceApp               # run from the build tree (development)
+
+bash packaging/make-app.sh release        # produces dist/UltraWorkspace.app
 open dist/UltraWorkspace.app
+
+bash packaging/make-dmg.sh                # produces dist/UltraWorkspace.dmg (app + Applications shortcut + manual)
 ```
 
-Or for development: `swift run UltraWorkspaceApp`.
+First launch: press **Scan**, then **Pair** next to your CoreBar and tap *Approve* on the CoreBar within 30 seconds. macOS may ask once for **Local Network** permission — allow it.
 
-First launch: press **Scan**, then **Pair** next to your CoreBar and tap *Approve* on the device within 30 seconds. macOS may ask once for **Local Network** permission — allow it, or the Mac can't see the CoreBar.
+If a pushed image looks wrong on the cube, try a different **Canvas** size in the app — the VivoCube renders at 240 × 240, but on some firmware a slightly different source size composites better.
 
-If a pushed image looks wrong on the cube, try a different **Canvas** size — the VivoCube's native resolution isn't published, so the correct value is found by trying (240–480 px).
+## Limitations
 
-## Architecture
+- **Ad-hoc code signing only.** Because the build uses the Command-Line Tools and not a full Xcode.app with a paid Apple Developer certificate, the app is ad-hoc signed. There is no Developer ID signature and no notarization yet, so the first launch needs the right-click → Open gesture (see the manual). A notarized release is on the roadmap.
+- **Token stored in a file, not the Keychain.** An ad-hoc-signed app gets a new code signature on every rebuild, which makes the Keychain re-prompt for the login password on every launch. Storing the token in a `0600` file in the user's Application Support directory avoids that friction. For a notarized / Developer-ID release this can move back to the Keychain.
+
+## Project layout
 
 - `Sources/UltraBarKit` — the reusable, UI-free protocol layer:
+  - `Models` — protocol constants (`Proto`): ports, act codes, property ids, QuantumLink product ids, and the `CoreBar` / `AttachedModule` types.
   - `Discovery` — UDP LAN discovery.
-  - `CoreBarClient` — one TLS control connection; line-delimited JSON; pairing, auth, request/response correlation; TOFU certificate pinning.
-  - `CoreBarSession` — high-level operations (list modules, read/write properties, reboot, upload) over fresh connections.
-  - `DeviceImage` — image → RGB565(+A) encoder.
-  - `DeployPackager` — ustar + gzip layer-package builder.
-  - `Store` — Keychain tokens + per-CoreBar metadata (cert pin, last IP).
-- `Sources/UltraWorkspaceApp` — the SwiftUI app (`AppModel`, `ContentView`).
+  - `CoreBarClient` — one TLS control connection; line-delimited JSON; pairing, auth, request/reply correlation; TOFU certificate pinning.
+  - `CoreBarSession` — high-level operations over fresh connections: module scan, provisioning (`SET_GATEWAY_CONFIG`), property read/write, screen/reboot, and the HTTP upload.
+  - `DeviceImage` — image → RGB565(+alpha) encoder.
+  - `DeployPackager` — ustar + gzip deploy-package builder.
+  - `Store` — file-based token store plus per-CoreBar metadata (cert pin, last IP) and the gateway-endpoint cache, all in Application Support.
+  - `OpenMeteo`, `SystemStats`, `NetworkStats`, `ClaudeUsage` — data sources for the cards.
+  - `WireLog` — captures all Mac↔CoreBar protocol traffic for diagnostics.
+- `Sources/UltraWorkspaceApp` — the SwiftUI app (`AppModel` and its extensions, `ContentView`, settings, logs view). `Theme` and `AppModel+Themes` are the card/carousel system; `Integrations/` holds the per-card renderers (weather, now-playing, stat cards, battery, disk, world clock, calendar) and the Apple Music / Location / People helpers.
 - `Sources/kitcheck` — known-answer checks for the encoders.
 
-The local CoreBar protocol was recovered by decompiling the independent ClickOnce "VivoCube Weather Tool" (a clean .NET reimplementation of the same local protocol) and cross-checking the official macOS binary. See `PROTOCOL.md`.
+The local CoreBar protocol was recovered by decompiling the independent ClickOnce "VivoCube Weather Tool" (a clean .NET reimplementation of the same local protocol), cross-checking the official macOS binary, and reading the LineOS APK. See `PROTOCOL.md`.
 
-## Roadmap toward a full replacement
+## Roadmap
 
-**Stream Deck-style action model (in progress).** A button on a VivoCube (or a
-row in the app) triggers an *action* that runs on the Mac. Apple Music and the
-per-person Teams/FaceTime/Mail actions are the first providers. Next:
+**Device / protocol**
+- **The CoreBar's own big screen.** Setting the ultrawide display's wallpaper / screensaver — this appears to be profile-bound (likely `BATCH_SAVE_PROFILE`, act 1108) rather than a direct image push, and is not yet mapped.
+- **KnobKey → volume** and **DotKey button actions.** These need inbound button/rotation events from the CoreBar over the control channel; the inbound `act` codes still have to be mined from the LineOS APK.
+- **SenseCube sensors** (humidity, light, radar, sound) and automations.
+- **Module OTA firmware flashing** (`.bin`, `MODULE_OAT_*`).
 
-- **Physical button → Mac action.** Two routes, from the campaign's "four protocol bridges":
-  - *HID bridge (works without new protocol knowledge):* when the CoreBar is USB-connected it acts as a standard HID device. Bind a module button to an otherwise-unused keystroke (e.g. F13–F24) in the official config, and have this app register a global hotkey that runs the action (mute Teams, skip track, etc.). This is how most Stream Deck alternatives bridge hardware — a near-term, reliable path.
-  - *Networked events:* subscribe to the CoreBar's button-press event over the TLS channel. This needs the inbound `act` code (to be mined from the LineOS APK). Once mapped: click/double-click/long-press and KnobKey rotation bind directly.
-- **Microsoft Teams mute/unmute** — via Teams' local *Third-party app API*
-  (`ws://localhost:8124`, user enables it in Teams settings and approves a
-  pairing token). Also toggle camera, raise hand, leave.
-- **Action catalog / marketplace** — a registry of installable action providers
-  (media, app shortcuts, hotkeys, smart-home, web), so actions that also exist on
-  a Stream Deck can run here.
-- **Hotkey + app-shortcut actions** — post key combos / launch apps / open URLs.
-
-**Device & UI**
-- Widget/layer designer (up to 6 layers × 3 slots per VivoCube).
-- KnobKey / DotKey binding (rotation, press/double/long, macros).
-- SenseCube sensors (humidity, light, radar, sound) + automations.
-- Module OTA firmware flashing (`.bin`).
-- Smart-home: Home Assistant, Sonos/Spotify (CoreBar runs these locally via LineOS).
-- App marketplace / icon browser (cloud backend `aiks360.com`).
-- Project persistence (the official app stores projects in a local SQLite DB).
+**App**
+- **A Stream-Deck-style widget marketplace** — a registry of installable card/action providers so the VivoCube carousel can be extended without rebuilding the app.
+- Finalize the new cards (battery, storage, world clock, calendar, crypto) and the layer/slot designer (the VivoCube supports multiple layers × widget slots).
+- A notarized / Developer-ID signed release.
 
 ## Ecosystem features (reference / backlog)
 

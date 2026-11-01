@@ -52,8 +52,10 @@ extension AppModel {
             return try await OpenMeteo.current(latitude: p.latitude, longitude: p.longitude, metric: metric, placeName: p.name)
         } else {
             if let loc = await MacLocation().once() {
+                WireLog.shared.event("weather: using Mac location → \(loc.place.isEmpty ? "?" : loc.place)")
                 return try await OpenMeteo.current(latitude: loc.lat, longitude: loc.lon, metric: metric, placeName: loc.place)
             }
+            WireLog.shared.event("weather: Mac location unavailable, trying manual city / IP")
             if !settings.manualCity.isEmpty, let p = try await OpenMeteo.geocode(settings.manualCity) {
                 return try await OpenMeteo.current(latitude: p.latitude, longitude: p.longitude, metric: metric, placeName: p.name)
             }

@@ -67,10 +67,16 @@ extension AppModel {
     private func renderTheme(_ theme: Theme, settings: AppSettings) async -> [UInt8]? {
         switch theme {
         case .weather:
-            let now = try? await resolveWeather(settings: settings, metric: settings.units == .metric)
-            if let now { lastWeather = now }
-            else { say("Weather unavailable — check the internet connection, or set a city in Settings → Weather.") }
-            return WeatherCard.render(width: 240, height: 240, now: now, clock24h: settings.clock24h)
+            do {
+                let now = try await resolveWeather(settings: settings, metric: settings.units == .metric)
+                lastWeather = now
+                WireLog.shared.event("weather: \(Int(now.temperature.rounded()))\(now.unitSuffix) \(now.sky.label) @ \(now.place.isEmpty ? "?" : now.place)")
+                return WeatherCard.render(width: 240, height: 240, now: now, clock24h: settings.clock24h)
+            } catch {
+                say("Weather unavailable: \(error.localizedDescription)")
+                WireLog.shared.event("weather FAILED: \(error.localizedDescription)")
+                return WeatherCard.render(width: 240, height: 240, now: nil, clock24h: settings.clock24h)
+            }
         case .music:
             refreshNowPlaying()
             let art = AppleMusic.currentArtwork()
@@ -86,6 +92,20 @@ extension AppModel {
         case .claude:
             let snap = await Task.detached { ClaudeUsage.snapshot() }.value
             return StatCard.claude(snap, size: 240)
+        case .battery:
+            return BatteryCard.render(BatteryStats.sample(), size: 240)
+        case .disk:
+            return DiskCard.render(size: 240)
+        case .worldclock:
+            return WorldClockCard.render(size: 240, zones: WorldClockCard.defaultZones, clock24h: settings.clock24h)
+        case .crypto:
+            let coins = await CryptoStats.fetch(currency: "eur")
+            return CryptoCard.render(coins, size: 240, currencySymbol: CryptoStats.suffix(for: "eur"))
+        case .calendar:
+            var auth = CalendarSource.authStatus()
+            if auth == .notDetermined { _ = await CalendarSource.requestAccess(); auth = CalendarSource.authStatus() }
+            let events = auth == .authorized ? await CalendarSource.upcoming() : []
+            return CalendarCard.render(events, auth: auth, size: 240, clock24h: settings.clock24h)
         }
     }
 }
