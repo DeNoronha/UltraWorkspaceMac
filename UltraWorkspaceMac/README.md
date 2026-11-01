@@ -85,6 +85,88 @@ per-person Teams/FaceTime/Mail actions are the first providers. Next:
 - App marketplace / icon browser (cloud backend `aiks360.com`).
 - Project persistence (the official app stores projects in a local SQLite DB).
 
+## Ecosystem features (reference / backlog)
+
+What the UltraBar X ecosystem advertises across its sources — the target surface for a full macOS replacement. Compiled from the Kickstarter campaign, the Sanytron support hub, the GitHub release notes, press coverage, and the bundled docs. Treat vendor marketing claims as claims, not verified behaviour.
+
+**Hardware**
+- **CoreBar** — main hub, 5:1 ultra-wide high-res touch display, 45° tilt, built-in speaker, real-time PC monitoring (CPU/memory), macro engine. 199 × 50.4 × 59.6 mm, 250 g. Runs **LineOS** and works independently of the PC.
+- **QuantumLink™** magnetic bus — instant attach + auto-detect, up to **15 mixed modules**.
+- **VivoCube** — 2.0" programmable AMOLED, mechanical switch, gestures, own power, daisy-chains up to 3, mini-controller or secondary display.
+- **SenseCube** — mmWave radar presence + ambient light, temperature, humidity, vibration; drives scene automation and desk-tap triggers.
+- **KnobKey** — metal rotary encoder, tactile steps, per-app/scene actions (volume, brush size, scrub, zoom).
+- **DotKey** — Cherry MX key array; single/double/long press, macro chains with ms delays.
+- Ports/power: USB-C (power+data) + 12 V DC on CoreBar; **PC-LINK** (5 V only — never a PD charger) and **USB-OTG** (fast charge); optional **Wireless Boot Module** (Bluetooth-Mesh / PCIe card) for BIOS-level PC wake.
+
+**Software (official UltraWorkSpace + LineOS)**
+- Profiles, multi-layer VivoCube canvas (up to 6 layers × 3 widget slots), widgets (clock, gauges, image/GIF, humidity/light/radar/sound, WebUI).
+- **SceneShift™ AI** — adapts layouts/controls to the active app/workflow.
+- Mesh device search/pair/replace incl. boot cards; automations with third-party app actions; app marketplace (install/update/uninstall).
+- **Nexus Store** — 90+ platform integrations, 300+ templates.
+- OTA firmware flashing for modules (`.bin`); SDK for plugins/scenes/integrations.
+- Management apps: Windows, iOS, Android; **macOS in development** (this project aims to go further).
+
+**Integrations named across sources**
+- Smart home: Home Assistant, Apple HomeKit (via HA), Philips Hue.
+- Media: SONOS, Spotify (album art, volume, transport), Apple Music (this app).
+- Work/creator/gaming: Microsoft Teams, Discord, OBS, Photoshop, VS Code, PS5.
+- PC wake: Wake-on-LAN (Ethernet) or simulated USB key-press (Wi-Fi-only); remote power-on via Home Assistant or the boot module.
+
+**The independent "VivoCube Weather Tool"** (`ultrabar-weather.pages.dev`) — a community ClickOnce app that pushes a live weather display to VivoCubes; its clean .NET reimplementation is the main source for the local protocol in `PROTOCOL.md`. Uses Open-Meteo, OpenStreetMap/Nominatim, RainViewer, and Aviation Weather for data.
+
+## Links & sources
+
+**Official / vendor**
+- Support hub: https://hub.sanytron.com/support/ultrabarx
+  - Getting started: https://hub.sanytron.com/support/ultrabarx/getting-started
+  - Troubleshooting: https://hub.sanytron.com/support/ultrabarx/troubleshooting
+  - Release notes: https://hub.sanytron.com/support/ultrabarx/release-notes
+  - Downloads: https://hub.sanytron.com/support/ultrabarx/downloads
+  - Power safety notice: https://hub.sanytron.com/news/corebar-power-safety-notice
+- Mac support page: https://ultrabarx.sanytron.com/mac/mac.htm
+- Boot module: https://ultrabarx.sanytron.com/bootmodule/
+- Forum: https://forum.sanytron.com
+- Email: support@sanytron.com · bz@sanytron.com
+- GitHub repo: https://github.com/Qinkunex/UltraWorkspace
+- Release v1.0.1.0: https://github.com/Qinkunex/UltraWorkspace/releases/tag/v1.0.1.0
+- Example firmware: https://github.com/Qinkunex/UltraWorkspace/releases/download/v1.0.0/VivoCube_V2_20260728_ota.bin
+
+**Kickstarter campaign**
+- https://www.kickstarter.com/projects/ultrabarx/ultrabar-x-future-desktop-revolution-aesthetics-function/description
+- Short link: https://ultrabarx-modular-smart-your.kckb.me/cnxsoft
+
+**Community / social**
+- Reddit: https://reddit.com/r/Sanytron
+- Discord: https://discord.gg/z629RRgHBJ (a second invite, `discord.gg/dh2sQrWTH`, is also listed on the hub)
+- YouTube: https://youtube.com/@SanytronHub
+- Facebook: https://facebook.com/sanytron.control
+- Instagram: https://instagram.com/sanytrontech
+- WhatsApp: https://wa.me/+8613823379099
+
+**Independent weather tool**
+- https://ultrabar-weather.pages.dev/
+- Deployment manifest: https://ultrabar-weather.pages.dev/UltraBarWeather.application
+- Author: TheDeveloperIncognito@gmail.com
+
+**Cloud backend used by the official app** (from binary strings — not a developer API)
+- API gateway: https://gatewayssl.dev.aiks360.com
+  (paths seen: `/api/v1/base-service/pub/apps/100/fetchListV2`, `/icon/tags/locales/allGrouped`, `/icon/v2/page`, `/plugin/page`)
+- `sys.widget.io`
+
+**Third-party APIs used by the tooling**
+- Open-Meteo: https://api.open-meteo.com/v1/forecast · https://geocoding-api.open-meteo.com/v1/search · https://air-quality-api.open-meteo.com/v1/air-quality
+- OpenStreetMap: https://nominatim.openstreetmap.org/ · tiles `https://tile.openstreetmap.org/{z}/{x}/{y}.png`
+- RainViewer: https://api.rainviewer.com/public/weather-maps.json
+- Aviation Weather (METAR): https://aviationweather.gov/api/data/
+- Connectivity check: http://www.msftconnecttest.com/connecttest.txt
+- Microsoft Teams deep links (used by this app): https://teams.microsoft.com/l/chat/0/0 · https://teams.microsoft.com/l/call/0/0
+
+**Press coverage**
+- New Atlas: https://newatlas.com/electronics/ultrabar-x-modular-command-center/
+- CNX-Software: https://www.cnx-software.com/2025/11/27/ultrabar-x-a-high-end-modular-desktop-smart-hub-with-a-51-ultra-wide-touch-display-magnetic-snap-on-modules/
+- Notebookcheck: https://www.notebookcheck.com/UltraBar-X-Modulare-Kontrollcenter-mit-Display-Sensorik-und-Smart-Home-Funktionen.1160641.0.html
+- appgefahren.de: https://www.appgefahren.de/ultrabar-x-modulare-touch-bar-nicht-nur-fuer-den-schreibtisch-390119.html
+
 ## License
 
 See the repository `LICENSE`.
