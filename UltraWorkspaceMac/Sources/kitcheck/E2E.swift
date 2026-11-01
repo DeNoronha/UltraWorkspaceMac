@@ -155,6 +155,33 @@ enum E2E {
             check(rec && w4 == 101, "recoverDisplay brings back layer 1 / widget 101", "\(w4 ?? -1)")
         }
 
+        // 7c. CoreBar pages: list → save (superset) → switch; guards against wipes
+        do {
+            let before = try await session.listPages()
+            check(before.map(\.id) == ["default"], "fresh device lists one page 'default'", "\(before)")
+            do { _ = try await session.savePages([]); check(false, "empty page list refused client-side") }
+            catch { check(true, "empty page list refused client-side") }
+            try await session.uploadPageAsset(makePNG(width: 480, height: 480), name: "cover.png")
+            let st0 = await fetchState()
+            let assets = (st0["assets"] as? [[String: Any]])?.compactMap { $0["path"] as? String } ?? []
+            check(assets.contains("deckhand/cover.png"), "page cover uploaded under deckhand/", assets.joined(separator: ","))
+            let pages: [[String: Any]] = [
+                ["id": "default", "name": "Standard Mode", "isDefault": true, "showName": true, "iconScale": 100, "module": [],
+                 "widget": [["id": "sys.component.time", "type": "TIME", "name": "Time", "icon": ""]]],
+                ["id": "deckhand.page", "name": "Deckhand", "isDefault": false, "showName": true, "iconScale": 100, "icon": "deckhand/cover.png", "module": [],
+                 "widget": [["id": "sys.component.time", "type": "TIME", "name": "Deckhand", "icon": "deckhand/cover.png"]]],
+            ]
+            let r = try await session.savePages(pages)
+            check(r.contains("\"code\":200"), "BATCH_SAVE_PROFILE accepted", r.prefix(60).description)
+            let after = try await session.listPages()
+            check(after.map(\.id) == ["default", "deckhand.page"], "both pages listed afterwards", "\(after.map(\.id))")
+            _ = try await session.switchPage(id: "deckhand.page")
+            let st = await fetchState()
+            check((st["activeProfileId"] as? String) == "deckhand.page", "TRIGGER_PROFILE_CHANGE switched the active page")
+            do { _ = try await session.switchPage(id: "nope"); check(false, "unknown page id rejected") }
+            catch { check(true, "unknown page id rejected ('profile id error')") }
+        } catch { check(false, "pages flow", "\(error)") }
+
         // 8. CoreBar big screen: zip upload still works, and PREVIEW_SCREENSAVER
         //    with an http URL served by this machine (the device PULLS the image).
         do {

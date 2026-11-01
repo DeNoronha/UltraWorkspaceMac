@@ -81,7 +81,8 @@ It covers: unicast probe (Add-by-IP path), pairing (`REQ_AUTH_TOKEN`), token che
 - `MODULE_PROPERTY_WRITE` (30201) — ok (result stripped). Writing property 9 selects which decoded widget image the viewer shows for that module; a widget id that is not in the last package makes the viewer show **nothing** and logs a `BLACK screen` line — the same mechanism that blanks a real VivoCube when a stale cached id is re-applied. Property 4 = 0 is remembered until written back to 1, so Deckhand's **Recover display** (4 = 1, 9 = layer 1 / widget 101) can be exercised against the mock.
 - `QUERY_MODULE_STATE` (30730) — empty (mirrors tested firmware).
 - `GET_COREBAR_CONFIG` (30740) / `SET_COREBAR_CONFIG` (30741) — `BASE_SET` echoes/stores the `ScreensaverConfig`; `GATEWAY_CONFIG` stored (the read returns null, like the tested firmware, so the client falls through to the live scan); `APP_LIST` read-only.
-- `PREVIEW_SCREENSAVER` (30742) — records `{url, mediaType}` and surfaces it in the viewer.
+- `PREVIEW_SCREENSAVER` (30742) — emulates the firmware: no ack; pulls an http(s) url and shows it in the viewer. (On the real device the dialog never appears — BadTokenException — so Deckhand no longer uses it.)
+- `SCENE_DEPENDS_PROFILE` (30710) — lists page ids/names; `BATCH_SAVE_PROFILE` (1108) requires ids and logs a HOME SCREEN WIPED warning on an empty list; `TRIGGER_PROFILE_CHANGE` (1103) rejects unknown ids with `profile id error`.
 - `SYS_REBOOT` (20100) — ok.
 - `START_SCAN_WIFI` (1633) / `STOP_SCAN_WIFI` (1634) — pushes `CUBE_SCAN_WIFI_LIST_RESULT` (1635) with a couple of fake networks.
 - `BATCH_SAVE_PROFILE` (1108) / `BATCH_CREATE_SCENE` (30500) / `TRIGGER_PROFILE_CHANGE` (1103) — store + ok.

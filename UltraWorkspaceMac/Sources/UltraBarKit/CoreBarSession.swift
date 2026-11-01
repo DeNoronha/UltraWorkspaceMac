@@ -396,6 +396,78 @@ public struct CoreBarSession: Sendable {
         try await previewScreen(url: path, isVideo: isVideo)
     }
 
+    // MARK: CoreBar pages (profiles)
+    //
+    // The vendor client never reads profiles back; it owns them and full-replaces
+    // with BATCH_SAVE_PROFILE (1108). The only read is SCENE_DEPENDS_PROFILE
+    // (30710), which lists ids + names. A missing/empty array wipes the home
+    // screen, so callers must always send the complete list.
+
+    public struct PageInfo: Sendable, Hashable { public let id: String; public let name: String }
+
+    /// List the page (profile) ids and names currently on the CoreBar.
+    public func listPages() async throws -> [PageInfo] {
+        let client = try await authedClient()
+        defer { Task { await client.close() } }
+        let json = try JSONSerialization.data(withJSONObject: [String: Any]())
+        guard let line = try await client.request(act: Proto.actSceneDependsProfile, dataJSON: json, timeout: 10),
+              let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+            throw UltraBarError.protocolError("no reply to SCENE_DEPENDS_PROFILE (30710)")
+        }
+        guard code(reply) == 200 else { throw UltraBarError.protocolError("30710 failed: \(String(data: line, encoding: .utf8) ?? "")") }
+        let arr = (reply["data"] as? [[String: Any]]) ?? []
+        return arr.compactMap { d in
+            guard let id = (d["value"] as? String) ?? (d["id"] as? String) else { return nil }
+            return PageInfo(id: id, name: (d["label"] as? String) ?? (d["name"] as? String) ?? id)
+        }
+    }
+
+    /// DESTRUCTIVE: replace ALL pages on the CoreBar with `profiles` (ProfileDTO
+    /// dictionaries). Refuses an empty list (that would wipe the home screen).
+    @discardableResult
+    public func savePages(_ profiles: [[String: Any]]) async throws -> String {
+        guard !profiles.isEmpty else { throw UltraBarError.protocolError("refusing to save an empty page list (it would wipe the CoreBar home screen)") }
+        for p in profiles {
+            guard let id = p["id"] as? String, !id.isEmpty, id != "null" else { throw UltraBarError.protocolError("every page needs a non-empty id") }
+            guard p["widget"] is [Any] else { throw UltraBarError.protocolError("page \(id) needs a widget array (may be empty)") }
+        }
+        let client = try await authedClient()
+        defer { Task { await client.close() } }
+        let json = try JSONSerialization.data(withJSONObject: profiles)
+        guard let line = try await client.request(act: Proto.actBatchSaveProfile, dataJSON: json, timeout: 12) else {
+            throw UltraBarError.protocolError("no reply to BATCH_SAVE_PROFILE (1108)")
+        }
+        let text = String(data: line, encoding: .utf8) ?? "<non-utf8>"
+        if let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any], code(reply) != 200 {
+            throw UltraBarError.protocolError("1108 rejected: \(text.prefix(200))")
+        }
+        return text
+    }
+
+    /// Switch the CoreBar to page `id` (TRIGGER_PROFILE_CHANGE 1103). Also exits the screensaver.
+    @discardableResult
+    public func switchPage(id: String) async throws -> String {
+        let client = try await authedClient()
+        defer { Task { await client.close() } }
+        let json = try JSONSerialization.data(withJSONObject: id, options: [.fragmentsAllowed])
+        guard let line = try await client.request(act: Proto.actTriggerProfileChange, dataJSON: json, timeout: 10) else {
+            throw UltraBarError.protocolError("no reply to TRIGGER_PROFILE_CHANGE (1103)")
+        }
+        let text = String(data: line, encoding: .utf8) ?? "<non-utf8>"
+        if let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any], code(reply) != 200 {
+            throw UltraBarError.protocolError("1103 rejected: \(text.prefix(200))")
+        }
+        return text
+    }
+
+    /// Upload one image into the CoreBar's `deckhand/` asset folder (never without a subDir:
+    /// an empty subDir with the device's default isFull=true wipes every app's files).
+    public func uploadPageAsset(_ image: Data, name: String) async throws {
+        let zip = ZipWriter.archive([ZipWriter.Entry(name: name, data: image)])
+        let (ok, text) = try await uploadScreenZip(zip, subDir: "deckhand", isFull: false)
+        guard ok else { throw UltraBarError.uploadRejected(text) }
+    }
+
     private func postUpload(serial: String, tgz: Data) async throws -> (accepted: Bool, text: String) {
         let boundary = "ubw-\(UUID().uuidString)"
         guard let url = URL(string: "http://\(ip):\(Proto.uploadPort)/upload?serialNo=\(serial.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? serial)") else {

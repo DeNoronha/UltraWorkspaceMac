@@ -43,6 +43,7 @@ export const Act = {
   MODULE_PROPERTY_WRITE: 30201,
   SET_GATEWAY_CONFIG: 30300, // body is CoreBarConfiguration directly
   BATCH_CREATE_SCENE: 30500, // data = [Scene] (full-replace)
+  SCENE_DEPENDS_PROFILE: 30710, // → [{label:name, value:id, last:true}]
   SCENE_DEPENDS_DEVICES: 30701,
   SCENE_DEPENDS_DEVICES_PROPERTY: 30702,
   SCENE_DEPENDS_DEVICES_PROPERTY_VALUE: 30703,

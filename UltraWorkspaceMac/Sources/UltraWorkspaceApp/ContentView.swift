@@ -207,36 +207,87 @@ private struct CoreBarView: View {
             HSplitView {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("CoreBar screen (5:1, 1424×280)").font(.headline)
-                        BarPreview()
-                        Button { model.previewCoreBarScreen(settings: settings) } label: {
-                            Label("Show this on the CoreBar screen now", systemImage: "play.rectangle.fill")
-                        }.disabled(model.isWorking)
-                        Text("Experimental, non-destructive: shows a one-shot full-screen image (PREVIEW_SCREENSAVER). It does not change your saved pages. Watch the big screen after clicking.")
-                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-
-                        Divider()
-                        RotationView(target: .corebar, publishSerial: nil)
-
-                        Divider()
-                        Text("Modules").font(.headline)
-                        if model.modules.isEmpty {
-                            Text("No modules yet. Tap the CoreBar's screen to wake the modules, then press “Refresh / set up”.").foregroundStyle(.secondary)
-                        } else {
-                            ForEach(model.modules) { m in
-                                HStack {
-                                    Circle().fill(m.online ? .green : .secondary).frame(width: 7, height: 7)
-                                    Text(m.prettyType).fontWeight(.medium)
-                                    Text(m.serial).font(.caption).foregroundStyle(.secondary)
-                                    Spacer()
-                                    Button("Open") { model.nav = .module(m.serial) }.buttonStyle(.link)
-                                }
-                            }
-                        }
+                        CoreBarPagesView()
                     }.padding().frame(minWidth: 320)
                 }
                 ActivityLog().frame(minWidth: 260)
             }
+        }
+    }
+}
+
+
+// MARK: - CoreBar pages (profiles)
+
+/// The CoreBar has no wallpaper: a page is a strip of the device's own cards and
+/// our image can only be the clock card's cover. Pages cannot be read back and
+/// BATCH_SAVE_PROFILE replaces all of them, so publishing is confirmed every time.
+private struct CoreBarPagesView: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var settings: AppSettings
+    @StateObject private var pm = PreviewModel()
+    @StateObject private var ui = PagesUI()   // @State macro unavailable on CLT-only toolchains
+    private final class PagesUI: ObservableObject { @Published var confirmPublish = false }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("CoreBar pages").font(.headline)
+                Spacer()
+                Button { model.refreshPages() } label: { Label("List pages", systemImage: "list.bullet.rectangle") }
+                    .help("Read-only: asks the CoreBar which pages (profiles) exist (ids + names).")
+            }
+            Text("The CoreBar's big screen shows pages: a strip of the device's own cards (clock, weather, …). There is no full-screen image. Deckhand can add a page whose clock card carries Deckhand's picture.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+
+            HStack(alignment: .top, spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.black)
+                    if let img = pm.image {
+                        Image(nsImage: img).resizable().interpolation(.high)
+                            .frame(width: 140, height: 140).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    } else if pm.loading { ProgressView() } else { Text("—").foregroundStyle(.secondary) }
+                }
+                .frame(width: 150, height: 150)
+                .onAppear { reload() }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Clock-card cover (480×480, weather & time)").font(.subheadline)
+                    Button { ui.confirmPublish = true } label: { Label("Publish Deckhand page…", systemImage: "rectangle.stack.badge.plus") }
+                        .disabled(model.isWorking || model.selectedCoreBar == nil)
+                    Button { model.refreshDeckhandCover(settings: settings) } label: { Label("Refresh cover only", systemImage: "arrow.triangle.2.circlepath") }
+                        .disabled(model.isWorking || model.selectedCoreBar == nil)
+                        .help("Re-uploads deckhand/cover.png; the CoreBar repaints the current page without rewriting pages.")
+                    Button { reload() } label: { Label("Refresh preview", systemImage: "arrow.clockwise") }.buttonStyle(.borderless)
+                }
+            }
+
+            if !model.corebarPages.isEmpty {
+                Text("Pages on the CoreBar").font(.subheadline)
+                ForEach(model.corebarPages, id: \.id) { p in
+                    HStack {
+                        Image(systemName: model.currentPageId == p.id ? "checkmark.circle.fill" : "circle").foregroundStyle(model.currentPageId == p.id ? .green : .secondary)
+                        Text(p.name).fontWeight(.medium)
+                        Text(p.id).font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Show") { model.switchPage(id: p.id) }.buttonStyle(.link)
+                    }
+                }
+            }
+            Label("Publishing rewrites ALL pages on the CoreBar (the device cannot send them back). Deckhand re-sends the standard page plus its own; pages made with the official app other than the standard one are lost — redeploy them from that app if needed. The official app's Deploy, in turn, deletes Deckhand's images.", systemImage: "exclamationmark.triangle")
+                .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+        }
+        .alert("Rewrite the CoreBar's pages?", isPresented: $ui.confirmPublish) {
+            Button("Publish", role: .destructive) { model.publishDeckhandPage(settings: settings) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This replaces every page on the CoreBar with: the standard page (clock + weather) and a Deckhand page whose clock card shows Deckhand's picture. Pages created in the official app (other than the standard one) will be removed. Known pages right now: \(model.corebarPages.isEmpty ? "not listed yet — press “List pages” first" : model.corebarPages.map(\.name).joined(separator: ", ")).")
+        }
+    }
+
+    private func reload() {
+        pm.reload {
+            guard let png = await model.renderPageCover(settings: settings) else { return nil }
+            return NSImage(data: png)
         }
     }
 }

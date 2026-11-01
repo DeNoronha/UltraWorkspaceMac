@@ -262,6 +262,13 @@ function handleFrame(socket: tls.TLSSocket, req: RequestFrame): void {
       return;
     }
 
+    case Act.SCENE_DEPENDS_PROFILE: {
+      // The only "read" of pages: ids + names. A fresh device has one page, "default".
+      const list = (state.profiles.length ? state.profiles : [{ id: 'default', name: 'Standard Mode' }]) as { id?: string; name?: string }[];
+      sendFrame(socket, reply(Act.SCENE_DEPENDS_PROFILE, id, list.map((p) => ({ label: p.name ?? p.id, value: p.id, last: true }))));
+      return;
+    }
+
     case Act.BATCH_CREATE_SCENE: {
       state.scenes = Array.isArray(data) ? (data as unknown[]) : [];
       state.record('evt', 'tls', `BATCH_CREATE_SCENE stored ${state.scenes.length} scene(s)`);
@@ -270,6 +277,11 @@ function handleFrame(socket: tls.TLSSocket, req: RequestFrame): void {
     }
 
     case Act.TRIGGER_PROFILE_CHANGE: {
+      const ids = (state.profiles.length ? state.profiles : [{ id: 'default' }]) as { id?: string }[];
+      if (!ids.some((p) => p.id === String(data ?? ''))) {
+        sendFrame(socket, reply(Act.TRIGGER_PROFILE_CHANGE, id, null, -1, 'profile id error'));
+        return;
+      }
       state.activeProfileId = String(data ?? '');
       state.record('evt', 'tls', `TRIGGER_PROFILE_CHANGE active="${state.activeProfileId}"`);
       sendFrame(socket, reply(Act.TRIGGER_PROFILE_CHANGE, id, null));

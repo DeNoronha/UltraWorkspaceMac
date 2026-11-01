@@ -43,6 +43,8 @@ final class AppModel: ObservableObject {
     // Theme carousel
     @Published var themeRunning = false
     @Published var currentThemeLabel = ""
+    @Published var corebarPages: [CoreBarSession.PageInfo] = []
+    @Published var currentPageId: String?
     let sysStats = SystemStats()
     let netStats = NetworkStats()
     let diskStats = DiskActivityStats()

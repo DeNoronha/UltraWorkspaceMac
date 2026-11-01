@@ -48,7 +48,7 @@ Each widget renders a 240 × 240 image on the Mac, which is encoded to the modul
 - **World clock** (Amsterdam / New York / Tokyo), **Calendar** (next events; needs Calendar access), **Crypto ticker** (BTC/ETH via CoinGecko, no API key).
 
 **CoreBar big screen (1424 × 280)**
-- **One-shot preview works (confirmed on hardware)**: the CoreBar page's **"Show this on the CoreBar screen now"** renders a 1424 × 280 PNG, serves it from the Mac over HTTP (`UltraBarKit/PreviewServer.swift`, ephemeral port — the device only accepts http(s) URLs and does not serve uploaded files back) and shows it with `PREVIEW_SCREENSAVER` (30742). The device never acknowledges 30742. It is non-destructive — it changes no saved pages — and currently renders the weather-only wide layout.
+- **CoreBar pages (experimental, hardware confirmation pending)**: the Overview lists the CoreBar's pages (`SCENE_DEPENDS_PROFILE`), can switch between them, and can publish a Deckhand page whose clock card carries a Deckhand-rendered cover (weather & time). Publishing rewrites all pages on the device (the protocol has no read-back), so it always asks first and re-sends the standard page. The one-shot `PREVIEW_SCREENSAVER` route was dropped: it is broken in the firmware (see PROTOCOL.md).
 - **Not yet, and re-scoped**: persistent pages via `BATCH_SAVE_PROFILE` (1108). The vendor-client analysis shows there is **no wallpaper / full-screen image page**: a page is a strip of the CoreBar's own cards, and Deckhand's image can only be the clock card's cover. So the plan is "vendor widgets configured from the Mac + our image as the clock cover" (see `docs/ROADMAP.md`). The CoreBar rotation controls are present but disabled.
 - **Warning**: the official UltraWorkSpace app's *Deploy project* uploads its assets with a request that wipes the CoreBar's entire external files directory and replaces all profiles — anything Deckhand put there is gone. The two apps cannot co-own a CoreBar.
 
@@ -127,7 +127,7 @@ Teams / FaceTime / Mail actions on the People page open deep links in the respec
   - `Discovery` — UDP LAN discovery (broadcast `listen` and unicast `probe(ip:)` for Add-by-IP).
   - `CoreBarClient` — one TLS control connection; line-delimited JSON; pairing, auth, request/reply correlation; TOFU certificate pinning.
   - `CoreBarSession` — high-level operations over fresh connections: module listing, provisioning (`SET_GATEWAY_CONFIG`), property read/write, screen/reboot, VivoCube layer switching and recovery (`setLayer`, `readLayerWidget`, `recoverDisplay`), SenseCube reads, the module HTTP upload, and the big-screen zip upload + preview.
-  - `PreviewServer` — a tiny HTTP server on the Mac that hosts the big-screen preview PNG for `PREVIEW_SCREENSAVER`.
+  - `PreviewServer` — a tiny HTTP server on the Mac (kept for future use; the 30742 preview it served is broken in the firmware).
   - `DeviceImage` — image → LVGL v8 RGB565 encoder (opaque by default, alpha opt-in).
   - `DeployPackager` — ustar + gzip multi-layer package builder.
   - `ZipWriter` — minimal zip writer for the big-screen `/upload/zip` route.
@@ -167,7 +167,7 @@ Mirrors [`docs/ROADMAP.md`](docs/ROADMAP.md); that file is authoritative.
 **Done**
 - Discovery, pairing, TOFU pinning, live bus scan + provisioning with the asleep-module cache, 13 VivoCube widgets with per-device rotation using the vendor's layer model (one package, property-9 switching), Recover display, panel size test.
 - **SenseCube** temperature / humidity / light, live on the SenseCube page.
-- **CoreBar big-screen preview** (Mac-hosted image + `PREVIEW_SCREENSAVER`), non-destructive, confirmed on hardware.
+- **CoreBar pages** (list / switch / publish a Deckhand page) — implemented; clock-card cover rendering to be confirmed on hardware.
 - The inbound **`PUSH_MESSAGE` (1000000)** request/reply contract for KnobKey/DotKey is fully mapped in `PROTOCOL.md` (confirmed from the vendor client).
 
 **Pending**
