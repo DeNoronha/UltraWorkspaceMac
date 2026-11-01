@@ -175,32 +175,36 @@ private struct CoreBarView: View {
                    }))
             Divider()
             HSplitView {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Modules").font(.headline)
-                    if model.modules.isEmpty {
-                        Text("No modules yet. Tap the CoreBar's screen to wake the modules, then press “Refresh / set up”.").foregroundStyle(.secondary)
-                    } else {
-                        ForEach(model.modules) { m in
-                            HStack {
-                                Circle().fill(m.online ? .green : .secondary).frame(width: 7, height: 7)
-                                Text(m.prettyType).fontWeight(.medium)
-                                Text(m.serial).font(.caption).foregroundStyle(.secondary)
-                                Spacer()
-                                Button("Open") { model.nav = .module(m.serial) }.buttonStyle(.link)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("CoreBar screen (5:1, 1424×280)").font(.headline)
+                        BarPreview()
+                        Button { model.previewCoreBarScreen(settings: settings) } label: {
+                            Label("Show this on the CoreBar screen now", systemImage: "play.rectangle.fill")
+                        }.disabled(model.isWorking)
+                        Text("Experimental, non-destructive: shows a one-shot full-screen image (PREVIEW_SCREENSAVER). It does not change your saved pages. Watch the big screen after clicking.")
+                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+
+                        Divider()
+                        RotationView(target: .corebar, publishSerial: nil)
+
+                        Divider()
+                        Text("Modules").font(.headline)
+                        if model.modules.isEmpty {
+                            Text("No modules yet. Tap the CoreBar's screen to wake the modules, then press “Refresh / set up”.").foregroundStyle(.secondary)
+                        } else {
+                            ForEach(model.modules) { m in
+                                HStack {
+                                    Circle().fill(m.online ? .green : .secondary).frame(width: 7, height: 7)
+                                    Text(m.prettyType).fontWeight(.medium)
+                                    Text(m.serial).font(.caption).foregroundStyle(.secondary)
+                                    Spacer()
+                                    Button("Open") { model.nav = .module(m.serial) }.buttonStyle(.link)
+                                }
                             }
                         }
-                    }
-                    Divider()
-                    Text("CoreBar screen (5:1, 1424×280)").font(.headline)
-                    BarPreview()
-                    Button { model.previewCoreBarScreen(settings: settings) } label: {
-                        Label("Preview a weather card on the CoreBar screen", systemImage: "rectangle.inset.filled.badge.record")
-                    }.disabled(model.isWorking)
-                    Text("Experimental, non-destructive: shows a one-shot full-screen image (PREVIEW_SCREENSAVER). It does not change your saved pages.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    RotationView(target: .corebar, publishSerial: nil)
-                    Spacer()
-                }.padding().frame(minWidth: 320)
+                    }.padding().frame(minWidth: 320)
+                }
                 ActivityLog().frame(minWidth: 260)
             }
         }

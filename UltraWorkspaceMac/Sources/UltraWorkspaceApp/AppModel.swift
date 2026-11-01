@@ -286,20 +286,14 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// RGBA8888 (bottom-left origin, as the card renderers produce) → PNG data,
-    /// flipping rows so the image is upright for ordinary image consumers.
+    /// RGBA8888 (row 0 = top, as the card renderers' buffer is laid out) → PNG.
+    /// The buffer is already in top-left order for CGImage/Glide, so no flip.
     nonisolated static func pngData(fromRGBA rgba: [UInt8], width: Int, height: Int) -> Data? {
         guard rgba.count == width * height * 4 else { return nil }
         let rowBytes = width * 4
-        var flipped = [UInt8](repeating: 0, count: rgba.count)
-        for y in 0..<height {
-            let src = (height - 1 - y) * rowBytes
-            let dst = y * rowBytes
-            flipped.replaceSubrange(dst..<(dst + rowBytes), with: rgba[src..<(src + rowBytes)])
-        }
         let cs = CGColorSpaceCreateDeviceRGB()
         let info = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
-        guard let provider = CGDataProvider(data: Data(flipped) as CFData),
+        guard let provider = CGDataProvider(data: Data(rgba) as CFData),
               let cg = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
                                bytesPerRow: rowBytes, space: cs, bitmapInfo: CGBitmapInfo(rawValue: info),
                                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { return nil }
