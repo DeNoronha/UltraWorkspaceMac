@@ -22,14 +22,19 @@ final class AppModel: ObservableObject {
     @Published var pairingPrompt: String?
     @Published var showingSettings = false
 
-    // Upload options
-    @Published var canvasSize = 320
+    // Upload options (VivoCube native resolution is ~240×240)
+    @Published var canvasSize = 240
 
     // Music
     @Published var nowPlaying = AppleMusic.NowPlaying(isPlaying: false, title: "", artist: "", album: "", hasTrack: false)
     @Published var autoPushNowPlaying = false
     var musicPollTask: Task<Void, Never>?
     var lastPushedKey = ""
+
+    // Weather
+    @Published var lastWeather: OpenMeteo.Now?
+    @Published var weatherAutoUpdate = false
+    var weatherTask: Task<Void, Never>?
 
     struct LogEntry: Identifiable {
         let id = UUID()

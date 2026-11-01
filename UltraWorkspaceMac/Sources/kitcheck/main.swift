@@ -4,6 +4,17 @@ import UltraBarKit
 
 // `kitcheck discover` — run the app's real Discovery from the terminal (which
 // already has Local Network permission) to prove the code works against hardware.
+if CommandLine.arguments.contains("weather") {
+    let city = CommandLine.arguments.last ?? "Amsterdam"
+    do {
+        guard let p = try await OpenMeteo.geocode(city) else { print("no geocode for \(city)"); exit(2) }
+        print("geocoded \(city) -> \(p.name), \(p.country)  (\(p.latitude), \(p.longitude))")
+        let now = try await OpenMeteo.current(latitude: p.latitude, longitude: p.longitude, metric: true, placeName: p.name)
+        print("now: \(Int(now.temperature.rounded()))\(now.unitSuffix)  code=\(now.code) sky=\(now.sky.label) day=\(now.isDay) hum=\(now.humidity ?? -1)% wind=\(now.windSpeed ?? 0)\(now.windSuffix) @ \(now.place)")
+    } catch { print("weather error: \(error)"); exit(1) }
+    exit(0)
+}
+
 if CommandLine.arguments.contains("discover") {
     print("scanning UDP \(Proto.discoveryPort) for 8s…")
     let bars = await Discovery.listen(timeout: 8)

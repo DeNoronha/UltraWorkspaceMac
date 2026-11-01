@@ -28,6 +28,8 @@
     <string>UltraWorkspace finds your CoreBar on the local network and sends it display updates.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>UltraWorkspace controls Apple Music (play/pause, skip, volume) and reads the current track to show it on your VivoCube.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>UltraWorkspace uses your location to show local weather on your UltraBar when "Same as this Mac" is selected.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>

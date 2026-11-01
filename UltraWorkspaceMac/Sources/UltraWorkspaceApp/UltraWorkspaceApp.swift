@@ -4,6 +4,14 @@ import SwiftUI
 struct UltraWorkspaceApp: App {
     @StateObject private var model = AppModel()
 
+    init() {
+        let a = CommandLine.arguments
+        if let i = a.firstIndex(of: "--render-weather"), i + 1 < a.count {
+            WeatherPreview.run(dir: a[i + 1])
+            exit(0)
+        }
+    }
+
     var body: some Scene {
         WindowGroup("UltraWorkspace") {
             ContentView()

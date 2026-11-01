@@ -1,0 +1,118 @@
+import Foundation
+
+/// Minimal Open-Meteo client (no API key). Geocoding + current weather.
+public enum OpenMeteo {
+    public struct Place: Sendable {
+        public var name: String
+        public var country: String
+        public var latitude: Double
+        public var longitude: Double
+    }
+
+    public enum Sky: String, Sendable {
+        case clear, partlyCloudy, cloudy, fog, drizzle, rain, snow, showers, thunder, unknown
+        public var label: String {
+            switch self {
+            case .clear: return "Clear"
+            case .partlyCloudy: return "Partly cloudy"
+            case .cloudy: return "Cloudy"
+            case .fog: return "Fog"
+            case .drizzle: return "Drizzle"
+            case .rain: return "Rain"
+            case .snow: return "Snow"
+            case .showers: return "Showers"
+            case .thunder: return "Thunderstorm"
+            case .unknown: return "—"
+            }
+        }
+    }
+
+    public struct Now: Sendable {
+        public var temperature: Double     // in requested units
+        public var unitSuffix: String      // "°C" / "°F"
+        public var code: Int               // WMO weather code
+        public var sky: Sky
+        public var isDay: Bool
+        public var humidity: Int?
+        public var windSpeed: Double?
+        public var windSuffix: String
+        public var place: String
+
+        public init(temperature: Double, unitSuffix: String, code: Int, sky: Sky, isDay: Bool,
+                    humidity: Int?, windSpeed: Double?, windSuffix: String, place: String) {
+            self.temperature = temperature
+            self.unitSuffix = unitSuffix
+            self.code = code
+            self.sky = sky
+            self.isDay = isDay
+            self.humidity = humidity
+            self.windSpeed = windSpeed
+            self.windSuffix = windSuffix
+            self.place = place
+        }
+    }
+
+    public static func geocode(_ query: String) async throws -> Place? {
+        var c = URLComponents(string: "https://geocoding-api.open-meteo.com/v1/search")!
+        c.queryItems = [
+            .init(name: "name", value: query),
+            .init(name: "count", value: "1"),
+            .init(name: "language", value: "en"),
+            .init(name: "format", value: "json"),
+        ]
+        let (data, _) = try await URLSession.shared.data(from: c.url!)
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let results = obj["results"] as? [[String: Any]], let r = results.first,
+              let lat = r["latitude"] as? Double, let lon = r["longitude"] as? Double else { return nil }
+        return Place(name: (r["name"] as? String) ?? query,
+                     country: (r["country"] as? String) ?? "",
+                     latitude: lat, longitude: lon)
+    }
+
+    public static func current(latitude: Double, longitude: Double, metric: Bool, placeName: String) async throws -> Now {
+        var c = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
+        c.queryItems = [
+            .init(name: "latitude", value: String(latitude)),
+            .init(name: "longitude", value: String(longitude)),
+            .init(name: "current", value: "temperature_2m,relative_humidity_2m,weather_code,is_day,wind_speed_10m"),
+            .init(name: "temperature_unit", value: metric ? "celsius" : "fahrenheit"),
+            .init(name: "wind_speed_unit", value: metric ? "kmh" : "mph"),
+            .init(name: "timezone", value: "auto"),
+        ]
+        let (data, _) = try await URLSession.shared.data(from: c.url!)
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let cur = obj["current"] as? [String: Any] else {
+            throw UltraBarError.protocolError("weather: bad response")
+        }
+        func dbl(_ k: String) -> Double? { (cur[k] as? Double) ?? (cur[k] as? NSNumber)?.doubleValue }
+        func int(_ k: String) -> Int? { (cur[k] as? Int) ?? (cur[k] as? NSNumber)?.intValue }
+        let code = int("weather_code") ?? 0
+        return Now(
+            temperature: dbl("temperature_2m") ?? 0,
+            unitSuffix: metric ? "°C" : "°F",
+            code: code,
+            sky: sky(for: code),
+            isDay: (int("is_day") ?? 1) == 1,
+            humidity: int("relative_humidity_2m"),
+            windSpeed: dbl("wind_speed_10m"),
+            windSuffix: metric ? "km/h" : "mph",
+            place: placeName
+        )
+    }
+
+    public static func sky(for code: Int) -> Sky {
+        switch code {
+        case 0: return .clear
+        case 1, 2: return .partlyCloudy
+        case 3: return .cloudy
+        case 45, 48: return .fog
+        case 51, 53, 55, 56, 57: return .drizzle
+        case 61, 63, 65, 66, 67: return .rain
+        case 71, 73, 75, 77: return .snow
+        case 80, 81, 82: return .showers
+        case 85, 86: return .snow
+        case 95, 96, 99: return .thunder
+        default: return .unknown
+        }
+    }
+}

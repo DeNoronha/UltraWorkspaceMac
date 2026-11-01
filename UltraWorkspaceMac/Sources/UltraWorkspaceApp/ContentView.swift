@@ -120,6 +120,9 @@ private struct DetailView: View {
                     MusicPanel()
                         .tabItem { Label("Music", systemImage: "music.note") }
 
+                    WeatherPanel()
+                        .tabItem { Label("Weather", systemImage: "cloud.sun") }
+
                     PeoplePanel()
                         .tabItem { Label("People", systemImage: "person.2") }
                 }
@@ -278,6 +281,63 @@ private struct MusicPanel: View {
     @Published var name = ""
     @Published var email = ""
     @Published var phone = ""
+}
+
+private struct WeatherPanel: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var settings: AppSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Weather on a VivoCube").font(.headline)
+            Text("Shows time, date, weather (sun/cloud/rain…) and temperature — rendered on the Mac via Open-Meteo (free, no API key) and pushed to a VivoCube (240×240).")
+                .font(.caption).foregroundStyle(.secondary)
+
+            HStack(spacing: 6) {
+                Image(systemName: "location")
+                Text(locationSummary).font(.callout)
+                Button("Change…") { model.showingSettings = true }.buttonStyle(.link)
+            }
+
+            if let w = model.lastWeather {
+                HStack(spacing: 10) {
+                    Text("\(Int(w.temperature.rounded()))\(w.unitSuffix)").font(.title).bold()
+                    VStack(alignment: .leading) {
+                        Text(w.sky.label)
+                        Text(w.place).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            Button {
+                model.pushWeather(settings: settings)
+            } label: {
+                Label("Push weather to VivoCube", systemImage: "cloud.sun.rain")
+            }
+            .disabled(model.selectedCoreBar == nil)
+
+            Toggle("Keep it updated (every 10 min)", isOn: Binding(
+                get: { model.weatherAutoUpdate },
+                set: { model.setWeatherAuto($0, settings: settings) }
+            )).toggleStyle(.switch)
+
+            Text("Tip: the CoreBar's own 5:1 wallpaper is 1424×280. Setting the big bar's wallpaper/screensaver is profile-bound and on the roadmap — for now the weather card targets a VivoCube.")
+                .font(.caption2).foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .padding()
+    }
+
+    private var locationSummary: String {
+        switch settings.locationMode {
+        case .auto: return "Same as this Mac" + (settings.manualCity.isEmpty ? "" : " (fallback: \(settings.manualCity))")
+        case .manual:
+            if !settings.manualLat.isEmpty, !settings.manualLon.isEmpty { return "\(settings.manualLat), \(settings.manualLon)" }
+            return settings.manualCity.isEmpty ? "Not set — open Settings" : settings.manualCity
+        }
+    }
 }
 
 private struct PeoplePanel: View {
