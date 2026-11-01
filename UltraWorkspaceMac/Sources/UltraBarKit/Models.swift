@@ -26,6 +26,7 @@ public enum Proto {
     public static let actWriteProp = 30201        // MODULE_PROPERTY_WRITE — {serialNo, deviceId, propertyId, value}
     public static let actQueryModuleState = 30730 // QUERY_MODULE_STATE
     public static let actGetCoreBarConfig = 30740 // GET_COREBAR_CONFIG
+    public static let actSetCoreBarConfig = 30741 // SET_COREBAR_CONFIG — provision modules
     public static let actSysReboot = 20100        // SYS_REBOOT (CoreBar)
 
     // Deprecated alias — 30730 is module STATE, not the device list.

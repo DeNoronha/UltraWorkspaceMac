@@ -169,6 +169,15 @@ private struct DetailView: View {
                 .pickerStyle(.radioGroup)
             }
 
+            Button {
+                model.provisionModules()
+            } label: {
+                Label("Set up modules on CoreBar", systemImage: "square.and.arrow.down.on.square")
+            }
+            .disabled(model.selectedCoreBar == nil || model.isWorking)
+            Text("Registers the attached modules in the CoreBar's config so they become controllable (needed once, like the official app's “Add”). If pushing an image says “module not found”, run this first.")
+                .font(.caption).foregroundStyle(.secondary)
+
             Divider()
             Text("Display").font(.headline)
             if let m = model.selectedModule, !m.isVivoCube {

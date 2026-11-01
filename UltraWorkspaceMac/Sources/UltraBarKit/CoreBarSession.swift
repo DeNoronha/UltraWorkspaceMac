@@ -107,6 +107,48 @@ public struct CoreBarSession: Sendable {
         return []
     }
 
+    /// Provision the CoreBar: scan the buses and write the discovered modules
+    /// into the gateway config (SET_COREBAR_CONFIG) so they become controllable.
+    /// Returns the number of modules written. This changes device configuration.
+    public func provision(scanSeconds: TimeInterval = 12) async throws -> Int {
+        let client = try await authedClient()
+        defer { Task { await client.close() } }
+        let canData = try JSONSerialization.data(withJSONObject: "can", options: [.fragmentsAllowed])
+        let meshData = try JSONSerialization.data(withJSONObject: "mesh", options: [.fragmentsAllowed])
+        try await client.fire(act: Proto.actModuleStartDiscovery, dataJSON: canData)
+        try await client.fire(act: Proto.actModuleStartDiscovery, dataJSON: meshData)
+        let found = await client.collect(act: Proto.actModuleDiscoveryReplay, duration: scanSeconds)
+
+        var canEps: [String: [String: Any]] = [:]
+        var meshEps: [String: [String: Any]] = [:]
+        for line in found {
+            guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                  let d = obj["data"] as? [String: Any] else { continue }
+            let serial = (d["serialNumber"] as? String) ?? (d["serialNo"] as? String) ?? (d["uid"] as? String) ?? ""
+            guard !serial.isEmpty else { continue }
+            if (d["interfaceType"] as? String) == "mesh" { meshEps[serial] = d } else { canEps[serial] = d }
+        }
+        let total = canEps.count + meshEps.count
+        guard total > 0 else { return 0 }
+
+        let config: [String: Any] = [
+            "canGateway": ["endpoints": Array(canEps.values)],
+            "meshGateway": ["endpoints": Array(meshEps.values)],
+        ]
+        let req: [String: Any] = ["type": "GATEWAY_CONFIG", "value": config]
+        let reqData = try JSONSerialization.data(withJSONObject: req)
+        guard let line = try await client.request(act: Proto.actSetCoreBarConfig, dataJSON: reqData, timeout: 15),
+              let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+            throw UltraBarError.protocolError("no reply to SET_COREBAR_CONFIG")
+        }
+        let code = (reply["code"] as? Int) ?? (reply["code"] as? NSNumber)?.intValue ?? -1
+        if code != 200 {
+            let msg = (reply["msg"] as? String) ?? "code \(code)"
+            throw UltraBarError.protocolError("provisioning rejected: \(msg)")
+        }
+        return total
+    }
+
     private static func endpoint(_ e: [String: Any]) -> AttachedModule {
         let serial = (e["serialNumber"] as? String) ?? (e["serialNo"] as? String) ?? (e["uid"] as? String) ?? ""
         return AttachedModule(

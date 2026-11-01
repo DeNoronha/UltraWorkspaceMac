@@ -167,6 +167,32 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Provision the CoreBar: scan + write the discovered modules into the
+    /// gateway config so they become controllable. Changes device config.
+    func provisionModules() {
+        guard let bar = selectedCoreBar, let session = session(for: bar), !isWorking else {
+            if selectedCoreBar != nil { say("No stored token — pair this CoreBar again.") }
+            return
+        }
+        isWorking = true
+        say("Setting up modules on \(bar.name) — scanning the bus and writing the config…")
+        Task {
+            do {
+                let n = try await session.provision()
+                self.isWorking = false
+                if n == 0 {
+                    self.say("No modules found to set up. Make sure they're attached, then try again.")
+                } else {
+                    self.say("Set up \(n) module\(n == 1 ? "" : "s") on the CoreBar. They should be controllable now.")
+                    self.refreshModules()
+                }
+            } catch {
+                self.isWorking = false
+                self.say("Setup failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: Control
 
     func setScreen(on: Bool) {
