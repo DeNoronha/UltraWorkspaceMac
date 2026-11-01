@@ -148,6 +148,46 @@ The CoreBar runs LineOS (`com.ultrabar.launch`); the screen protocol lives there
 
 **Non-destructive preview.** `PREVIEW_SCREENSAVER` (30742) `data` = `{url, mediaType:"IMAGE"|"VIDEO"}` shows a full-screen image/video immediately — one-shot, changes no saved state. This is the safe way to validate upload + sizing/format. **Deckhand implements exactly this** (`uploadScreenZip` + `previewScreen`) and deliberately does NOT yet write profiles.
 
+## Device settings — confirmed scope
+
+The :7431 channel is **not** a general system-settings API. Only the act codes registered in the launcher's `MessageFactory` are handled, and there is **no** act code for volume, brightness, Bluetooth, Wi-Fi connect, timezone/24h, locale, or wallpaper — those live only as on-device helpers driven by the launcher UI and the physical knob. Moving them into a desktop app would need new device-side firmware.
+
+Controllable today:
+- **Screensaver** — `GET {act:30740, data:{type:"BASE_SET"}}` → `ScreensaverConfig`; `SET {act:30741, data:{type:"BASE_SET", value:{featureEnabled, lockTime, uri, packageName, ver}}}`. `lockTime` is a `LockTime` enum serialized by name: `TIME_30S, TIME_1MIN, TIME_2MIN, TIME_3MIN, TIME_4MIN, TIME_5MIN, NEVER`.
+- **Screensaver preview** — `{act:30742, data:{url, mediaType:"IMAGE"|"VIDEO"}}` (one-shot).
+- **Gateway endpoints** — `{act:30741, data:{type:"GATEWAY_CONFIG", value:CoreBarConfiguration}}` (write; get returns null). `SET_GATEWAY_CONFIG` (30300) also accepts the config as the raw body.
+- **Reboot** — `{act:20100}`.
+- **Wi-Fi scan/list only** — `{act:1633}` start / `{act:1634}` stop; results pushed as `{act:1635}` (`CUBE_SCAN_WIFI_LIST_RESULT`), each `{name, signal, frequency}`, open networks filtered. No connect path.
+- **Screen on/off** — `{act:30201, data:{serialNo, deviceId, propertyId:4, value}}`, addressed to a real module endpoint (rejects `serialNo=="0000000000000000"`; the CoreBar's own local volume/brightness are not reachable this way).
+
+`SET_COREBAR_CONFIG` (30741) `type` enum (`ReadWriteType`) has exactly three members: `BASE_SET` (ScreensaverConfig), `GATEWAY_CONFIG` (CoreBarConfiguration), `APP_LIST` (read-only). Reply envelope: `{act, code(200|-1), msg, data, id, timestamp}` — payloads come back in `data`.
+
+## SenseCube sensors (read)
+
+Read with `MODULE_PROPERTY_READ` (30200), `data = {serialNo, deviceId, propertyId}`; the value comes back raw in `data.result` (the app does the scaling — the device only scales on its internal push path, not on reads). The SenseCube's sub-devices use their own ids (not main=256).
+
+| deviceId | propId | sensor | unit (raw → value) | pollable |
+|---|---|---|---|---|
+| 10 | 1 | illuminance | lux (as-is) | yes |
+| 11 | 1 | temperature | raw ÷ 10 = °C | yes |
+| 12 | 1 | humidity | raw ÷ 10 = %RH | yes |
+| 15 | 2 | shock-wake state | 0 / ≠0 | yes |
+| 13 | 2 | presence (mmWave) | bool | event-only |
+| 14 | 1 | ambient audio (SPL) | dB | event-only |
+| 15 | 3 | shock/vibration | event id | event-only |
+| any | 0 | min report interval | ms (write to configure) | config |
+
+Example — temperature: `{"act":30200,"data":{"serialNo":"<SN>","deviceId":11,"propertyId":1}}` → `{"code":200,"data":{...,"result":235}}` = 23.5 °C. No battery property (mains/USB powered). Presence/audio/vibration are event-only and do **not** appear to be forwarded over :7431 (they drive on-device widgets / scene triggers); over the protocol the SenseCube is effectively poll-only for temp/humidity/light.
+
+## CoreBar inputs (DotKey / KnobKey)
+
+The launcher does **not** push raw key/knob events over :7431. Raw input is consumed on-device and bound, via the active Profile's module config, to on-device scenes/controllers. The client only receives **semantic, pre-mapped** messages, and only when a control is bound to a "PC" target:
+
+- Outbound push: `PUSH_MESSAGE` (1000000), `data = {type: <PushType>, payload}`. PushType includes `SET_VOLUME`, `SET_BRIGHTNESS`, `GET_VOLUME`, `GET_BRIGHTNESS`, `PC_CONTROL`, and `CPU/MEMORY/STORAGE/NETWORK` (the device asking the PC for stats to display).
+- **KnobKey → Mac**: bind a rotation direction to `PC_VOLUME` (or `PC_BRIGHT`) in the profile; the device then pushes `{act:1000000, data:{type:"SET_VOLUME", payload:<0..100>}}` on each tick (and polls `GET_VOLUME` every 5 s). No subscribe needed — pushing starts once the binding exists.
+- **DotKey → Mac**: a key press only reaches the PC if its bound scene uses a `PC_CONTROL` action (pushes `{type:"PC_CONTROL", payload}`) or an HID-keycode action (sent over a separate keyboard channel). The 3 keys report per-key 16-bit keyCodes + up/down/hold; single/double/long is computed on-device.
+- Bindings are **settable over the protocol** by writing the Profile: `BATCH_SAVE_PROFILE` (1108), `GET_PROFILE_WIDGET` (1002), `TRIGGER_PROFILE_CHANGE` (1103). So the Mac app can bind a knob direction to PC_VOLUME, or a key to PC_CONTROL, by writing the profile — then listen for `act:1000000`.
+
 ## Not yet mapped
 
 - Persistent CoreBar **wallpaper/pages** via `BATCH_SAVE_PROFILE` (1108): needs the full authoritative profile array (open question: does `albumId` alone repaint, or must the TIME-widget `icon` be set; exact `/upload/zip` success JSON; the screensaver app's `packageName`/`ver`).

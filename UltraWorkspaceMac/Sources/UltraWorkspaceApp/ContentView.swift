@@ -259,8 +259,8 @@ private struct KnobKeyView: View {
     var body: some View {
         DeviceInfo(title: "KnobKey", serial: module.serial, systemImage: "dial.min",
                    lines: ["A rotary encoder with a push button.",
-                           "Planned: bind rotation to system/Apple Music volume and the push button to play/pause — driven over the network by this app.",
-                           "This needs the inbound knob/button events (next feature)."])
+                           "Feasible: bind a rotation direction to “PC volume” in the device profile; the CoreBar then pushes volume changes to this Mac (act 1000000 / SET_VOLUME), which we apply to the system volume.",
+                           "Needs the profile-write path (BATCH_SAVE_PROFILE) — on the roadmap, after the safe preview is confirmed."])
     }
 }
 
@@ -268,18 +268,70 @@ private struct DotKeyView: View {
     let module: AttachedModule
     var body: some View {
         DeviceInfo(title: "DotKey", serial: module.serial, systemImage: "square.grid.3x1.below.line.grid.1x2",
-                   lines: ["A 3-key mechanical keypad (single / double / long press).",
-                           "Planned: bind keys to app shortcuts, hotkeys, media keys and macros.",
-                           "This needs the inbound button events (next feature)."])
+                   lines: ["A 3-key keypad (two round + one long key; single / double / long press).",
+                           "Feasible: bind a key to a “PC control” scene action in the device profile; a press then pushes to this Mac (act 1000000 / PC_CONTROL), which we map to a shortcut/hotkey/media key.",
+                           "Needs the profile-write path (BATCH_SAVE_PROFILE) — on the roadmap, after the safe preview is confirmed."])
     }
 }
 
+@MainActor final class SenseReader: ObservableObject {
+    @Published var reading: CoreBarSession.SenseReading?
+    @Published var updated: Date?
+    @Published var busy = false
+    private var task: Task<Void, Never>?
+    func start(model: AppModel, serial: String) {
+        stop()
+        task = Task { [weak self] in
+            while !Task.isCancelled {
+                if let bar = model.selectedCoreBar, let session = model.session(for: bar) {
+                    await MainActor.run { self?.busy = true }
+                    let r = await session.readSenseCube(serial: serial)
+                    await MainActor.run { self?.reading = r; self?.updated = Date(); self?.busy = false }
+                }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+        }
+    }
+    func stop() { task?.cancel(); task = nil }
+}
+
 private struct SenseCubeView: View {
+    @EnvironmentObject var model: AppModel
     let module: AttachedModule
+    @StateObject private var reader = SenseReader()
+
     var body: some View {
-        DeviceInfo(title: "SenseCube", serial: module.serial, systemImage: "sensor.fill",
-                   lines: ["mmWave radar + light, temperature, humidity and vibration sensors.",
-                           "Planned: live sensor readouts and automations (e.g. presence)."])
+        VStack(alignment: .leading, spacing: 0) {
+            Header(title: "SenseCube", subtitle: module.serial,
+                   trailing: AnyView(Button { reader.start(model: model, serial: module.serial) } label: {
+                       Label("Refresh", systemImage: "arrow.clockwise") }.disabled(reader.busy)))
+            Divider()
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 14) {
+                    tile("Temperature", reader.reading?.temperatureC.map { String(format: "%.1f°C", $0) } ?? "—", "thermometer.medium", .orange)
+                    tile("Humidity", reader.reading?.humidity.map { String(format: "%.0f%%", $0) } ?? "—", "humidity.fill", .teal)
+                    tile("Light", reader.reading?.lux.map { "\($0) lux" } ?? "—", "sun.max.fill", .yellow)
+                }
+                Text("Presence (mmWave), sound level and vibration are event-only on the device and aren't exposed over the network — so they can't be read remotely yet.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if let u = reader.updated {
+                    Text("Updated \(u, style: .time) · polling every 5s").font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }.padding()
+        }
+        .onAppear { reader.start(model: model, serial: module.serial) }
+        .onDisappear { reader.stop() }
+    }
+
+    private func tile(_ label: String, _ value: String, _ icon: String, _ color: Color) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon).font(.system(size: 26)).foregroundStyle(color)
+            Text(value).font(.title3).bold().monospacedDigit()
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(width: 120, height: 110)
+        .background(RoundedRectangle(cornerRadius: 12).fill(.quaternary.opacity(0.4)))
     }
 }
 

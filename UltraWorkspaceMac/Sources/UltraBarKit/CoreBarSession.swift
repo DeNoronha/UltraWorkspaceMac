@@ -219,12 +219,12 @@ public struct CoreBarSession: Sendable {
         return String(data: line, encoding: .utf8) ?? "<non-utf8 reply>"
     }
 
-    public func readProperty(serial: String, propertyId: Int, timeout: TimeInterval = 8) async -> Int64? {
+    public func readProperty(serial: String, deviceId: Int = Proto.deviceMain, propertyId: Int, timeout: TimeInterval = 8) async -> Int64? {
         do {
             let client = try await authedClient()
             defer { Task { await client.close() } }
             let data: [String: Any] = [
-                "serialNo": serial, "deviceId": Proto.deviceMain,
+                "serialNo": serial, "deviceId": deviceId,
                 "propertyId": propertyId, "extra": NSNull(),
             ]
             let json = try JSONSerialization.data(withJSONObject: data)
@@ -251,6 +251,27 @@ public struct CoreBarSession: Sendable {
                   let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return nil }
             return code(reply)
         } catch { return nil }
+    }
+
+    /// SenseCube ambient readings. Temp/humidity/light are pollable over the
+    /// protocol (raw ints in `result`); the app does the scaling. Presence,
+    /// audio and vibration are event-only and not exposed here.
+    public struct SenseReading: Sendable {
+        public var temperatureC: Double?   // °C
+        public var humidity: Double?       // %RH
+        public var lux: Int?               // illuminance
+        public init(temperatureC: Double?, humidity: Double?, lux: Int?) {
+            self.temperatureC = temperatureC; self.humidity = humidity; self.lux = lux
+        }
+    }
+
+    public func readSenseCube(serial: String) async -> SenseReading {
+        let t = await readProperty(serial: serial, deviceId: 11, propertyId: 1)
+        let h = await readProperty(serial: serial, deviceId: 12, propertyId: 1)
+        let l = await readProperty(serial: serial, deviceId: 10, propertyId: 1)
+        return SenseReading(temperatureC: t.map { Double($0) / 10.0 },
+                            humidity: h.map { Double($0) / 10.0 },
+                            lux: l.map { Int($0) })
     }
 
     public func setScreen(serial: String, on: Bool) async -> Int? {
