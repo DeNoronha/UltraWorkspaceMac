@@ -26,6 +26,21 @@ extension AppModel {
         }
     }
 
+    /// Coordinates for the device's own WEATHER card (same chain as our weather:
+    /// manual lat/lon → manual city → Mac location → IP geolocation).
+    func resolveCoordinates(settings: AppSettings) async -> (lat: String, lon: String, place: String)? {
+        func fmt(_ d: Double) -> String { String(format: "%.4f", d) }
+        if settings.locationMode == .manual {
+            if let lat = Double(settings.manualLat.replacingOccurrences(of: ",", with: ".")),
+               let lon = Double(settings.manualLon.replacingOccurrences(of: ",", with: ".")) { return (fmt(lat), fmt(lon), settings.manualCity) }
+            if !settings.manualCity.isEmpty, let p = try? await OpenMeteo.geocode(settings.manualCity) { return (fmt(p.latitude), fmt(p.longitude), p.name) }
+        }
+        if let loc = await MacLocation().once() { return (fmt(loc.lat), fmt(loc.lon), loc.place) }
+        if !settings.manualCity.isEmpty, let p = try? await OpenMeteo.geocode(settings.manualCity) { return (fmt(p.latitude), fmt(p.longitude), p.name) }
+        if let ip = await OpenMeteo.ipLocate() { return (fmt(ip.lat), fmt(ip.lon), ip.city) }
+        return nil
+    }
+
     /// Render the square cover we put on the clock card.
     func renderPageCover(settings: AppSettings) async -> Data? {
         let now = try? await resolveWeather(settings: settings, metric: settings.units == .metric)
@@ -48,30 +63,39 @@ extension AppModel {
             do {
                 try await session.uploadPageAsset(png, name: "cover.png")
                 self.say("Cover uploaded (deckhand/cover.png). Writing pages…")
-                let lat = settings.manualLat.replacingOccurrences(of: ",", with: ".")
-                let lon = settings.manualLon.replacingOccurrences(of: ",", with: ".")
+                // Device-native cards: they keep running on the CoreBar when the Mac is off.
+                let coords = await self.resolveCoordinates(settings: settings)
+                let weatherParam: [String: String] = ["lat": coords?.lat ?? "", "lon": coords?.lon ?? ""]
+                if coords == nil { self.say("No location available — the CoreBar's weather card will use the device's network location.") }
+                let senseSerial = self.modules.first(where: { $0.type == "SENSE_CUBE" })?.serial
                 let standard: [String: Any] = [
                     "id": Self.defaultPageId, "name": "Standard Mode", "isDefault": true, "showName": true, "iconScale": 100,
                     "icon": "http://cdn.lifex360.com/ultrabar/desktop/default.png",
                     "module": [],
                     "widget": [
                         ["id": "sys.component.time", "type": "TIME", "name": "Time", "icon": ""],
-                        ["id": "sys.component.weather", "type": "WEATHER", "name": "Weather", "param": ["lat": lat, "lon": lon]],
+                        ["id": "sys.component.weather", "type": "WEATHER", "name": "Weather", "param": weatherParam],
                     ],
                 ]
+                var deckhandWidgets: [[String: Any]] = [
+                    ["id": "sys.component.time", "type": "TIME", "name": "Deckhand", "icon": "deckhand/cover.png"],
+                    ["id": "sys.component.weather", "type": "WEATHER", "name": "Weather", "param": weatherParam],
+                ]
+                if let senseSerial {
+                    deckhandWidgets.append(["id": "deckhand.sense.temp", "type": "SENSE_CUBE_TEMP", "name": "Temperature", "param": ["uid": senseSerial]])
+                    deckhandWidgets.append(["id": "deckhand.sense.hum", "type": "SENSE_CUBE_HUM", "name": "Humidity", "param": ["uid": senseSerial]])
+                }
                 let deckhand: [String: Any] = [
                     "id": Self.deckhandPageId, "name": "Deckhand", "isDefault": false, "showName": true, "iconScale": 100,
                     "icon": "deckhand/cover.png",
                     "module": [],
-                    "widget": [
-                        ["id": "sys.component.time", "type": "TIME", "name": "Deckhand", "icon": "deckhand/cover.png"],
-                    ],
+                    "widget": deckhandWidgets,
                 ]
                 let reply = try await session.savePages([standard, deckhand])
                 self.say("Pages written (\(reply.prefix(80))). Switching to the Deckhand page…")
                 _ = try await session.switchPage(id: Self.deckhandPageId)
                 self.currentPageId = Self.deckhandPageId
-                self.say("CoreBar is showing the Deckhand page. ✓ Look at the clock card.")
+                self.say("CoreBar is showing the Deckhand page: clock (our cover), the device's own weather card\(coords.map { " for \($0.place)" } ?? "")\(senseSerial != nil ? ", SenseCube temperature + humidity" : ""). These cards run on the CoreBar itself. ✓")
                 self.refreshPages()
             } catch { self.say("Page publish failed: \(error.localizedDescription)") }
         }
