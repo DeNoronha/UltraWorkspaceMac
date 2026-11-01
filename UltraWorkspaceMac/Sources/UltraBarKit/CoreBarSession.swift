@@ -110,7 +110,7 @@ public struct CoreBarSession: Sendable {
     /// Provision the CoreBar: scan the buses and write the discovered modules
     /// into the gateway config (SET_COREBAR_CONFIG) so they become controllable.
     /// Returns the number of modules written. This changes device configuration.
-    public func provision(scanSeconds: TimeInterval = 12) async throws -> Int {
+    public func provision(scanSeconds: TimeInterval = 12) async throws -> (count: Int, diagnostic: String) {
         let client = try await authedClient()
         defer { Task { await client.close() } }
         let canData = try JSONSerialization.data(withJSONObject: "can", options: [.fragmentsAllowed])
@@ -121,15 +121,17 @@ public struct CoreBarSession: Sendable {
 
         var canEps: [String: [String: Any]] = [:]
         var meshEps: [String: [String: Any]] = [:]
+        var sampleEndpoint = ""
         for line in found {
             guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
                   let d = obj["data"] as? [String: Any] else { continue }
+            if sampleEndpoint.isEmpty { sampleEndpoint = String(data: line, encoding: .utf8) ?? "" }
             let serial = (d["serialNumber"] as? String) ?? (d["serialNo"] as? String) ?? (d["uid"] as? String) ?? ""
             guard !serial.isEmpty else { continue }
             if (d["interfaceType"] as? String) == "mesh" { meshEps[serial] = d } else { canEps[serial] = d }
         }
         let total = canEps.count + meshEps.count
-        guard total > 0 else { return 0 }
+        guard total > 0 else { return (0, "no endpoints; sample=\(sampleEndpoint.prefix(300))") }
 
         let config: [String: Any] = [
             "canGateway": ["endpoints": Array(canEps.values)],
@@ -137,16 +139,12 @@ public struct CoreBarSession: Sendable {
         ]
         let req: [String: Any] = ["type": "GATEWAY_CONFIG", "value": config]
         let reqData = try JSONSerialization.data(withJSONObject: req)
-        guard let line = try await client.request(act: Proto.actSetCoreBarConfig, dataJSON: reqData, timeout: 15),
-              let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
-            throw UltraBarError.protocolError("no reply to SET_COREBAR_CONFIG")
+        var replyStr = "<no reply>"
+        if let line = try await client.request(act: Proto.actSetCoreBarConfig, dataJSON: reqData, timeout: 15) {
+            replyStr = String(data: line, encoding: .utf8) ?? "<non-utf8>"
         }
-        let code = (reply["code"] as? Int) ?? (reply["code"] as? NSNumber)?.intValue ?? -1
-        if code != 200 {
-            let msg = (reply["msg"] as? String) ?? "code \(code)"
-            throw UltraBarError.protocolError("provisioning rejected: \(msg)")
-        }
-        return total
+        let diag = "ep0=\(sampleEndpoint.prefix(360)) | setReply=\(replyStr.prefix(200))"
+        return (total, diag)
     }
 
     private static func endpoint(_ e: [String: Any]) -> AttachedModule {

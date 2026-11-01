@@ -180,8 +180,9 @@ final class AppModel: ObservableObject {
         say("Setting up modules on \(bar.name) — scanning the bus and writing the config…")
         Task {
             do {
-                let n = try await session.provision()
+                let (n, diag) = try await session.provision()
                 self.isWorking = false
+                self.say("provision diag: \(diag)")
                 if n == 0 {
                     self.say("No modules found to set up. Make sure they're attached, then try again.")
                 } else {

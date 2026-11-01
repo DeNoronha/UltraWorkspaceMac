@@ -69,43 +69,34 @@ public final class Store: @unchecked Sendable {
         }
     }
 
-    // MARK: Tokens (Keychain)
+    // MARK: Tokens
+    //
+    // Stored as user-only files in Application Support rather than the Keychain.
+    // An ad-hoc-signed app gets a new code signature on every rebuild, which
+    // makes the Keychain re-prompt for the login password every launch. A file
+    // (0600, in the user's own app-support dir) avoids that friction. For a
+    // notarized/Developer-ID release this can move back to the Keychain.
+
+    private func tokenURL(_ serial: String) -> URL {
+        let dir = fileURL.deletingLastPathComponent().appendingPathComponent("tokens", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
+                                                 attributes: [.posixPermissions: 0o700])
+        let safe = serial.filter { $0.isLetter || $0.isNumber }
+        return dir.appendingPathComponent("\(safe).token")
+    }
 
     public func saveToken(_ token: String, serial: String) {
-        let acct = serial
-        let data = Data(token.utf8)
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: acct,
-        ]
-        SecItemDelete(base as CFDictionary)
-        var add = base
-        add[kSecValueData as String] = data
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(add as CFDictionary, nil)
+        let url = tokenURL(serial)
+        try? Data(token.utf8).write(to: url, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 
     public func loadToken(serial: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: serial,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data else { return nil }
+        guard let data = try? Data(contentsOf: tokenURL(serial)) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
     public func deleteToken(serial: String) {
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: serial,
-        ]
-        SecItemDelete(base as CFDictionary)
+        try? FileManager.default.removeItem(at: tokenURL(serial))
     }
 }
