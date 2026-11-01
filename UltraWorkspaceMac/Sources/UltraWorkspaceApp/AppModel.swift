@@ -24,6 +24,12 @@ final class AppModel: ObservableObject {
     // Upload options
     @Published var canvasSize = 320
 
+    // Music
+    @Published var nowPlaying = AppleMusic.NowPlaying(isPlaying: false, title: "", artist: "", album: "", hasTrack: false)
+    @Published var autoPushNowPlaying = false
+    var musicPollTask: Task<Void, Never>?
+    var lastPushedKey = ""
+
     struct LogEntry: Identifiable {
         let id = UUID()
         let time = Date()

@@ -3,6 +3,7 @@ import UltraBarKit
 
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
+    @StateObject private var contacts = ContactStore()
 
     var body: some View {
         NavigationSplitView {
@@ -11,6 +12,8 @@ struct ContentView: View {
         } detail: {
             DetailView()
         }
+        .environmentObject(contacts)
+        .onAppear { model.startMusicPolling() }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -93,10 +96,20 @@ private struct DetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 header(bar)
                 Divider()
-                HSplitView {
-                    modulePanel.frame(minWidth: 280)
-                    logPanel.frame(minWidth: 280)
+                TabView {
+                    HSplitView {
+                        modulePanel.frame(minWidth: 280)
+                        logPanel.frame(minWidth: 260)
+                    }
+                    .tabItem { Label("Device", systemImage: "rectangle.on.rectangle.angled") }
+
+                    MusicPanel()
+                        .tabItem { Label("Music", systemImage: "music.note") }
+
+                    PeoplePanel()
+                        .tabItem { Label("People", systemImage: "person.2") }
                 }
+                .padding(.top, 4)
             }
         } else {
             ContentUnavailableLikeView()
@@ -190,6 +203,119 @@ private struct DetailView: View {
         if d > 0 { return "\(d)d \(h)h" }
         if h > 0 { return "\(h)h \(m)m" }
         return "\(m)m"
+    }
+}
+
+private struct MusicPanel: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Apple Music").font(.headline)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.nowPlaying.hasTrack ? model.nowPlaying.title : "Nothing playing")
+                    .font(.title3).bold().lineLimit(1)
+                Text(model.nowPlaying.hasTrack ? "\(model.nowPlaying.artist) — \(model.nowPlaying.album)" : " ")
+                    .foregroundStyle(.secondary).lineLimit(1)
+            }
+
+            HStack(spacing: 12) {
+                Button { model.musicPrevious() } label: { Image(systemName: "backward.fill") }
+                Button { model.musicPlayPause() } label: {
+                    Image(systemName: model.nowPlaying.isPlaying ? "pause.fill" : "play.fill")
+                }
+                Button { model.musicNext() } label: { Image(systemName: "forward.fill") }
+                Divider().frame(height: 18)
+                Button { model.musicVolume(-10) } label: { Image(systemName: "speaker.wave.1.fill") }
+                Button { model.musicVolume(10) } label: { Image(systemName: "speaker.wave.3.fill") }
+            }
+            .buttonStyle(.bordered)
+
+            Divider()
+            Text("Show on the VivoCube").font(.headline)
+            Button {
+                model.pushNowPlaying()
+            } label: {
+                Label("Push now-playing to \(model.selectedModuleSerial ?? "module")", systemImage: "music.note.tv")
+            }
+            .disabled(model.selectedModuleSerial == nil || !model.nowPlaying.hasTrack || model.isWorking)
+
+            Toggle("Auto-update the cube when the track changes", isOn: $model.autoPushNowPlaying)
+                .toggleStyle(.switch)
+
+            Text("The album art and track are rendered on the Mac and pushed to the selected module. (Pressing the cube to skip needs the device button-event, which is coming — see the roadmap.)")
+                .font(.caption).foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .padding()
+    }
+}
+
+@MainActor final class DraftContact: ObservableObject {
+    @Published var name = ""
+    @Published var email = ""
+    @Published var phone = ""
+}
+
+private struct PeoplePanel: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var contacts: ContactStore
+    @StateObject private var draft = DraftContact()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("People — quick actions").font(.headline)
+
+            if contacts.contacts.isEmpty {
+                Text("Add someone below to get Teams chat/call, FaceTime and mail buttons.")
+                    .foregroundStyle(.secondary)
+            }
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 6) {
+                    ForEach(contacts.contacts) { c in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(c.name).fontWeight(.medium)
+                                Text(c.email).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button { PeopleActions.teamsChat(c) } label: { Image(systemName: "message.fill") }
+                                .help("Teams chat")
+                            Button { PeopleActions.teamsCall(c) } label: { Image(systemName: "phone.fill") }
+                                .help("Teams call")
+                            Button { PeopleActions.faceTime(c) } label: { Image(systemName: "video.fill") }
+                                .help("FaceTime")
+                            Button { PeopleActions.mail(c) } label: { Image(systemName: "envelope.fill") }
+                                .help("Mail")
+                            Button(role: .destructive) { contacts.remove(c) } label: { Image(systemName: "trash") }
+                        }
+                        .buttonStyle(.borderless)
+                        .padding(.vertical, 2)
+                        Divider()
+                    }
+                }
+            }
+
+            Divider()
+            Text("Add a person").font(.subheadline).bold()
+            HStack {
+                TextField("Name", text: $draft.name).frame(width: 130)
+                TextField("name@work.com", text: $draft.email).frame(width: 170)
+                TextField("phone (optional)", text: $draft.phone).frame(width: 130)
+                Button("Add") {
+                    let name = draft.name.trimmingCharacters(in: .whitespaces)
+                    let email = draft.email.trimmingCharacters(in: .whitespaces)
+                    guard !name.isEmpty, !email.isEmpty else { return }
+                    contacts.add(Contact(name: name, email: email, phone: draft.phone.trimmingCharacters(in: .whitespaces)))
+                    draft.name = ""; draft.email = ""; draft.phone = ""
+                }
+            }
+            Spacer()
+        }
+        .padding()
     }
 }
 
