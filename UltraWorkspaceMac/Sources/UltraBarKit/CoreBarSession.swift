@@ -279,6 +279,39 @@ public struct CoreBarSession: Sendable {
         await writeProperty(serial: serial, propertyId: Proto.Property.screen, value: on ? 1 : 0)
     }
 
+    // MARK: VivoCube layers (property 9 = (layer << 16) | widgetId)
+    //
+    // The official client deploys ALL layers once (≤ 6, one Button widget each)
+    // and then switches what is shown by writing property 9; it never
+    // re-uploads to rotate. The CoreBar caches properties 4 (screen) and 9 and
+    // re-applies them to the module on every status round, so a cached
+    // layer/widget that is missing from the current package leaves the screen
+    // black until property 9 points at an existing one again.
+
+    public static func layerWidgetValue(layer: Int, widget: Int) -> Int { (layer << 16) | (widget & 0xFFFF) }
+
+    /// Show `layer`/`widget` on a VivoCube (no upload).
+    @discardableResult
+    public func setLayer(serial: String, layer: Int, widget: Int) async -> Int? {
+        await writeProperty(serial: serial, propertyId: Proto.Property.layerWidget,
+                            value: Self.layerWidgetValue(layer: layer, widget: widget))
+    }
+
+    /// Which layer/widget the CoreBar currently has cached for this module.
+    public func readLayerWidget(serial: String) async -> (layer: Int, widget: Int)? {
+        guard let v = await readProperty(serial: serial, propertyId: Proto.Property.layerWidget) else { return nil }
+        return (Int(v >> 16), Int(v & 0xFFFF))
+    }
+
+    /// Recover a black VivoCube: screen on + layer 1 / widget 101 (the ids every
+    /// Deckhand package uses for its first layer).
+    @discardableResult
+    public func recoverDisplay(serial: String) async -> Bool {
+        let a = await setScreen(serial: serial, on: true)
+        let b = await setLayer(serial: serial, layer: 1, widget: 101)
+        return a == 200 && b == 200
+    }
+
     public func reboot(serial: String) async {
         _ = await writeProperty(serial: serial, propertyId: Proto.Property.reboot, value: true, timeout: 0.3)
     }

@@ -71,8 +71,32 @@ class AppState {
   /** Fake QuantumLink modules the bus scan reports. */
   readonly modules: FakeModule[] = [];
 
-  /** Latest decoded image per module serialNo. */
+  /** Image currently SHOWN per module serialNo (selected layer/widget). */
   readonly images = new Map<string, StoredImage>();
+  /** All decoded widget images of the last package per module: serial → widgetId → image. */
+  readonly widgetImages = new Map<string, Map<number, StoredImage>>();
+  /** Cached property 9 (layer<<16 | widget) per module, like VCWidgetMain. */
+  readonly layerWidget = new Map<string, number>();
+  /** Cached property 4 (screen on/off) per module. */
+  readonly screenOn = new Map<string, boolean>();
+
+  /** Re-select the shown image from the cached layer/widget (or the first widget). */
+  applyLayerWidget(serial: string): void {
+    const imgs = this.widgetImages.get(serial);
+    if (!imgs || imgs.size === 0) return;
+    const lw = this.layerWidget.get(serial);
+    const want = lw !== undefined ? lw & 0xffff : undefined;
+    const pick = want !== undefined ? imgs.get(want) : undefined;
+    if (pick) {
+      this.images.set(serial, pick);
+    } else if (want !== undefined) {
+      // Like the real module: a cached widget that is not in the package shows nothing.
+      this.images.delete(serial);
+      this.record('evt', 'tls', `module ${serial}: cached widget ${want} not in package → BLACK screen`);
+    } else {
+      this.images.set(serial, imgs.values().next().value as StoredImage);
+    }
+  }
 
   /** Latest PREVIEW_SCREENSAVER call. */
   preview: PreviewRecord | null = null;

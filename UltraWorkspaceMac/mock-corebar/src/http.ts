@@ -80,12 +80,13 @@ export function startHttpUpload(): import('http').Server {
         const d = imgs.default, p = imgs.pressed;
         state.record('evt', 'http', `widget ${widgetId}: default=${d ? `${d.width}x${d.height}${d.hasAlpha ? '+a' : ''}` : '-'} pressed=${p ? `${p.width}x${p.height}${p.hasAlpha ? '+a' : ''}` : '-'}`);
       }
-      // Pick the first widget that has a decoded default image.
-      let stored = false;
+      // Keep every widget image; what is SHOWN follows the cached layer/widget
+      // (property 9) or, when none is cached, the defaultLayer's first item.
+      const all = new Map<number, import('./state').StoredImage>();
       for (const [widgetId, imgs] of pkg.widgets) {
         const img = imgs.default ?? imgs.pressed;
         if (!img) continue;
-        state.images.set(serialNo, {
+        all.set(widgetId, {
           png: rgbaToPng(img),
           width: img.width,
           height: img.height,
@@ -95,16 +96,20 @@ export function startHttpUpload(): import('http').Server {
           receivedAt: Date.now(),
           packageBytes: file.size,
         });
-        state.record(
-          'evt',
-          'http',
-          `decoded widget ${widgetId} → ${img.width}x${img.height}${img.hasAlpha ? ' +alpha' : ''} for ${serialNo}`,
-        );
-        stored = true;
-        break;
+        state.record('evt', 'http', `decoded widget ${widgetId} → ${img.width}x${img.height}${img.hasAlpha ? ' +alpha' : ''} for ${serialNo}`);
       }
-      if (!stored) {
+      if (all.size === 0) {
         state.record('evt', 'http', `no decodable com_res*/default.bin in package for ${serialNo}`);
+      } else {
+        state.widgetImages.set(serialNo, all);
+        if (!state.layerWidget.has(serialNo)) {
+          // First package: show defaultLayer's first item, like the module does.
+          const cfg = pkg.config as { defaultLayer?: number; layers?: { id: number; items?: { id: number }[] }[] } | undefined;
+          const layer = cfg?.layers?.find((l) => l.id === cfg?.defaultLayer) ?? cfg?.layers?.[0];
+          const first = layer?.items?.[0]?.id;
+          if (layer && first !== undefined) state.layerWidget.set(serialNo, (layer.id << 16) | first);
+        }
+        state.applyLayerWidget(serialNo);
       }
     } catch (e) {
       state.record('evt', 'http', `decode failed for ${serialNo}: ${(e as Error).message}`);

@@ -122,6 +122,39 @@ enum E2E {
             } else { check(false, "fetch decoded PNG from viewer") }
         } else { check(false, "VivoCube present") }
 
+        // 7b. Multi-layer package + layer switching via property 9 (official rotation model)
+        if let vivo {
+            func solid(_ r: UInt8, _ g: UInt8, _ b: UInt8) -> [UInt8] {
+                var px = [UInt8](repeating: 255, count: 240 * 240 * 4)
+                for i in stride(from: 0, to: px.count, by: 4) { px[i] = r; px[i+1] = g; px[i+2] = b }
+                return px
+            }
+            let l1 = DeviceImage.encode(width: 240, height: 240, rgba: solid(200, 30, 30))
+            let l2 = DeviceImage.encode(width: 240, height: 240, rgba: solid(30, 200, 30))
+            let tgz = DeployPackager.buildTgz(layers: [.init(layerId: 1, widgetId: 101, defaultBin: l1, pressedBin: l1),
+                                                       .init(layerId: 2, widgetId: 102, defaultBin: l2, pressedBin: l2)], defaultLayer: 1)
+            do { _ = try await session.upload(serial: vivo.serial, tgz: tgz) } catch { check(false, "multi-layer upload", "\(error)") }
+            func shownWidget() async -> Int? {
+                let st = await fetchState()
+                let m = (st["modules"] as? [[String: Any]])?.first { ($0["serialNo"] as? String) == vivo.serial }
+                return (m?["image"] as? [String: Any])?["widgetId"] as? Int
+            }
+            let w1 = await shownWidget()
+            check(w1 == 101, "after multi-layer upload the cached layer stays on widget 101", "\(w1 ?? -1)")
+            let sw = await session.setLayer(serial: vivo.serial, layer: 2, widget: 102)
+            check(sw == 200, "property 9 write (layer 2 / widget 102) acknowledged")
+            let w2 = await shownWidget()
+            check(w2 == 102, "layer switch shows widget 102 without re-upload", "\(w2 ?? -1)")
+            let lw = await session.readLayerWidget(serial: vivo.serial)
+            check(lw?.layer == 2 && lw?.widget == 102, "readLayerWidget reflects the cached value", "\(String(describing: lw))")
+            _ = await session.setLayer(serial: vivo.serial, layer: 3, widget: 103) // not in package → black
+            let w3 = await shownWidget()
+            check(w3 == nil, "stale layer/widget not in package → nothing shown (black)", "\(w3 ?? -1)")
+            let rec = await session.recoverDisplay(serial: vivo.serial)
+            let w4 = await shownWidget()
+            check(rec && w4 == 101, "recoverDisplay brings back layer 1 / widget 101", "\(w4 ?? -1)")
+        }
+
         // 8. CoreBar big screen: zip upload still works, and PREVIEW_SCREENSAVER
         //    with an http URL served by this machine (the device PULLS the image).
         do {

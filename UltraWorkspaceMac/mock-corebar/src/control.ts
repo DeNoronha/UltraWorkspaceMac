@@ -123,8 +123,11 @@ function handleFrame(socket: tls.TLSSocket, req: RequestFrame): void {
       let result: number | null = null;
       if (key in state.sensors) {
         result = state.sensors[key];
+      } else if (d.propertyId === 9 && d.serialNo) {
+        result = state.layerWidget.get(d.serialNo) ?? 0;
+      } else if (d.propertyId === 4 && d.serialNo) {
+        result = state.screenOn.get(d.serialNo) === false ? 0 : 1;
       } else {
-        // Non-sensor read (e.g. VivoCube screen propertyId 4): return a plausible value.
         result = d.propertyId === 4 ? 1 : 0;
       }
       sendFrame(
@@ -140,8 +143,17 @@ function handleFrame(socket: tls.TLSSocket, req: RequestFrame): void {
     }
 
     case Act.MODULE_PROPERTY_WRITE: {
-      const d = (data ?? {}) as { deviceId?: number; propertyId?: number; value?: unknown };
+      const d = (data ?? {}) as { serialNo?: string; deviceId?: number; propertyId?: number; value?: unknown };
       state.record('evt', 'tls', `MODULE_PROPERTY_WRITE ${d.deviceId}/${d.propertyId} = ${JSON.stringify(d.value)}`);
+      if (d.serialNo && d.propertyId === 9 && typeof d.value === 'number') {
+        // Cached like VCWidgetMain; selects which layer/widget the module shows.
+        state.layerWidget.set(d.serialNo, d.value);
+        state.record('evt', 'tls', `module ${d.serialNo}: layer ${d.value >> 16} / widget ${d.value & 0xffff}`);
+        state.applyLayerWidget(d.serialNo);
+      }
+      if (d.serialNo && d.propertyId === 4) {
+        state.screenOn.set(d.serialNo, Number(d.value) !== 0);
+      }
       // Success replies strip the `result` field (per asyncapi.yaml).
       sendFrame(socket, reply(Act.MODULE_PROPERTY_WRITE, id, null));
       return;

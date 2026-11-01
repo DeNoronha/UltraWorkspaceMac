@@ -269,7 +269,10 @@ final class AppModel: ObservableObject {
             }
             do {
                 _ = try await session.upload(serial: serial, tgz: tgz)
-                await MainActor.run { self.say("Uploaded \(tgz.count) bytes to \(serial). ✓"); self.isWorking = false }
+                await MainActor.run {
+                    self.selectFirstLayerAfterSettle(session: session, serial: serial)
+                    self.say("Uploaded \(tgz.count) bytes to \(serial) — the VivoCube applies it in a few seconds. ✓"); self.isWorking = false
+                }
             } catch {
                 await MainActor.run { self.say("Upload failed: \(error.localizedDescription)"); self.isWorking = false }
             }

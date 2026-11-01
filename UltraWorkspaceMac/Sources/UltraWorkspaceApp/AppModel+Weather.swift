@@ -33,6 +33,7 @@ extension AppModel {
                 let layer = DeployPackager.Layer(layerId: 1, widgetId: 101, defaultBin: bin, pressedBin: bin)
                 let tgz = DeployPackager.buildTgz(layers: [layer], defaultLayer: 1)
                 _ = try await session.upload(serial: serial, tgz: tgz)
+                self.selectFirstLayerAfterSettle(session: session, serial: serial)
                 self.say("Weather on \(serial): \(Int(now.temperature.rounded()))\(now.unitSuffix) · \(now.sky.label)\(now.place.isEmpty ? "" : " · \(now.place)") ✓")
             } catch {
                 if !silent { self.say("Weather failed: \(error.localizedDescription)") }

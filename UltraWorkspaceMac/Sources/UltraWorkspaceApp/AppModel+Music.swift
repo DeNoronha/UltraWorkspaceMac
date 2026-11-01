@@ -66,7 +66,10 @@ extension AppModel {
             let tgz = DeployPackager.buildTgz(layers: [layer], defaultLayer: 1)
             do {
                 _ = try await session.upload(serial: serial, tgz: tgz)
-                await MainActor.run { self.say("Now playing on \(serial): \(np.title) — \(np.artist) ✓") }
+                await MainActor.run {
+                    self.selectFirstLayerAfterSettle(session: session, serial: serial)
+                    self.say("Now playing on \(serial): \(np.title) — \(np.artist) ✓")
+                }
             } catch {
                 await MainActor.run { self.say("Now-playing push failed: \(error.localizedDescription)") }
             }

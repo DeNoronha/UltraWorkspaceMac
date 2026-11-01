@@ -4,34 +4,119 @@ import UltraBarKit
 
 @MainActor
 extension AppModel {
-    /// Start (or restart) the VivoCube theme carousel from settings.
+    /// Max layers in one VivoCube package (official client limit).
+    static let maxVivoLayers = 6
+    /// Widget id used for layer N (layer 1 → 101, the id "Recover display" falls back to).
+    static func widgetId(forLayer n: Int) -> Int { 100 + n }
+    /// Seconds to let the VivoCube download + apply a package after the CoreBar
+    /// accepts it (`state:200` only means the module acknowledged the command).
+    static let vivoSettleSeconds: UInt64 = 10
+
+    /// Start (or restart) the VivoCube widget carousel.
+    ///
+    /// Model (mirrors the official client): render every ticked widget into its
+    /// own layer, upload ONE package, wait for the module to apply it, then
+    /// rotate by writing property 9 (layer|widget) — no flash rewrite per step.
+    /// Contents are re-rendered and re-uploaded only every `refreshEvery`.
     func startThemeRotation(settings: AppSettings) {
         themeTask?.cancel(); themeTask = nil
-        let themes = settings.enabledList(for: .vivocube)
-        guard selectedCoreBar != nil, session(for: selectedCoreBar!) != nil, vivoCubeSerial != nil else {
+        var themes = settings.enabledList(for: .vivocube)
+        guard let bar = selectedCoreBar, let session = session(for: bar), let serial = vivoCubeSerial else {
             say("Pair a CoreBar with a VivoCube first."); themeRunning = false; return
         }
         guard !themes.isEmpty else { say("Tick at least one widget for the VivoCube."); themeRunning = false; return }
+        if themes.count > Self.maxVivoLayers {
+            say("A VivoCube holds \(Self.maxVivoLayers) layers — using the first \(Self.maxVivoLayers) ticked widgets.")
+            themes = Array(themes.prefix(Self.maxVivoLayers))
+        }
         themeRunning = true
         themeIndex = 0
         let interval = max(10, settings.vivoSeconds)
-        if themes.count == 1 {
-            say("Publishing \(themes[0].title) to the VivoCube…")
-        } else {
-            say("Rotation started: \(themes.map(\.title).joined(separator: ", ")) · every \(interval)s")
-        }
+        let refreshEvery = TimeInterval(max(300, interval * themes.count)) // re-render + re-upload cadence
+        let list = themes
+
         themeTask = Task {
-            while !Task.isCancelled {
-                let list = settings.enabledList(for: .vivocube)
-                if list.isEmpty { break }
-                let t = list[self.themeIndex % list.count]
-                self.themeIndex += 1
-                self.currentThemeLabel = t.title
-                await self.pushTheme(t, settings: settings)
-                if list.count == 1 { break } // single widget: publish once, no rotation
-                try? await Task.sleep(nanoseconds: UInt64(max(10, settings.vivoSeconds)) * 1_000_000_000)
+            defer { self.themeRunning = false }
+            // 1. One package with all layers.
+            self.say(list.count == 1 ? "Rendering \(list[0].title) for the VivoCube…"
+                                     : "Rendering \(list.count) widgets into one VivoCube package…")
+            guard await self.uploadPackage(list, settings: settings, session: session, serial: serial) else { return }
+            if Task.isCancelled { return }
+            self.say("Package accepted — waiting \(Self.vivoSettleSeconds)s for the VivoCube to apply it…")
+            try? await Task.sleep(nanoseconds: Self.vivoSettleSeconds * 1_000_000_000)
+            if Task.isCancelled { return }
+
+            // 2. Point the module at layer 1 (clears any stale cached layer/widget).
+            self.currentThemeLabel = list[0].title
+            _ = await session.setLayer(serial: serial, layer: 1, widget: Self.widgetId(forLayer: 1))
+            if list.count == 1 {
+                self.say("\(list[0].title) is on the VivoCube. ✓ (Publish again to refresh its contents.)")
+                return
             }
-            self.themeRunning = false
+            self.say("Rotating \(list.map(\.title).joined(separator: ", ")) · every \(interval)s · contents refresh every \(Int(refreshEvery / 60)) min")
+
+            // 3. Rotate via property 9; refresh contents occasionally.
+            var lastRefresh = Date()
+            var step = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
+                if Task.isCancelled { break }
+                if Date().timeIntervalSince(lastRefresh) >= refreshEvery {
+                    self.say("Refreshing widget contents on the VivoCube…")
+                    if await self.uploadPackage(list, settings: settings, session: session, serial: serial) {
+                        lastRefresh = Date()
+                        try? await Task.sleep(nanoseconds: Self.vivoSettleSeconds * 1_000_000_000)
+                    }
+                    if Task.isCancelled { break }
+                }
+                step += 1
+                let layer = (step % list.count) + 1
+                self.themeIndex = layer - 1
+                self.currentThemeLabel = list[layer - 1].title
+                let code = await session.setLayer(serial: serial, layer: layer, widget: Self.widgetId(forLayer: layer))
+                if code != 200 { self.say("Layer switch to \(list[layer - 1].title) not acknowledged (code \(code.map(String.init) ?? "nil")).") }
+            }
+        }
+    }
+
+    /// Render `themes` into layers 1…n (widget 100+n) and upload a single package.
+    private func uploadPackage(_ themes: [Theme], settings: AppSettings, session: CoreBarSession, serial: String) async -> Bool {
+        var layers: [DeployPackager.Layer] = []
+        for (i, t) in themes.enumerated() {
+            guard let rgba = await renderTheme(t, settings: settings) else {
+                say("\(t.title): could not render — skipped."); continue
+            }
+            let bin = DeviceImage.encode(width: 240, height: 240, rgba: rgba)
+            layers.append(.init(layerId: i + 1, widgetId: Self.widgetId(forLayer: i + 1), defaultBin: bin, pressedBin: bin))
+        }
+        guard !layers.isEmpty else { say("Nothing to publish."); return false }
+        let tgz = DeployPackager.buildTgz(layers: layers, defaultLayer: 1)
+        do {
+            _ = try await session.upload(serial: serial, tgz: tgz)
+            return true
+        } catch {
+            say("VivoCube upload failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// Put a black VivoCube back: screen on + layer 1 / widget 101.
+    func recoverVivoDisplay(serial: String) {
+        guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
+        Task {
+            let before = await session.readLayerWidget(serial: serial)
+            let ok = await session.recoverDisplay(serial: serial)
+            let was = before.map { "was layer \($0.layer) / widget \($0.widget)" } ?? "cached state unknown"
+            self.say(ok ? "VivoCube display recovered (\(was) → layer 1 / widget 101, screen on)."
+                        : "Recover sent, but the CoreBar did not acknowledge both writes (\(was)).")
+        }
+    }
+
+    /// After a single-layer upload, make sure the cached layer/widget points at it.
+    func selectFirstLayerAfterSettle(session: CoreBarSession, serial: String) {
+        Task {
+            try? await Task.sleep(nanoseconds: Self.vivoSettleSeconds * 1_000_000_000)
+            _ = await session.setLayer(serial: serial, layer: 1, widget: Self.widgetId(forLayer: 1))
         }
     }
 
@@ -49,7 +134,7 @@ extension AppModel {
         let bin = DeviceImage.encode(width: 240, height: 240, rgba: rgba)
         let layer = DeployPackager.Layer(layerId: 1, widgetId: 101, defaultBin: bin, pressedBin: bin)
         let tgz = DeployPackager.buildTgz(layers: [layer], defaultLayer: 1)
-        do { _ = try await session.upload(serial: target, tgz: tgz) }
+        do { _ = try await session.upload(serial: target, tgz: tgz); selectFirstLayerAfterSettle(session: session, serial: target) }
         catch { say("\(theme.title): push failed (\(error.localizedDescription))") }
     }
 
@@ -64,7 +149,11 @@ extension AppModel {
             let bin = DeviceImage.encode(width: 240, height: 240, rgba: rgba)
             let layer = DeployPackager.Layer(layerId: 1, widgetId: 101, defaultBin: bin, pressedBin: bin)
             let tgz = DeployPackager.buildTgz(layers: [layer], defaultLayer: 1)
-            do { _ = try await session.upload(serial: serial, tgz: tgz); self.say("\(theme.title) published to \(serial). ✓") }
+            do {
+                _ = try await session.upload(serial: serial, tgz: tgz)
+                self.selectFirstLayerAfterSettle(session: session, serial: serial)
+                self.say("\(theme.title) accepted by \(serial) — the VivoCube applies it in a few seconds. ✓")
+            }
             catch { self.say("\(theme.title): publish failed (\(error.localizedDescription))") }
         }
     }

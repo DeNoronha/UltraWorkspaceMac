@@ -262,7 +262,13 @@ private struct VivoCubeView: View {
                             Button("Screen On") { push { await $0.setScreen(serial: module.serial, on: true) } }
                             Button("Screen Off") { push { await $0.setScreen(serial: module.serial, on: false) } }
                             Button("Reboot", role: .destructive) { push { await $0.reboot(serial: module.serial) } }
+                            Button { model.recoverVivoDisplay(serial: module.serial) } label: {
+                                Label("Recover display", systemImage: "bandage")
+                            }
+                            .help("Black screen? The CoreBar re-applies its cached screen state and layer/widget to the VivoCube. This sets screen on + layer 1 / widget 101.")
                         }
+                        Text("Uploads are applied by the VivoCube itself a few seconds after the CoreBar accepts them. \"Screen Off\" is remembered by the CoreBar until you turn it on again.")
+                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
 
                         Divider()
                         RotationView(target: .vivocube, publishSerial: module.serial)
@@ -488,7 +494,7 @@ private struct RotationView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Widget rotation").font(.headline)
             Text(target == .vivocube
-                 ? "Tick the widgets to show on this VivoCube. One ticked stays on screen; two or more rotate."
+                 ? "Tick up to 6 widgets. They are uploaded once as layers; rotation then just switches layers (no re-flash). Contents refresh every few minutes."
                  : "Tick the widgets for the CoreBar's big screen.")
                 .font(.caption).foregroundStyle(.secondary)
 
