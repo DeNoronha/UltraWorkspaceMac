@@ -41,10 +41,14 @@ Many UltraBar X buyers — macOS users especially — can't do much with the dev
 
 Risks/unknowns: the vendor ("Sanytron") could ship or object; trademark (hence the Deckhand rename); the install base size; App Store vs. direct (ad-hoc signing today → needs a Developer ID / notarization for a paid release). Recommendation: ship a great free client now to win the users, add a low-friction Pro tier once the feature set (bar pages + settings + input bindings) lands, and keep the marketplace free at first to seed content.
 
-## Open questions (need your call)
+## Decisions (2026-11-01)
 
-1. **Widget format for cross-platform** — the big fork. See WIDGETS.md: compiled-native (fast, per-platform) vs. HTML/JS-rendered-to-image (write once, runs on Mac+Windows, sandboxed) vs. a declarative JSON spec. My lean: HTML/JS rendered headlessly to an image for community widgets, keeping the current native cards as the built-ins.
-2. **Business model** — which of the four above do you want to aim for? (My lean: free core now, freemium Pro later, free marketplace to start.)
-3. **Windows** — build it in parallel, or only after macOS Pro proves demand?
-4. **Settings migration scope** — move everything we can into the app, or keep a few safety-critical ones (Wi-Fi onboarding) on the device?
-5. **Distribution** — direct download (needs a paid Apple Developer ID for notarization) vs. Mac App Store (sandboxing may block local-network/Process use)?
+1. **Widget format** — web, **TypeScript-first** (HTML/CSS/JS authored in TS, rendered headlessly to an image). Cross-platform by design. See WIDGETS.md for the full option comparison.
+2. **Business model** — agreed: free, strong core now → freemium Pro later → marketplace free to start.
+3. **Windows** — design for it **from day 1** (shared, platform-neutral core: protocol + widget runtime), even though macOS is the only target we can test here. A second engineer may help on Windows — AWAITING the links the user mentioned (not yet received).
+4. **Settings in the app** — move everything the protocol allows into the app; keep **Wi-Fi / network onboarding on the device** (and note the protocol can't set most system settings anyway — see the settings reality-check above). Also: make the **physical connection + which USB port to use** unmistakable in-app (the vendor's port design is dangerous — wrong port can fry the mainboard).
+5. **Distribution** — **GitHub Releases** with a DMG + full download. The user is obtaining an **Apple Developer ID (for DNC)** so releases can be signed + notarized (no Gatekeeper warnings). Until then, releases are ad-hoc-signed (users must right-click → Open once). See RELEASING.md.
+
+## Connection model (for reference)
+
+Deckhand talks to the CoreBar **over the network** (UDP/TLS/HTTP on the LAN) — there is no USB data transport in the protocol. USB-C is for **power** (and the vendor's HID path). So the "how do I connect" choice is really Wi-Fi vs. wired LAN (most reliable if the device is reachable that way); the USB cable just keeps it powered. Port safety (from the device manual): the CoreBar's **PC-LINK** port is **5 V-only** → connect it to the Mac/computer USB (safe, correct); the **USB-OTG** port is for charging (PD/QC/12 V). **Never** put a PD fast-charger into PC-LINK — it can permanently damage the board. Deckhand surfaces this prominently in-app.

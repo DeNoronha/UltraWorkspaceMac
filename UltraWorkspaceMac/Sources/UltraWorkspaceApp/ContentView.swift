@@ -687,13 +687,38 @@ private struct ActivityLog: View {
 private struct Unavailable: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "rectangle.on.rectangle.angled").font(.system(size: 48)).foregroundStyle(.secondary)
-            Text("Select a CoreBar").font(.title3)
-            Text("Press Scan, then Pair with your CoreBar. Tap Approve on the device when prompted.")
-                .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 360)
-            Button("Scan now") { model.scan() }.disabled(model.isScanning)
-        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        ScrollView {
+            VStack(spacing: 14) {
+                Image(systemName: "rectangle.on.rectangle.angled").font(.system(size: 44)).foregroundStyle(.secondary)
+                Text("Connect your UltraBar").font(.title3)
+                Text("Make sure the CoreBar and this Mac are on the same Wi-Fi, then Scan and Pair (tap Approve on the device).")
+                    .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 380)
+                Button("Scan now") { model.scan() }.disabled(model.isScanning)
+                ConnectionHelp().frame(maxWidth: 440).padding(.top, 8)
+            }.frame(maxWidth: .infinity).padding(28)
+        }
+    }
+}
+
+/// Reusable connection + USB-port guidance. The vendor's two-port design is
+/// easy to get dangerously wrong, so we surface it prominently.
+struct ConnectionHelp: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Connecting your UltraBar", systemImage: "cable.connector").font(.headline)
+            Text("Deckhand controls the CoreBar over your **Wi-Fi / local network** — the Mac and the CoreBar must be on the same network. The USB cable is only for power; there is no USB data link.")
+                .font(.callout).fixedSize(horizontal: false, vertical: true)
+            GroupBox {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Use the correct USB port", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange).font(.subheadline.bold())
+                    Text("• **PC-LINK** (5 V only) → connect to your Mac / computer USB. Safe and correct.")
+                    Text("• **USB-OTG** → charging only (a PD/QC or 12 V adapter).")
+                    Text("• ⚠️ Never plug a laptop/PD fast-charger into PC-LINK — it can permanently damage the mainboard.")
+                        .foregroundStyle(.orange)
+                }.font(.caption).frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
     }
 }
 

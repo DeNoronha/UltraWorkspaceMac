@@ -14,13 +14,17 @@ Deckhand converts the RGBA to the device format: RGB565(+alpha) + tar/gzip for a
 
 This is great for built-ins but is **macOS-only and requires recompiling the app** — not suitable for a community marketplace. That's the open decision below.
 
-## The cross-platform decision (OPEN)
+## The cross-platform decision (DECIDED: web/TypeScript)
 
-To "build a widget once, run on macOS and Windows", a widget can't be compiled Swift. Candidate formats:
+To "build a widget once, run on macOS and Windows", a widget can't be compiled Swift. Full option set:
 
-1. **HTML/CSS/JS rendered headlessly to an image** (recommended lean). A widget is a folder with `manifest.json` + `index.html` + assets. Deckhand loads it in an offscreen web view (WKWebView on macOS, WebView2 on Windows), passes it data (weather, stats, device info) via a small JS bridge, and snapshots the result to the target resolution. Pros: truly write-once, huge author pool, easy styling/animation, sandboxable. Cons: a web runtime per render.
-2. **Declarative JSON spec** (layout + bindings, no code). Safest/sandboxed, but limited expressiveness; we'd build the renderer on each platform.
-3. **Compiled-native per platform**. Fastest, but authors must ship two binaries — poor marketplace fit.
+1. **HTML/CSS/JS, authored in TypeScript, rendered headlessly to an image** — CHOSEN. A widget is a folder with `manifest.json` + a built `index.html`/`bundle.js` (authored in TypeScript, compiled to JS) + assets. Deckhand loads it in an offscreen web view (WKWebView on macOS, WebView2 on Windows), hands it data via a typed JS bridge, and snapshots to the target resolution (240×240 or 1424×280). Pros: truly write-once, the largest author pool, TypeScript gives authors types + tooling, easy styling/animation/Canvas/SVG, sandboxable (no filesystem/native access — only the data we inject). Cons: a web runtime per render (fine at a 10–60 s cadence). We publish an official `@deckhand/widget-sdk` TypeScript package with the типed data API and a local preview harness.
+2. **Declarative JSON/YAML spec** (layout + data bindings, no code). Safest and tiny, renders natively on each platform, but limited expressiveness (no custom charts/animation); good as a *simple* widget tier layered on top of option 1 later.
+3. **WASM module** (write in Rust/AssemblyScript/TinyGo, run anywhere). Very sandboxable and fast, but a much smaller author pool and more toolchain friction than TS — overkill for drawing a card.
+4. **Lua / QuickJS embedded script** (a small scripting runtime drawing to a canvas). Lighter than a full web view, but a bespoke API few people know; weaker ecosystem than TS.
+5. **Compiled-native per platform** (Swift + C#/Win). Fastest, but authors ship two binaries and we can't sandbox them — poor marketplace fit. This stays only for our built-ins.
+
+Decision: **option 1 (web, TypeScript-first)** for community/marketplace widgets, with option 2 as a possible later "no-code" tier. Built-ins stay native Swift for now but will be mirrored as web widgets so the SDK is dogfooded.
 
 Proposed manifest sketch (format 1):
 

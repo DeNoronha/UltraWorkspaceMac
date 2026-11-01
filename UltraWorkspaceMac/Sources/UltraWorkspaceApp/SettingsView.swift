@@ -19,6 +19,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     deviceSection
+                    ConnectionHelp()
                     deviceSideSection
                     aboutSection
                 }
@@ -58,7 +59,7 @@ struct SettingsView: View {
             Label("About", systemImage: "info.circle").font(.headline)
             Text("Deckhand — independent, community software for UltraBar X. Not affiliated with Sanytron.")
                 .font(.caption).foregroundStyle(.secondary)
-            Text("Add-ons (weather, music, CPU, network, Claude) and their settings live in the Add-ons section.")
+            Text("Widgets and their settings live in the Widgets section; pick which ones show per device on the VivoCube / CoreBar pages.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
