@@ -1,0 +1,16 @@
+services:
+  mock-corebar:
+    build: .
+    image: mock-corebar
+    container_name: mock-corebar
+    environment:
+      # Advertise 127.0.0.1 in discovery replies so the client connects back
+      # through the published ports. (See README: broadcast discovery does not
+      # cross Docker Desktop's NAT on macOS — use "Add CoreBar by IP".)
+      MOCK_IP: 127.0.0.1
+    ports:
+      - "5319:5319/udp"   # UDP discovery (unicast only across Docker NAT)
+      - "7431:7431"       # TLS control
+      - "8080:8080"       # HTTP upload
+      - "8081:8081"       # web viewer
+    restart: unless-stopped
