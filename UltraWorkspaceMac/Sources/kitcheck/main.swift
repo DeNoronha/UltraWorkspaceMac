@@ -2,6 +2,16 @@ import Foundation
 import Compression
 import UltraBarKit
 
+// `kitcheck discover` — run the app's real Discovery from the terminal (which
+// already has Local Network permission) to prove the code works against hardware.
+if CommandLine.arguments.contains("discover") {
+    print("scanning UDP \(Proto.discoveryPort) for 8s…")
+    let bars = await Discovery.listen(timeout: 8)
+    print("discovered \(bars.count):")
+    for b in bars { print("  \(b.name)  ip=\(b.ip)  sn=\(b.serialNo)  ver=\(b.version)  tcp=\(b.tcpPort)") }
+    exit(bars.isEmpty ? 2 : 0)
+}
+
 var failures = 0
 @MainActor func check(_ cond: Bool, _ name: String) {
     print("\(cond ? "ok  " : "FAIL") \(name)")

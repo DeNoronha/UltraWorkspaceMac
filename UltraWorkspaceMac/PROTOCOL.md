@@ -27,11 +27,44 @@ and usually carry `code` (200 = ok) and `data`.
 
 | act    | meaning            | data (request)                                             | reply |
 |--------|--------------------|------------------------------------------------------------|-------|
-| 101    | pair               | `{id, clientType:"pc", name}`                              | `data.token` once the user taps Approve on the device |
-| 100    | authenticate       | `"<token>"`                                                | `code == 200` on success |
-| 30730  | list modules       | `{}`                                                       | `data` = array of `{serialNo, …}` |
+| 101    | pair (REQ_AUTH_TOKEN) | `{id, clientType:"pc", name}`                           | `data.token` once the user taps Approve on the device |
+| 100    | authenticate (AUTH)   | `"<token>"`                                             | `code == 200` on success |
+| 1300   | **GET_DEVICE** — list all devices/modules | `{}`                              | `data` = array of `{id, name, deviceType, online, supportedFeatures, attr}` |
 | 30200  | read property      | `{serialNo, deviceId:256, propertyId, extra:null}`         | `data.result` (integer) |
 | 30201  | write property     | `{serialNo, deviceId:256, propertyId, value}`              | `code` |
+| 30730  | query module STATE (not a list) | `{serialNo, …}`                              | state (returns `data:[]` when used without a target) |
+
+> **Note:** the enumeration query is **`GET_DEVICE` (1300)**, not 30730. 30730 is `QUERY_MODULE_STATE`. An earlier version of this client used 30730 to list modules and got an empty array back.
+
+## Full act-code catalog (`MessageAction`, from LineOS 1.0.9)
+
+The CoreBar's PC-facing command set, recovered from LineOS `com.ultrabar.launch.common.communication.bean.MessageAction`. Response envelope: `{act, id, code, data, timestamp}` (`code == 200` = success). `GET_DEVICE` returns `Device` objects: `{id, name, deviceType (DeviceEnum), online, supportedFeatures, attr}`. `DeviceEnum`: VIVO_CUBE, SENSE_CUBE, PC_BOOT, COMPUTER_INFO, AUDIO_PLAYER, ACTION, SCENE, EMAIL_CARD, SWITCH, LIGHT(/_TEMP/_HS/_HS_TEMP), CURTAIN(_SWITCH), AC, FAN, TEMPERATURE_SENSOR, HUMIDITY_SENSOR, UNKNOWN.
+
+| code | name | code | name |
+|------|------|------|------|
+| 10 | ERROR | 1617 | GET_KNOB_FUNCTION_DEVICE |
+| 11 | EXCEPTION | 20100 | SYS_REBOOT |
+| 20 | HEARTBEAT_PACKAGE | 30100 | MODULE_START_DISCOVERY |
+| 100 | AUTH | 30101 | MODULE_STOP_DISCOVERY |
+| 101 | REQ_AUTH_TOKEN | 30102 | MODULE_START_DISCOVERY_REPLAY |
+| 1000 | GET_APP_LIST | 30103 | GATEWAY_SUB_PAIRING |
+| 1002 | GET_PROFILE_WIDGET | 30104 | GATEWAY_PAIRING_RESULT |
+| 1010 | INTEGRATED_CONFIG_SET | 30200 | MODULE_PROPERTY_READ |
+| 1103 | TRIGGER_PROFILE_CHANGE | 30201 | MODULE_PROPERTY_WRITE |
+| 1108 | BATCH_SAVE_PROFILE | 30300 | SET_GATEWAY_CONFIG |
+| 1204 | SCENE_TRIGGER | 30400 | MODULE_OAT_START (OTA) |
+| 1205 | SCENE_ACTION_V2 | 30401 | MODULE_OAT_DATA (OTA) |
+| 1300 | GET_DEVICE | 30500 | BATCH_CREATE_SCENE |
+| 1500 | LIST_EMAIL_CONFIG | 30600 | APP_MANAGER |
+| 1501 | SAVE_EMAIL_CONFIG | 30601 | APP_MANAGER_PROGRESS_EVENT |
+| 1502 | DEL_EMAIL | 30700–30721 | SCENE_* dependency queries |
+| 1633 | START_SCAN_WIFI | 30730 | QUERY_MODULE_STATE |
+| 1634 | STOP_SCAN_WIFI | 30740 | GET_COREBAR_CONFIG |
+| 1635 | CUBE_SCAN_WIFI_LIST_RESULT | 30741 | SET_COREBAR_CONFIG |
+| 1000000 | PUSH_MESSAGE | 30742 | PREVIEW_SCREENSAVER |
+| | | 30750–30752 | THREE_CAPABILITY_* |
+
+The complete QuantumLink module protocol (how the CoreBar talks to each module over the magnetic bus / CAN / Mesh) lives in the `quantum.link` package of the LineOS/CoreBridge APKs: `QLinkVivoCube`, `QLinkSenseCube`, `QLinkKnobKey`, `QLinkDotKey`, `QLinkPCBootCard`, VivoCube widgets (`VCWidget*`), sensors, and `HidKeyboardOut` (USB-HID keystroke output for button macros). This is the reference for building out widget, sensor, KnobKey/DotKey, and OTA support.
 
 `deviceId` for the main device inside a module is **256**.
 

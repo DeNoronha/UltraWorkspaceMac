@@ -46,6 +46,10 @@ final class AppModel: ObservableObject {
         paired.first { $0.serialNo == selectedSerial }
     }
 
+    var selectedModule: AttachedModule? {
+        modules.first { $0.serial == selectedModuleSerial }
+    }
+
     func ipForSelected() -> String? {
         if let d = discovered.first(where: { $0.serialNo == selectedSerial }) { return d.ip }
         return selectedCoreBar?.lastIp
@@ -129,10 +133,21 @@ final class AppModel: ObservableObject {
             do {
                 let mods = try await session.listModules()
                 self.modules = mods
-                if self.selectedModuleSerial == nil { self.selectedModuleSerial = mods.first?.serial }
-                self.say(mods.isEmpty ? "No VivoCubes attached to this CoreBar." : "Found \(mods.count) module\(mods.count == 1 ? "" : "s").")
+                // Prefer a VivoCube for the display controls, else the first device.
+                if self.selectedModuleSerial == nil || !mods.contains(where: { $0.serial == self.selectedModuleSerial }) {
+                    self.selectedModuleSerial = (mods.first(where: { $0.isVivoCube }) ?? mods.first)?.serial
+                }
+                if mods.isEmpty {
+                    self.say("No devices reported (act 1300).")
+                    if let raw = try? await session.rawRequest(act: Proto.actGetDevice) {
+                        self.say("raw 1300 → \(raw.prefix(500))")
+                    }
+                } else {
+                    let names = mods.map { "\($0.displayName) (\($0.prettyType))" }.joined(separator: ", ")
+                    self.say("Found \(mods.count) device\(mods.count == 1 ? "" : "s"): \(names)")
+                }
             } catch {
-                self.say("Could not load modules: \(error.localizedDescription)")
+                self.say("Could not load devices: \(error.localizedDescription)")
             }
             self.isWorking = false
         }

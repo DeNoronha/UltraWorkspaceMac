@@ -137,13 +137,16 @@ private struct DetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Modules").font(.headline)
             if model.modules.isEmpty {
-                Text("No modules loaded. Press “Refresh modules”.")
+                Text("No devices loaded. Press “Refresh modules”.")
                     .foregroundStyle(.secondary)
             } else {
                 Picker("Module", selection: $model.selectedModuleSerial) {
                     ForEach(model.modules) { m in
-                        Text("\(m.serial)\(m.upSeconds.map { "  ·  up \(formatUptime($0))" } ?? "")")
-                            .tag(Optional(m.serial))
+                        HStack {
+                            Circle().fill(m.online ? .green : .secondary).frame(width: 7, height: 7)
+                            Text("\(m.displayName)  ·  \(m.prettyType)")
+                        }
+                        .tag(Optional(m.serial))
                     }
                 }
                 .pickerStyle(.radioGroup)
@@ -151,12 +154,16 @@ private struct DetailView: View {
 
             Divider()
             Text("Display").font(.headline)
+            if let m = model.selectedModule, !m.isVivoCube {
+                Text("Display controls apply to a VivoCube. “\(m.displayName)” is a \(m.prettyType).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             HStack {
                 Button("Screen On") { model.setScreen(on: true) }
                 Button("Screen Off") { model.setScreen(on: false) }
                 Button("Reboot", role: .destructive) { model.reboot() }
             }
-            .disabled(model.selectedModuleSerial == nil)
+            .disabled(model.selectedModule?.isVivoCube != true)
 
             Divider()
             Text("Push an image").font(.headline)
@@ -171,7 +178,7 @@ private struct DetailView: View {
             } label: {
                 Label("Choose image & upload…", systemImage: "photo.badge.arrow.down")
             }
-            .disabled(model.selectedModuleSerial == nil || model.isWorking)
+            .disabled(model.selectedModule?.isVivoCube != true || model.isWorking)
             Text("If the image looks wrong on the cube, try another canvas size — the VivoCube’s native resolution isn’t published, so the right value is found by trying.")
                 .font(.caption).foregroundStyle(.secondary)
 
@@ -237,9 +244,9 @@ private struct MusicPanel: View {
             Button {
                 model.pushNowPlaying()
             } label: {
-                Label("Push now-playing to \(model.selectedModuleSerial ?? "module")", systemImage: "music.note.tv")
+                Label("Push now-playing to \(model.selectedModule?.displayName ?? "VivoCube")", systemImage: "music.note.tv")
             }
-            .disabled(model.selectedModuleSerial == nil || !model.nowPlaying.hasTrack || model.isWorking)
+            .disabled(model.selectedModule?.isVivoCube != true || !model.nowPlaying.hasTrack || model.isWorking)
 
             Toggle("Auto-update the cube when the track changes", isOn: $model.autoPushNowPlaying)
                 .toggleStyle(.switch)

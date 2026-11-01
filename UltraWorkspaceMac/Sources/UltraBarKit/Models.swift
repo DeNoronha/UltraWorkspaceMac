@@ -14,12 +14,21 @@ public enum Proto {
     /// TLS SNI the CoreBar certificate is issued for.
     public static let tlsHost = "ultrabar.local"
 
-    // Control "act" codes.
-    public static let actAuth = 100          // data = token
-    public static let actPair = 101          // data = {id, clientType:"pc", name}
-    public static let actReadProp = 30200    // data = {serialNo, deviceId, propertyId, extra}
-    public static let actWriteProp = 30201   // data = {serialNo, deviceId, propertyId, value}
-    public static let actListModules = 30730 // data = {} -> array of {serialNo,...}
+    // Control "act" codes (from LineOS `MessageAction` enum).
+    public static let actAuth = 100               // AUTH — data = token
+    public static let actPair = 101               // REQ_AUTH_TOKEN — data = {id, clientType:"pc", name}
+    public static let actGetDevice = 1300         // GET_DEVICE — list all devices/modules
+    public static let actGetAppList = 1000        // GET_APP_LIST
+    public static let actModuleStartDiscovery = 30100 // MODULE_START_DISCOVERY — scan for new modules
+    public static let actModuleStopDiscovery = 30101  // MODULE_STOP_DISCOVERY
+    public static let actReadProp = 30200         // MODULE_PROPERTY_READ — {serialNo, deviceId, propertyId, extra}
+    public static let actWriteProp = 30201        // MODULE_PROPERTY_WRITE — {serialNo, deviceId, propertyId, value}
+    public static let actQueryModuleState = 30730 // QUERY_MODULE_STATE
+    public static let actGetCoreBarConfig = 30740 // GET_COREBAR_CONFIG
+    public static let actSysReboot = 20100        // SYS_REBOOT (CoreBar)
+
+    // Deprecated alias — 30730 is module STATE, not the device list.
+    public static let actListModules = 30730
 
     // Logical device id addressed inside a module.
     public static let deviceMain = 256
@@ -52,15 +61,38 @@ public struct CoreBar: Identifiable, Hashable, Sendable, Codable {
     }
 }
 
-/// A VivoCube (or other display module) currently attached to a CoreBar.
+/// A device/module reported by the CoreBar (GET_DEVICE / act 1300): a VivoCube,
+/// SenseCube, KnobKey, DotKey, PC-Boot card, or an integration entity.
 public struct AttachedModule: Identifiable, Hashable, Sendable {
-    public var serial: String
+    public var deviceId: String       // CoreBar "id"
+    public var name: String
+    public var type: String           // DeviceEnum, e.g. "VIVO_CUBE"
+    public var online: Bool
+    public var serial: String         // serialNo for module control (from attr, else id)
     public var upSeconds: Int64?
-    public var id: String { serial }
+    public var id: String { deviceId }
 
-    public init(serial: String, upSeconds: Int64?) {
+    public init(deviceId: String, name: String, type: String, online: Bool, serial: String, upSeconds: Int64? = nil) {
+        self.deviceId = deviceId
+        self.name = name
+        self.type = type
+        self.online = online
         self.serial = serial
         self.upSeconds = upSeconds
+    }
+
+    public var isVivoCube: Bool { type == "VIVO_CUBE" }
+    public var displayName: String { name.isEmpty ? (serial.isEmpty ? deviceId : serial) : name }
+    public var prettyType: String {
+        switch type {
+        case "VIVO_CUBE": return "VivoCube"
+        case "SENSE_CUBE": return "SenseCube"
+        case "PC_BOOT": return "PC-Boot"
+        case "COMPUTER_INFO": return "Computer"
+        case "ACTION": return "Action"
+        case "AUDIO_PLAYER": return "Audio"
+        default: return type.capitalized.replacingOccurrences(of: "_", with: " ")
+        }
     }
 }
 
