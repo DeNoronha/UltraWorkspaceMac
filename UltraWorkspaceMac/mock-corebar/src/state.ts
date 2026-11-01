@@ -131,6 +131,16 @@ class AppState {
   /** Big-screen zip assets, keyed by relative path. */
   readonly assets = new Map<string, ZipAsset>();
 
+  /** What the Mac answered to our PUSH_MESSAGE queries (device-first cards). */
+  readonly macMetrics: Record<string, unknown> = {};
+  /** Mac volume as last reported / set via GET_VOLUME / SET_VOLUME. */
+  macVolume: number | null = null;
+  /** Heartbeats (act 20) received. */
+  heartbeats = 0;
+  /** Pushes sent / replies received. */
+  pushesSent = 0;
+  pushReplies = 0;
+
   /** Bounded log ring. */
   private readonly log: LogEntry[] = [];
   private readonly maxLog = 500;

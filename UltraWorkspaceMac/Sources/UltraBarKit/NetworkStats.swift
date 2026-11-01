@@ -27,6 +27,10 @@ public final class NetworkStats: @unchecked Sendable {
         return Sample(downBytesPerSec: Double(dIn) / dt, upBytesPerSec: Double(dOut) / dt)
     }
 
+    /// Cumulative bytes received/sent since boot (all physical interfaces).
+    /// The CoreBar's NETWORK card wants these totals and derives rates itself.
+    public func totals() -> (received: UInt64, sent: UInt64) { counters() }
+
     private func counters() -> (UInt64, UInt64) {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return (0, 0) }

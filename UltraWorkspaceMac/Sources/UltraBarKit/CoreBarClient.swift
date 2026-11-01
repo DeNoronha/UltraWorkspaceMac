@@ -305,6 +305,20 @@ public actor CoreBarClient {
         return nil
     }
 
+    /// Next inbound frame (raw line) or nil on close/timeout. Used by the
+    /// persistent link to consume device-initiated pushes.
+    public func nextLine(timeout: TimeInterval) async -> Data? {
+        await readLine(until: Date().addingTimeInterval(timeout))
+    }
+
+    /// Send an arbitrary frame as-is (e.g. a reply to a device push, or the
+    /// vendor-style heartbeat `{"act":20,"id":"n"}` without a `data` key).
+    public func sendFrame(_ frame: [String: Any]) async throws {
+        try await send(frame)
+    }
+
+    public var isClosed: Bool { closed }
+
     /// Fire a message without waiting for its reply (for push-based flows).
     public func fire(act: Int, dataJSON: Data?) async throws {
         let msgId = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()

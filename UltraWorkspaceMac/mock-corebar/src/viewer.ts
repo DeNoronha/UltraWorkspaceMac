@@ -78,6 +78,7 @@ export function startViewer(): import('http').Server {
       profiles: state.profiles,
       scenes: state.scenes,
       activeProfileId: state.activeProfileId,
+      link: { heartbeats: state.heartbeats, pushesSent: state.pushesSent, pushReplies: state.pushReplies, macMetrics: state.macMetrics, macVolume: state.macVolume },
       assets: [...state.assets.values()].map((a) => ({
         path: a.path,
         bytes: a.bytes,

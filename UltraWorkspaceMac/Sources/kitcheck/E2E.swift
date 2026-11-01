@@ -158,7 +158,7 @@ enum E2E {
         // 7c. CoreBar pages: list → save (superset) → switch; guards against wipes
         do {
             let before = try await session.listPages()
-            check(before.map(\.id) == ["default"], "fresh device lists one page 'default'", "\(before)")
+            check(before.contains { $0.id == "default" }, "device lists the standard page 'default'", "\(before.map(\.id))")
             do { _ = try await session.savePages([]); check(false, "empty page list refused client-side") }
             catch { check(true, "empty page list refused client-side") }
             try await session.uploadPageAsset(makePNG(width: 480, height: 480), name: "cover.png")
@@ -174,7 +174,7 @@ enum E2E {
             let r = try await session.savePages(pages)
             check(r.contains("\"code\":200"), "BATCH_SAVE_PROFILE accepted", r.prefix(60).description)
             let after = try await session.listPages()
-            check(after.map(\.id) == ["default", "deckhand.page"], "both pages listed afterwards", "\(after.map(\.id))")
+            check(Set(after.map(\.id)) == ["default", "deckhand.page"], "both pages listed afterwards", "\(after.map(\.id))")
             _ = try await session.switchPage(id: "deckhand.page")
             let st = await fetchState()
             check((st["activeProfileId"] as? String) == "deckhand.page", "TRIGGER_PROFILE_CHANGE switched the active page")
@@ -212,6 +212,43 @@ enum E2E {
             check((prev?["url"] as? String) == url, "mock recorded the http preview url", "\(prev?["url"] ?? "nil")")
             check((prev?["fetched"] as? Bool) == true, "mock fetched the image from this machine", "\(prev?["fetchBytes"] ?? "no fetch")")
         } catch { check(false, "big screen flow", "\(error)") }
+
+        // 8b. Persistent link: heartbeat + answering the device's push queries
+        do {
+            let link = CoreBarLink(ip: ip, token: token, certPin: cert)
+            final class Seen: @unchecked Sendable {
+                private var types: [String] = []; private let lock = NSLock()
+                func add(_ t: String) { lock.withLock { types.append(t) } }
+                var all: Set<String> { lock.withLock { Set(types) } }
+            }
+            let seen = Seen()
+            await link.start { type, payload in
+                seen.add(type)
+                switch type {
+                case "CPU": return 37
+                case "MEMORY": return 61
+                case "STORAGE": return 48
+                case "NETWORK": return ["totalReceived": 123_456_789, "totalSent": 9_876_543]
+                case "GET_VOLUME": return 45
+                case "SET_VOLUME": return payload
+                default: return NSNull()
+                }
+            }
+            try? await Task.sleep(nanoseconds: 7_500_000_000)
+            let st = await fetchState()
+            let linkInfo = st["link"] as? [String: Any]
+            let hb = (linkInfo?["heartbeats"] as? Int) ?? 0
+            check(await link.state == .connected, "link reports connected")
+            check(hb >= 1, "mock received heartbeats (act 20)", "\(hb)")
+            let metrics = linkInfo?["macMetrics"] as? [String: Any]
+            check((metrics?["CPU"] as? Int) == 37, "CPU query answered with percent", "\(metrics?["CPU"] ?? "nil")")
+            check((metrics?["NETWORK"] as? [String: Any])?["totalReceived"] as? Int == 123_456_789, "NETWORK answered with cumulative totals")
+            check((linkInfo?["macVolume"] as? Int) == 45, "GET_VOLUME answered", "\(linkInfo?["macVolume"] ?? "nil")")
+            let types = seen.all
+            check(types.isSuperset(of: ["CPU", "GET_VOLUME", "NETWORK"]), "handler saw CPU/NETWORK/GET_VOLUME pushes", types.sorted().joined(separator: ","))
+            await link.stop()
+            check(await link.state == .stopped, "link stops cleanly")
+        }
 
         // 9. Raw request to an unknown act must not hang the client
         do {

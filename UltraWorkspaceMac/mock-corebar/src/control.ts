@@ -37,11 +37,71 @@ function pushFrame(socket: tls.TLSSocket, act: number, data: unknown): void {
   sendFrame(socket, frame, `PUSH act=${act}`);
 }
 
+/** Outstanding PUSH_MESSAGE queries by id → type (so replies can be routed). */
+const pendingPushes = new Map<string, { type: string; socket: tls.TLSSocket }>();
+
+/**
+ * After AUTH, behave like a CoreBar with the device-first cards on screen:
+ * query the PC for CPU (3 s), NETWORK (5 s), MEMORY (8 s), STORAGE (10 s) and
+ * GET_VOLUME (5 s, KnobKey bound to PC_VOLUME). Pushes go to every live
+ * connection; the PC must reply {act:1000000,id,code:200,data:{type,payload}}.
+ */
+function startPushLoop(socket: tls.TLSSocket): void {
+  const timers: NodeJS.Timeout[] = [];
+  const push = (type: string, payload?: unknown) => {
+    if (socket.destroyed) return;
+    const id = 'sys.push.' + newId();
+    pendingPushes.set(id, { type, socket });
+    const frame: RequestFrame = { act: Act.PUSH_MESSAGE, data: payload === undefined ? { type } : { type, payload }, id };
+    state.pushesSent++;
+    sendFrame(socket, frame, `PUSH ${type}`);
+    setTimeout(() => pendingPushes.delete(id), 5000);
+  };
+  timers.push(setInterval(() => push('CPU'), 3000));
+  timers.push(setInterval(() => push('NETWORK'), 5000));
+  timers.push(setInterval(() => push('MEMORY'), 8000));
+  timers.push(setInterval(() => push('STORAGE'), 10000));
+  timers.push(setInterval(() => push('GET_VOLUME'), 5000));
+  setTimeout(() => push('CPU'), 300);
+  setTimeout(() => push('GET_VOLUME'), 500);
+  socket.on('close', () => timers.forEach((t) => clearInterval(t)));
+}
+
+function handlePushReply(frame: { id?: string; code?: number; data?: unknown }): boolean {
+  const id = frame.id ?? '';
+  const pending = pendingPushes.get(id);
+  if (!pending) return false;
+  pendingPushes.delete(id);
+  state.pushReplies++;
+  const d = (frame.data ?? {}) as { type?: string; payload?: unknown };
+  const type = d.type ?? pending.type;
+  if (frame.code !== 200) { state.record('evt', 'tls', `push reply ${type} code ${frame.code}`); return true; }
+  if (type === 'GET_VOLUME' || type === 'SET_VOLUME') {
+    if (typeof d.payload === 'number') state.macVolume = d.payload;
+  } else {
+    state.macMetrics[type] = d.payload;
+  }
+  state.record('evt', 'tls', `push reply ${type} = ${JSON.stringify(d.payload)}`);
+  return true;
+}
+
 function handleFrame(socket: tls.TLSSocket, req: RequestFrame): void {
   const { act, id } = req;
   const data = req.data;
 
+  // Replies to our own pushes come back with act 1000000 and code 200.
+  if (act === Act.PUSH_MESSAGE && (req as { code?: number }).code !== undefined) {
+    handlePushReply(req as { id?: string; code?: number; data?: unknown });
+    return;
+  }
+
   switch (act) {
+    case Act.HEARTBEAT: {
+      state.heartbeats++;
+      sendFrame(socket, reply(Act.HEARTBEAT, id, 'success'));
+      return;
+    }
+
     case Act.REQ_AUTH_TOKEN: {
       // Simulate the user walking to the device and tapping "Approve" ~1s later.
       state.record('evt', 'tls', 'Pairing requested — waiting for Approve…');
@@ -58,6 +118,7 @@ function handleFrame(socket: tls.TLSSocket, req: RequestFrame): void {
       // Accept any token (and the one we issued). data is the token string.
       state.record('evt', 'tls', `AUTH token="${String(data)}" accepted`);
       sendFrame(socket, reply(Act.AUTH, id, null));
+      startPushLoop(socket);
       return;
     }
 
