@@ -98,6 +98,12 @@ private struct SidebarView: View {
                 Label("People", systemImage: "person.2").tag(NavItem.people)
                 Label("Logs", systemImage: "doc.text.magnifyingglass").tag(NavItem.logs)
             }
+
+            Section {
+                Button { model.showingAbout = true } label: {
+                    Label("About UltraWorkspace", systemImage: "info.circle")
+                }.buttonStyle(.plain)
+            }
         }
         .listStyle(.sidebar)
     }
@@ -185,8 +191,7 @@ private struct CoreBarView: View {
                     }
                     Divider()
                     Text("CoreBar screen (5:1, 1424×280)").font(.headline)
-                    Text("Setting the big bar's wallpaper/screensaver is profile-bound and on the roadmap — for now add-ons publish to a VivoCube.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    RotationView(target: .corebar, publishSerial: nil)
                     Spacer()
                 }.padding().frame(minWidth: 320)
                 ActivityLog().frame(minWidth: 260)
@@ -217,26 +222,7 @@ private struct VivoCubeView: View {
                         }
 
                         Divider()
-                        Text("Publish a widget").font(.headline)
-                        Picker("Widget", selection: $model.selectedAddon) {
-                            ForEach(Theme.allCases) { Label($0.title, systemImage: $0.icon).tag($0) }
-                        }.pickerStyle(.radioGroup)
-                        Button {
-                            model.publishAddon(model.selectedAddon, to: module.serial, settings: settings)
-                        } label: { Label("Publish to this VivoCube", systemImage: "square.and.arrow.up") }
-
-                        Divider()
-                        Text("Auto-rotate").font(.headline)
-                        Text("Cycle through the widgets you enabled in the Widgets section — each stays on screen for \(settings.rotateSeconds)s before the next.")
-                            .font(.caption).foregroundStyle(.secondary)
-                        HStack {
-                            if model.themeRunning {
-                                Button("Stop") { model.stopThemeRotation() }
-                                Text("Showing: \(model.currentThemeLabel)").font(.caption).foregroundStyle(.secondary)
-                            } else {
-                                Button("Start rotation") { model.startThemeRotation(settings: settings) }
-                            }
-                        }
+                        RotationView(target: .vivocube, publishSerial: module.serial)
 
                         Divider()
                         Text("Push a custom image").font(.headline)
@@ -310,7 +296,68 @@ private struct DeviceInfo: View {
     }
 }
 
-// MARK: - Add-ons (left list, right settings)
+// MARK: - Per-device widget rotation (tick widgets + interval + publish)
+
+private struct RotationView: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var settings: AppSettings
+    let target: RotationTarget
+    let publishSerial: String?   // VivoCube serial to publish to; nil = not pushable yet (CoreBar)
+
+    private var enabled: [Theme] { settings.enabledList(for: target) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Widget rotation").font(.headline)
+            Text(target == .vivocube
+                 ? "Tick the widgets to show on this VivoCube. One ticked stays on screen; two or more rotate."
+                 : "Tick the widgets for the CoreBar's big screen.")
+                .font(.caption).foregroundStyle(.secondary)
+
+            ForEach(Theme.allCases) { t in
+                Toggle(isOn: Binding(get: { settings.isEnabled(t, for: target) },
+                                     set: { settings.setEnabled(t, $0, for: target) })) {
+                    Label(t.title, systemImage: t.icon)
+                }.toggleStyle(.checkbox)
+            }
+
+            Divider()
+            HStack(spacing: 8) {
+                Text(enabled.count > 1 ? "Show each for" : "Interval").foregroundStyle(.secondary)
+                Picker("", selection: target == .vivocube ? $settings.vivoSeconds : $settings.coreSeconds) {
+                    Text("15s").tag(15); Text("30s").tag(30); Text("1 min").tag(60); Text("3 min").tag(180)
+                }.labelsHidden().frame(width: 90).disabled(enabled.count <= 1)
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    if target == .vivocube { model.startThemeRotation(settings: settings) }
+                } label: {
+                    Label(enabled.count > 1 ? "Publish & rotate" : "Publish to \(target == .vivocube ? "VivoCube" : "CoreBar")",
+                          systemImage: "square.and.arrow.up")
+                }
+                .disabled(publishSerial == nil || enabled.isEmpty || model.isWorking)
+
+                if target == .vivocube && model.themeRunning {
+                    Button("Stop") { model.stopThemeRotation() }
+                    if !model.currentThemeLabel.isEmpty {
+                        Text("Showing: \(model.currentThemeLabel)").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if target == .corebar {
+                Label("Publishing to the CoreBar's big screen is still being reverse-engineered — your selection is saved for when it's ready.",
+                      systemImage: "wrench.and.screwdriver")
+                    .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            } else if enabled.isEmpty {
+                Text("Tick at least one widget to publish.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+// MARK: - Widget settings (left list, right settings)
 
 private struct AddonsView: View {
     @EnvironmentObject var model: AppModel
@@ -318,7 +365,7 @@ private struct AddonsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Header(title: "Widgets", subtitle: "Configure, then publish from a VivoCube", trailing: nil)
+            Header(title: "Widgets", subtitle: "Configure each widget — pick which ones to show per device on the VivoCube / CoreBar pages", trailing: nil)
             Divider()
             HSplitView {
                 List(selection: Binding(get: { model.selectedAddon as Theme? },
@@ -331,23 +378,10 @@ private struct AddonsView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        HStack {
-                            Label(model.selectedAddon.title, systemImage: model.selectedAddon.icon).font(.title3).bold()
-                            Spacer()
-                            Toggle("In rotation", isOn: Binding(
-                                get: { settings.isThemeEnabled(model.selectedAddon) },
-                                set: { settings.setTheme(model.selectedAddon, $0) })).toggleStyle(.checkbox)
-                        }
+                        Label(model.selectedAddon.title, systemImage: model.selectedAddon.icon).font(.title3).bold()
                         addonSettings(model.selectedAddon)
                         Divider()
-                        HStack {
-                            Text("Show each widget for")
-                            Picker("", selection: $settings.rotateSeconds) {
-                                Text("15s").tag(15); Text("30s").tag(30); Text("1 min").tag(60); Text("3 min").tag(180)
-                            }.labelsHidden().frame(width: 90)
-                            Text("(only when rotating ≥2 widgets)").font(.caption).foregroundStyle(.secondary)
-                        }
-                        Text("Publish happens from a VivoCube (pick a module in the sidebar → Publish).")
+                        Text("Choose where this widget appears and how fast it rotates on the device's page: sidebar → VivoCube (or CoreBar) → Widget rotation.")
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer()
                     }.padding().frame(minWidth: 320)

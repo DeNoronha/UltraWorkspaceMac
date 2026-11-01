@@ -7,24 +7,29 @@ extension AppModel {
     /// Start (or restart) the VivoCube theme carousel from settings.
     func startThemeRotation(settings: AppSettings) {
         themeTask?.cancel(); themeTask = nil
-        let themes = settings.enabledThemeList
+        let themes = settings.enabledList(for: .vivocube)
         guard selectedCoreBar != nil, session(for: selectedCoreBar!) != nil, vivoCubeSerial != nil else {
             say("Pair a CoreBar with a VivoCube first."); themeRunning = false; return
         }
-        guard !themes.isEmpty else { say("Enable at least one theme in Settings."); themeRunning = false; return }
+        guard !themes.isEmpty else { say("Tick at least one widget for the VivoCube."); themeRunning = false; return }
         themeRunning = true
         themeIndex = 0
-        let interval = max(10, settings.rotateSeconds)
-        say("Display started: \(themes.map(\.title).joined(separator: ", ")) · every \(interval)s")
+        let interval = max(10, settings.vivoSeconds)
+        if themes.count == 1 {
+            say("Publishing \(themes[0].title) to the VivoCube…")
+        } else {
+            say("Rotation started: \(themes.map(\.title).joined(separator: ", ")) · every \(interval)s")
+        }
         themeTask = Task {
             while !Task.isCancelled {
-                let list = settings.enabledThemeList
+                let list = settings.enabledList(for: .vivocube)
                 if list.isEmpty { break }
                 let t = list[self.themeIndex % list.count]
                 self.themeIndex += 1
                 self.currentThemeLabel = t.title
                 await self.pushTheme(t, settings: settings)
-                try? await Task.sleep(nanoseconds: UInt64(max(10, settings.rotateSeconds)) * 1_000_000_000)
+                if list.count == 1 { break } // single widget: publish once, no rotation
+                try? await Task.sleep(nanoseconds: UInt64(max(10, settings.vivoSeconds)) * 1_000_000_000)
             }
             self.themeRunning = false
         }

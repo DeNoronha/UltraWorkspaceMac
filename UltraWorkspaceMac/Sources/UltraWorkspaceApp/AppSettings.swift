@@ -1,8 +1,13 @@
 import Foundation
 import CoreLocation
 
+/// Which display device a rotation is configured for. Each device keeps its own
+/// set of enabled widgets and its own interval (a VivoCube is 240×240, the
+/// CoreBar screen is 1424×280, so they don't share a widget selection).
+enum RotationTarget: String, Codable, CaseIterable, Sendable { case vivocube, corebar }
+
 /// App-wide preferences, persisted to Application Support. These feed the
-/// weather feature (location + units) and display preferences.
+/// weather feature (location + units) and the per-device widget rotations.
 @MainActor
 final class AppSettings: ObservableObject {
     enum LocationMode: String, Codable, CaseIterable { case auto, manual }
@@ -15,9 +20,11 @@ final class AppSettings: ObservableObject {
     @Published var units: Units = .metric { didSet { save() } }
     @Published var clock24h: Bool = true { didSet { save() } }
 
-    // Display themes (VivoCube carousel)
-    @Published var enabledThemes: [String] = [Theme.weather.rawValue] { didSet { save() } }
-    @Published var rotateSeconds: Int = 30 { didSet { save() } }
+    // Per-device widget rotations.
+    @Published var vivoThemes: [String] = [Theme.weather.rawValue] { didSet { save() } }
+    @Published var vivoSeconds: Int = 30 { didSet { save() } }
+    @Published var coreThemes: [String] = [] { didSet { save() } }
+    @Published var coreSeconds: Int = 30 { didSet { save() } }
 
     private let url: URL
 
@@ -28,20 +35,30 @@ final class AppSettings: ObservableObject {
         var manualLon = ""
         var units: Units = .metric
         var clock24h = true
-        var enabledThemes: [String] = [Theme.weather.rawValue]
-        var rotateSeconds: Int = 30
+        // Legacy single list (pre per-device). Migrated into vivoThemes on load.
+        var enabledThemes: [String]? = nil
+        var rotateSeconds: Int? = nil
+        var vivoThemes: [String]? = nil
+        var vivoSeconds: Int? = nil
+        var coreThemes: [String]? = nil
+        var coreSeconds: Int? = nil
     }
 
-    /// Enabled themes in the canonical display order.
-    var enabledThemeList: [Theme] {
-        Theme.allCases.filter { enabledThemes.contains($0.rawValue) }
+    // MARK: Per-device rotation helpers
+
+    func themes(for t: RotationTarget) -> [String] { t == .vivocube ? vivoThemes : coreThemes }
+    func enabledList(for t: RotationTarget) -> [Theme] {
+        let raw = themes(for: t)
+        return Theme.allCases.filter { raw.contains($0.rawValue) }
     }
-    func isThemeEnabled(_ t: Theme) -> Bool { enabledThemes.contains(t.rawValue) }
-    func setTheme(_ t: Theme, _ on: Bool) {
-        var set = Set(enabledThemes)
-        if on { set.insert(t.rawValue) } else { set.remove(t.rawValue) }
-        enabledThemes = Theme.allCases.map(\.rawValue).filter { set.contains($0) }
+    func isEnabled(_ th: Theme, for t: RotationTarget) -> Bool { themes(for: t).contains(th.rawValue) }
+    func setEnabled(_ th: Theme, _ on: Bool, for t: RotationTarget) {
+        var set = Set(themes(for: t))
+        if on { set.insert(th.rawValue) } else { set.remove(th.rawValue) }
+        let ordered = Theme.allCases.map(\.rawValue).filter { set.contains($0) }
+        if t == .vivocube { vivoThemes = ordered } else { coreThemes = ordered }
     }
+    func seconds(for t: RotationTarget) -> Int { t == .vivocube ? vivoSeconds : coreSeconds }
 
     init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -56,8 +73,11 @@ final class AppSettings: ObservableObject {
             manualLon = p.manualLon
             units = p.units
             clock24h = p.clock24h
-            enabledThemes = p.enabledThemes
-            rotateSeconds = p.rotateSeconds
+            // Prefer the new per-device fields; fall back to the legacy single list.
+            vivoThemes = p.vivoThemes ?? p.enabledThemes ?? [Theme.weather.rawValue]
+            vivoSeconds = p.vivoSeconds ?? p.rotateSeconds ?? 30
+            coreThemes = p.coreThemes ?? []
+            coreSeconds = p.coreSeconds ?? 30
         }
     }
 
@@ -67,7 +87,9 @@ final class AppSettings: ObservableObject {
         let p = Persisted(locationMode: locationMode, manualCity: manualCity,
                           manualLat: manualLat, manualLon: manualLon,
                           units: units, clock24h: clock24h,
-                          enabledThemes: enabledThemes, rotateSeconds: rotateSeconds)
+                          enabledThemes: nil, rotateSeconds: nil,
+                          vivoThemes: vivoThemes, vivoSeconds: vivoSeconds,
+                          coreThemes: coreThemes, coreSeconds: coreSeconds)
         if let data = try? JSONEncoder().encode(p) { try? data.write(to: url, options: .atomic) }
     }
 
