@@ -733,6 +733,18 @@ private struct StatusBar: View {
             if model.isScanning || model.isWorking { ProgressView().controlSize(.small) }
             Text(model.statusLine).font(.caption).lineLimit(1)
             Spacer()
-        }.padding(.horizontal, 12).padding(.vertical, 6).background(.ultraThinMaterial)
+        }.padding(.horizontal, 12).padding(.vertical, 6).modifier(GlassSurface())
+    }
+}
+
+/// Adopt the macOS 26+ Liquid Glass surface where we previously hand-rolled a
+/// material; falls back to the system material on older macOS.
+private struct GlassSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.glassEffect(.regular, in: Rectangle())
+        } else {
+            content.background(.ultraThinMaterial)
+        }
     }
 }
