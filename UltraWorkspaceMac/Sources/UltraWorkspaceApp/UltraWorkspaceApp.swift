@@ -21,6 +21,9 @@ struct UltraWorkspaceApp: App {
         .windowStyle(.titleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .appInfo) {
+                Button("About UltraWorkspace") { model.showingAbout = true }
+            }
         }
     }
 }

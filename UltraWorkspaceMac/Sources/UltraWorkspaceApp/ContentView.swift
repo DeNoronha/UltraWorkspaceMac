@@ -20,12 +20,14 @@ struct ContentView: View {
                 Button { model.scan() } label: { Label("Scan", systemImage: "antenna.radiowaves.left.and.right") }
                     .disabled(model.isScanning)
             }
+            ToolbarItem { Button { model.showingAbout = true } label: { Label("About", systemImage: "info.circle") } }
             ToolbarItem { Button { model.showingSettings = true } label: { Label("Settings", systemImage: "gearshape") } }
         }
         .overlay(alignment: .bottom) { StatusBar() }
         .sheet(isPresented: $model.showingSettings) {
             SettingsView().environmentObject(model).environmentObject(settings)
         }
+        .sheet(isPresented: $model.showingAbout) { AboutView() }
         .sheet(isPresented: Binding(get: { model.pairingPrompt != nil },
                                     set: { if !$0 { model.pairingPrompt = nil } })) {
             VStack(spacing: 16) { ProgressView(); Text(model.pairingPrompt ?? "").multilineTextAlignment(.center) }

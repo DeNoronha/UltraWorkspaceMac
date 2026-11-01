@@ -21,6 +21,7 @@ final class AppModel: ObservableObject {
     @Published var log: [LogEntry] = []
     @Published var pairingPrompt: String?
     @Published var showingSettings = false
+    @Published var showingAbout = false
     @Published var nav: NavItem = .coreBar
     @Published var selectedAddon: Theme = .weather
 
