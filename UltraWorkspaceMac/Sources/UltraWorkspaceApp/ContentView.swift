@@ -165,6 +165,7 @@ private struct ModuleRouter: View {
 
 private struct CoreBarView: View {
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var settings: AppSettings
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Header(title: model.selectedCoreBar?.name ?? "CoreBar",
@@ -191,6 +192,11 @@ private struct CoreBarView: View {
                     }
                     Divider()
                     Text("CoreBar screen (5:1, 1424×280)").font(.headline)
+                    Button { model.previewCoreBarScreen(settings: settings) } label: {
+                        Label("Preview a weather card on the CoreBar screen", systemImage: "rectangle.inset.filled.badge.record")
+                    }.disabled(model.isWorking)
+                    Text("Experimental, non-destructive: shows a one-shot full-screen image (PREVIEW_SCREENSAVER). It does not change your saved pages.")
+                        .font(.caption).foregroundStyle(.secondary)
                     RotationView(target: .corebar, publishSerial: nil)
                     Spacer()
                 }.padding().frame(minWidth: 320)
@@ -429,6 +435,12 @@ private struct AddonsView: View {
             Text("Bitcoin and Ethereum price with 24-hour change (CoinGecko, in EUR — no API key).").font(.callout).foregroundStyle(.secondary)
         case .calendar:
             Text("Your next calendar events. Needs Calendar access (macOS will ask the first time).").font(.callout).foregroundStyle(.secondary)
+        case .diskio:
+            Text("Live disk read/write throughput of this Mac.").font(.callout).foregroundStyle(.secondary)
+        case .topcpu:
+            Text("The top CPU-consuming apps on this Mac right now.").font(.callout).foregroundStyle(.secondary)
+        case .uptime:
+            Text("How long this Mac has been running, plus the 1/5/15-minute load average.").font(.callout).foregroundStyle(.secondary)
         }
     }
 }

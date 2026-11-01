@@ -19,6 +19,10 @@ public enum Proto {
     public static let actPair = 101               // REQ_AUTH_TOKEN — data = {id, clientType:"pc", name}
     public static let actGetDevice = 1300         // GET_DEVICE — list all devices/modules
     public static let actGetAppList = 1000        // GET_APP_LIST
+    public static let actGetProfileWidget = 1002  // GET_PROFILE_WIDGET — placeable widget tree
+    public static let actTriggerProfileChange = 1103 // TRIGGER_PROFILE_CHANGE — data = profile id (switch page)
+    public static let actBatchSaveProfile = 1108  // BATCH_SAVE_PROFILE — data = [ProfileDTO] (REPLACES all pages)
+    public static let actPreviewScreensaver = 30742 // PREVIEW_SCREENSAVER — {url, mediaType} one-shot full-screen
     public static let actModuleStartDiscovery = 30100 // MODULE_START_DISCOVERY — scan the bus
     public static let actModuleStopDiscovery = 30101  // MODULE_STOP_DISCOVERY
     public static let actModuleDiscoveryReplay = 30102 // MODULE_START_DISCOVERY_REPLAY — pushed per found module

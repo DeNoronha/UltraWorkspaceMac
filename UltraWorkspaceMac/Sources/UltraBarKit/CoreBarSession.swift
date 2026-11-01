@@ -277,6 +277,57 @@ public struct CoreBarSession: Sendable {
         throw UltraBarError.uploadRejected(text)
     }
 
+    // MARK: CoreBar big screen (1424×280)
+    //
+    // The CoreBar's own screen takes ordinary image files (jpg/png), not the
+    // RGB565 tgz used by modules. Assets are delivered as a .zip that the device
+    // unzips into its external files dir under `subDir`; images can then be
+    // referenced by the relative path "<subDir>/<file>". `isFull = true` wipes
+    // the subdir first. Route: POST :8080/upload/zip?subDir=<x>&isFull=<bool>.
+
+    @discardableResult
+    public func uploadScreenZip(_ zip: Data, subDir: String, isFull: Bool = false) async throws -> (accepted: Bool, text: String) {
+        let q = "subDir=\(subDir.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subDir)&isFull=\(isFull)"
+        guard let url = URL(string: "http://\(ip):\(Proto.uploadPort)/upload/zip?\(q)") else {
+            throw UltraBarError.protocolError("bad upload URL")
+        }
+        let boundary = "ubw-\(UUID().uuidString)"
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"assets.zip\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: application/zip\r\n\r\n".data(using: .utf8)!)
+        body.append(zip)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        req.httpBody = body
+
+        WireLog.shared.http("POST \(url.absoluteString) (\(zip.count) B zip)")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let text = String(data: data, encoding: .utf8) ?? ""
+        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        WireLog.shared.http("← \(status) \(text.prefix(200))")
+        let accepted = (200..<300).contains(status)
+        return (accepted, text.isEmpty ? "HTTP \(status)" : text)
+    }
+
+    /// Non-destructive: show a full-screen image on the CoreBar screen right now
+    /// (PREVIEW_SCREENSAVER / act 30742). One-shot; does NOT change saved config
+    /// or any profile/page. `path` is an http URL or a relative path the device
+    /// resolves under its external files dir (e.g. "wallpaper/preview.jpg").
+    @discardableResult
+    public func previewScreen(path: String, isVideo: Bool = false) async throws -> String {
+        let client = try await authedClient()
+        defer { Task { await client.close() } }
+        let payload: [String: Any] = ["url": path, "mediaType": isVideo ? "VIDEO" : "IMAGE"]
+        let json = try JSONSerialization.data(withJSONObject: payload)
+        guard let line = try await client.request(act: Proto.actPreviewScreensaver, dataJSON: json, timeout: 10) else {
+            return "<no reply>"
+        }
+        return String(data: line, encoding: .utf8) ?? "<non-utf8>"
+    }
+
     private func postUpload(serial: String, tgz: Data) async throws -> (accepted: Bool, text: String) {
         let boundary = "ubw-\(UUID().uuidString)"
         guard let url = URL(string: "http://\(ip):\(Proto.uploadPort)/upload?serialNo=\(serial.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? serial)") else {

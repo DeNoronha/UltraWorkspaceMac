@@ -131,9 +131,26 @@ The reference single-layer deploy uses `widgetId 101`, `layerId 1`, `defaultLaye
 
 The package is POSTed to `http://<corebar>:8080/upload?serialNo=<serial>` (multipart, field `file`, `application/gzip`); a successful push returns `{"state":200,"msg":"ok"}`.
 
+## CoreBar big screen (1424×280)
+
+The CoreBar runs LineOS (`com.ultrabar.launch`); the screen protocol lives there (the bridge APK is just a relay). Unlike modules, the big screen takes **ordinary image files** (jpg/jpeg/png/webp/gif) at 1424×280 — no RGB565/tar.
+
+**Pages / scenes (Stream-Deck-like).** `AppData` holds a `List<Profile>`. A `Profile` is a page: `{id, name, icon, bgColor, isDefault, showName, albumId, module[], homeData[], player}`, where `homeData[]` is the ordered widget strip (order = on-screen order; no x/y).
+- `TRIGGER_PROFILE_CHANGE` (1103): `data` = profile id string — switch the active page.
+- `BATCH_SAVE_PROFILE` (1108): `data` = array of `ProfileDTO` — **replaces the whole page list** (read-modify-write; there's no "list profiles" op over 7431, so the PC client owns the authoritative copy). Destructive if sent partial.
+- `GET_PROFILE_WIDGET` (1002): returns the tree of placeable widgets.
+
+**Asset upload (big screen).** `POST http://<corebar>:8080/upload/zip?subDir=<x>&isFull=<bool>` (multipart, field `file`, a `.zip` ≤50 MB). The device unzips into its external files dir under `<subDir>`; images are then referenced by the relative path `"<subDir>/<file>"`. `isFull=true` wipes the subdir first. (The module route `POST :8080/upload?serialNo=` is separate; the big screen has no serialNo — it's the host device, mutated over 7431.)
+
+**Wallpaper.** No standalone message: the background behind the clock is the TIME widget's `icon` field (and/or `Profile.albumId`). Value resolution (`GlideExtend.loadSmartCore`): `http…` → direct; `resId://…` → built-in drawable; a relative string → `getExternalFilesDir/<string>`; `file://` or `/…` → absolute. So: upload a zip, set the target profile's TIME-widget `icon` to `"<subDir>/<file>.png"`, then `BATCH_SAVE_PROFILE` (1108) with the full profile array.
+
+**Screensaver.** `SET_COREBAR_CONFIG` (30741) `data` = `{type:"BASE_SET", value: ScreensaverConfig}` where `ScreensaverConfig = {featureEnabled, lockTime(TIME_30S…NEVER), packageName, uri, ver}`; a separate screensaver app renders/rotates. `GET_COREBAR_CONFIG` (30740) `{type:"BASE_SET"}` reads it back.
+
+**Non-destructive preview.** `PREVIEW_SCREENSAVER` (30742) `data` = `{url, mediaType:"IMAGE"|"VIDEO"}` shows a full-screen image/video immediately — one-shot, changes no saved state. This is the safe way to validate upload + sizing/format. **Deckhand implements exactly this** (`uploadScreenZip` + `previewScreen`) and deliberately does NOT yet write profiles.
+
 ## Not yet mapped
 
-- The CoreBar's **own big screen** (wallpaper / screensaver). This appears profile-bound — likely `BATCH_SAVE_PROFILE` (1108), with `PREVIEW_SCREENSAVER` (30742) as a preview — rather than a direct image push.
+- Persistent CoreBar **wallpaper/pages** via `BATCH_SAVE_PROFILE` (1108): needs the full authoritative profile array (open question: does `albumId` alone repaint, or must the TIME-widget `icon` be set; exact `/upload/zip` success JSON; the screensaver app's `packageName`/`ver`).
 - **Inbound button / rotation events** for KnobKey and DotKey (needed to bind KnobKey → volume and DotKey presses to Mac actions). The official app encodes these as integer `act` codes, best recovered from the LineOS APK.
 - Additional `act` codes for widgets, automations, OTA (`MODULE_OAT_*`), and smart-home bridging.
 - Cloud backend `aiks360.com` (`/api/v1/base-service/pub/...`) for the app marketplace and icon/plugin catalog.

@@ -111,6 +111,15 @@ extension AppModel {
             if auth == .notDetermined { _ = await CalendarSource.requestAccess(); auth = CalendarSource.authStatus() }
             let events = auth == .authorized ? await CalendarSource.upcoming() : []
             return CalendarCard.render(events, auth: auth, size: 240, clock24h: settings.clock24h)
+        case .diskio:
+            _ = diskStats.sample()
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            return DiskActivityCard.render(diskStats.sample(), size: 240)
+        case .topcpu:
+            let procs = await Task.detached { TopProcStats.top(3) }.value
+            return TopProcCard.render(procs, size: 240)
+        case .uptime:
+            return UptimeCard.render(size: 240)
         }
     }
 }

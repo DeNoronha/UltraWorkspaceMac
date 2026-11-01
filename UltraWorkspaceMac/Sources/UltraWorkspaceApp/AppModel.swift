@@ -44,6 +44,7 @@ final class AppModel: ObservableObject {
     @Published var currentThemeLabel = ""
     let sysStats = SystemStats()
     let netStats = NetworkStats()
+    let diskStats = DiskActivityStats()
     var themeTask: Task<Void, Never>?
     var themeIndex = 0
 
@@ -252,6 +253,58 @@ final class AppModel: ObservableObject {
                 await MainActor.run { self.say("Upload failed: \(error.localizedDescription)"); self.isWorking = false }
             }
         }
+    }
+
+    /// Experimental: render a wide card and show it on the CoreBar's own big
+    /// screen (1424×280) using the non-destructive PREVIEW_SCREENSAVER path —
+    /// no profile/page is modified. Uploads a one-image zip, then previews it.
+    func previewCoreBarScreen(settings: AppSettings) {
+        guard let bar = selectedCoreBar, let session = session(for: bar) else {
+            say("Pair a CoreBar first."); return
+        }
+        guard !isWorking else { return }
+        isWorking = true
+        say("Rendering a 1424×280 card for the CoreBar screen…")
+        Task {
+            let now = try? await self.resolveWeather(settings: settings, metric: settings.units == .metric)
+            guard let rgba = WeatherCard.render(width: 1424, height: 280, now: now, clock24h: settings.clock24h),
+                  let png = Self.pngData(fromRGBA: rgba, width: 1424, height: 280) else {
+                self.say("Could not render the CoreBar card."); self.isWorking = false; return
+            }
+            do {
+                let zip = ZipWriter.archive([ZipWriter.Entry(name: "preview.png", data: png)])
+                let up = try await session.uploadScreenZip(zip, subDir: "deckhand", isFull: false)
+                guard up.accepted else {
+                    self.say("CoreBar upload rejected: \(up.text.prefix(120))"); self.isWorking = false; return
+                }
+                let reply = try await session.previewScreen(path: "deckhand/preview.png")
+                self.say("CoreBar preview sent. Reply: \(reply.prefix(120))")
+            } catch {
+                self.say("CoreBar preview failed: \(error.localizedDescription)")
+            }
+            self.isWorking = false
+        }
+    }
+
+    /// RGBA8888 (bottom-left origin, as the card renderers produce) → PNG data,
+    /// flipping rows so the image is upright for ordinary image consumers.
+    nonisolated static func pngData(fromRGBA rgba: [UInt8], width: Int, height: Int) -> Data? {
+        guard rgba.count == width * height * 4 else { return nil }
+        let rowBytes = width * 4
+        var flipped = [UInt8](repeating: 0, count: rgba.count)
+        for y in 0..<height {
+            let src = (height - 1 - y) * rowBytes
+            let dst = y * rowBytes
+            flipped.replaceSubrange(dst..<(dst + rowBytes), with: rgba[src..<(src + rowBytes)])
+        }
+        let cs = CGColorSpaceCreateDeviceRGB()
+        let info = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        guard let provider = CGDataProvider(data: Data(flipped) as CFData),
+              let cg = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+                               bytesPerRow: rowBytes, space: cs, bitmapInfo: CGBitmapInfo(rawValue: info),
+                               provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { return nil }
+        let rep = NSBitmapImageRep(cgImage: cg)
+        return rep.representation(using: .png, properties: [:])
     }
 
     nonisolated static func buildTgz(from url: URL, size: Int) -> Data? {
