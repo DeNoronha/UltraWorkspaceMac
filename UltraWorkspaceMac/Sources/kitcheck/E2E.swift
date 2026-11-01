@@ -222,16 +222,16 @@ enum E2E {
                 var all: Set<String> { lock.withLock { Set(types) } }
             }
             let seen = Seen()
-            await link.start { type, payload in
+            await link.start { type, payloadJSON in
                 seen.add(type)
                 switch type {
-                case "CPU": return 37
-                case "MEMORY": return 61
-                case "STORAGE": return 48
-                case "NETWORK": return ["totalReceived": 123_456_789, "totalSent": 9_876_543]
-                case "GET_VOLUME": return 45
-                case "SET_VOLUME": return payload
-                default: return NSNull()
+                case "CPU": return CoreBarLink.json(37)
+                case "MEMORY": return CoreBarLink.json(61)
+                case "STORAGE": return CoreBarLink.json(48)
+                case "NETWORK": return CoreBarLink.json(["totalReceived": 123_456_789, "totalSent": 9_876_543])
+                case "GET_VOLUME": return CoreBarLink.json(45)
+                case "SET_VOLUME": return payloadJSON
+                default: return Data()
                 }
             }
             try? await Task.sleep(nanoseconds: 7_500_000_000)

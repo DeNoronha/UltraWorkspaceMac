@@ -14,7 +14,7 @@ struct ContentView: View {
         }
         .environmentObject(contacts)
         .environmentObject(settings)
-        .onAppear { model.startMusicPolling() }
+        .onAppear { model.startMusicPolling(); model.startDailyCoverRefresh(settings: settings) }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { model.scan() } label: { Label("Scan", systemImage: "antenna.radiowaves.left.and.right") }
@@ -269,6 +269,21 @@ private struct CoreBarPagesView: View {
                     Button { reload() } label: { Label("Refresh preview", systemImage: "arrow.clockwise") }.buttonStyle(.borderless)
                 }
             }
+
+            Text("Cards on the Deckhand page").font(.subheadline)
+            Text("All of these are drawn and kept up to date by the CoreBar itself. Cards marked “fed by Deckhand” get their numbers over the live link while this Mac is on.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            ForEach(AppSettings.allCoreCards, id: \.id) { card in
+                Toggle(isOn: Binding(get: { settings.coreCards.contains(card.id) },
+                                     set: { on in var c = settings.coreCards; c.removeAll { $0 == card.id }; if on { c.append(card.id) }; settings.coreCards = c })) {
+                    HStack(spacing: 6) {
+                        Text(card.title)
+                        if card.needsMac { Text("needs Mac").font(.caption2).padding(.horizontal, 5).padding(.vertical, 1).background(Color.orange.opacity(0.2)).clipShape(Capsule()) }
+                    }
+                }.toggleStyle(.checkbox)
+            }
+            Text("Modules on this page: KnobKey → Mac volume (button = mute), DotKey buttons 1/2 → VivoCube widgets 1/2 on the device, button 3 → next widget, long-press → standard page.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
 
             if !model.corebarPages.isEmpty {
                 Text("Pages on the CoreBar").font(.subheadline)
@@ -839,6 +854,12 @@ private struct StatusBar: View {
             if model.isScanning || model.isWorking { ProgressView().controlSize(.small) }
             Text(model.statusLine).font(.caption).lineLimit(1)
             Spacer()
+            HStack(spacing: 4) {
+                Circle().fill(model.linkState == "Live link" ? Color.green : (model.linkState.hasPrefix("Link") ? Color.secondary : Color.orange)).frame(width: 7, height: 7)
+                Text(model.linkState).font(.caption).foregroundStyle(.secondary)
+                if model.pushCount > 0 { Text("· \(model.pushCount) answered").font(.caption2).foregroundStyle(.tertiary) }
+            }
+            .help("Persistent connection to the CoreBar. It answers the CoreBar's own questions (CPU, memory, network, storage, volume) so the device's native cards and KnobKey volume work.")
         }.padding(.horizontal, 12).padding(.vertical, 6).modifier(GlassSurface())
     }
 }

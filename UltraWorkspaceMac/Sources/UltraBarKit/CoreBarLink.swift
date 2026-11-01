@@ -11,9 +11,19 @@ import Foundation
 public actor CoreBarLink {
     public enum State: Sendable, Equatable { case stopped, connecting, connected, reconnecting(String) }
 
-    /// Handles one device push. Return the `payload` to reply with (any JSON
-    /// value, or NSNull for "acknowledge without data"), or nil for no reply.
-    public typealias PushHandler = @Sendable (_ type: String, _ payload: Any?) async -> Any?
+    /// Handles one device push. `payloadJSON` is the request payload serialized
+    /// as JSON (nil when absent). Return the reply payload as JSON `Data`
+    /// (`Data()` = acknowledge with no payload), or nil for no reply at all.
+    public typealias PushHandler = @Sendable (_ type: String, _ payloadJSON: Data?) async -> Data?
+
+    /// Helpers for handlers: JSON ⇄ Foundation values.
+    public static func json(_ value: Any) -> Data? {
+        try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed])
+    }
+    public static func value(_ data: Data?) -> Any? {
+        guard let data, !data.isEmpty else { return nil }
+        return try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+    }
 
     private let ip: String, token: String, certPin: String?, port: UInt16
     private var client: CoreBarClient?
@@ -105,12 +115,12 @@ public actor CoreBarLink {
             let id = (obj["id"] as? String) ?? ""
             let data = obj["data"] as? [String: Any]
             let type = (data?["type"] as? String) ?? ""
-            let payload = data?["payload"]
+            let payloadJSON = data?["payload"].flatMap { Self.json($0) }
             pushesHandled += 1
             guard let handler else { continue }
-            if let reply = await handler(type, payload) {
+            if let reply = await handler(type, payloadJSON) {
                 var d: [String: Any] = ["type": type]
-                if !(reply is NSNull) { d["payload"] = reply }
+                if let v = Self.value(reply) { d["payload"] = v }
                 let frame: [String: Any] = ["act": Proto.actPushMessage, "id": id, "code": 200, "data": d]
                 try? await c.sendFrame(frame)
             }

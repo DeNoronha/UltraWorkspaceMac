@@ -8,7 +8,7 @@ final class AppModel: ObservableObject {
     // CoreBars
     @Published var discovered: [CoreBar] = []
     @Published var paired: [Store.PairedCoreBar] = Store.shared.pairedCoreBars
-    @Published var selectedSerial: String?
+    @Published var selectedSerial: String? { didSet { if oldValue != selectedSerial { startLink() } } }
 
     // Selected CoreBar state
     @Published var modules: [AttachedModule] = []
@@ -44,6 +44,17 @@ final class AppModel: ObservableObject {
     @Published var themeRunning = false
     @Published var currentThemeLabel = ""
     @Published var corebarPages: [CoreBarSession.PageInfo] = []
+    // Persistent link ("Mac agent") that answers the CoreBar's push queries.
+    @Published var linkState: String = "Link off"
+    @Published var pushCount = 0
+    @Published var lastKnobVolume: Int?
+    var link: CoreBarLink?
+    let agentSystemStats = SystemStats()
+    let agentNetworkStats = NetworkStats()
+    /// Layers in the last VivoCube package (for DotKey / card "next" stepping).
+    var lastPublishedVivoLayers = 1
+    var coverRefreshTask: Task<Void, Never>?
+    var vivoLayerIndex = 0
     @Published var currentPageId: String?
     let sysStats = SystemStats()
     let netStats = NetworkStats()
@@ -62,6 +73,7 @@ final class AppModel: ObservableObject {
         // from the local cache, so there's no need to scan on every launch.
         if selectedSerial == nil, let first = paired.first { selectedSerial = first.serialNo }
         loadCachedModules()
+        startLink()
     }
 
     /// Populate `modules` from the on-disk endpoint cache (written by the last

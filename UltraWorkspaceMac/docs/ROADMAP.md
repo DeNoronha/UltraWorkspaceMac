@@ -57,3 +57,15 @@ Risks/unknowns: the vendor ("Sanytron") could ship or object; trademark (hence t
 ## Connection model (for reference)
 
 Deckhand talks to the CoreBar **over the network** (UDP/TLS/HTTP on the LAN) — there is no USB data transport in the protocol. USB-C is for **power** (and the vendor's HID path). So the "how do I connect" choice is really Wi-Fi vs. wired LAN (most reliable if the device is reachable that way); the USB cable just keeps it powered. Port safety (from the device manual): the CoreBar's **PC-LINK** port is **5 V-only** → connect it to the Mac/computer USB (safe, correct); the **USB-OTG** port is for charging (PD/QC/12 V). **Never** put a PD fast-charger into PC-LINK — it can permanently damage the board. Deckhand surfaces this prominently in-app.
+
+## Device-first (decided 2026-11-01, implemented 2026-11-02 night)
+
+Principle: the CoreBar renders and keeps its own cards alive; the Mac only configures the device and supplies Mac-only data. Consequences and status:
+
+- **Persistent link ("Mac agent")** — `UltraBarKit/CoreBarLink.swift` + `AppModel+Link.swift`: one authenticated connection per selected CoreBar, vendor heartbeat `{"act":20,"id":n}` every 3 s, answers `PUSH_MESSAGE` queries: CPU/MEMORY/STORAGE (percent), NETWORK (cumulative bytes), GET/SET_VOLUME (Mac output volume via osascript), GET/SET_BRIGHTNESS (stub, like the vendor's Mac client), PC_CONTROL (`{"deckhand": next|previous|mute|music.*|page.*}` and the vendor `{action: openBrowser|openFile|startApp}`; `inputText`/`execCmd` are never executed). Status shown in the status bar ("Live link · n answered"). DONE, mock-tested; hardware test pending.
+- **Deckhand page = device cards** — TIME (our cover), the CoreBar's own WEATHER (lat/lon from the Mac's location chain), WORLD_TIME (Mac timezone as `GMT±H:MM`), SENSE_CUBE_TEMP/HUM, CPU/MEMORY/STORAGE/NETWORK (fed over the link), plus PC_CONTROL button cards ("Next widget", "Play/Pause") with Deckhand-drawn icons. Selectable per card in the Overview. DONE; hardware test pending.
+- **Module bindings in the profile** — KnobKey: turns = Mac volume (PC_VOLUME), button = mute; DotKey: buttons 1/2 = VivoCube widget 1/2 via `VIVO_CUBE_TOGGLE` on the device, button 3 = "next" (via the Mac), long-press = standard page. DONE; hardware test pending.
+- **VivoCube rotation** stays a Mac timer (the firmware has no time/interval trigger — CONFIRMED absent; see docs/research/device-first-findings.md §D), but each step is a single property-9 write and DotKey buttons switch widgets without the Mac.
+- **Cover date** — the clock-card cover is a static picture, so it is refreshed once a day (00:02) and at launch instead of every minute; the live time comes from the CoreBar's own TIME card.
+- **Plugin packs** — vendor hotkey packs (`config.json` + icons; see docs/research/vendor-plugins-findings.md) are importable as HOT_KEY_GROUP cards; importer not built yet.
+- Open hardware checks: metric cards show live values; KnobKey volume; DotKey layer switching; PC_CONTROL cards push; WORLD_TIME offset format renders; iconScale 80 looks right.

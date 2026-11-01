@@ -93,6 +93,8 @@ extension AppModel {
         let tgz = DeployPackager.buildTgz(layers: layers, defaultLayer: 1)
         do {
             _ = try await session.upload(serial: serial, tgz: tgz)
+            lastPublishedVivoLayers = layers.count
+            vivoLayerIndex = 0
             return true
         } catch {
             say("VivoCube upload failed: \(error.localizedDescription)")

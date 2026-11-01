@@ -25,6 +25,24 @@ final class AppSettings: ObservableObject {
     @Published var vivoSeconds: Int = 30 { didSet { save() } }
     @Published var coreThemes: [String] = [] { didSet { save() } }
     @Published var coreSeconds: Int = 30 { didSet { save() } }
+    /// Device-native cards on the Deckhand page (CoreBar renders these itself).
+    @Published var coreCards: [String] = AppSettings.defaultCoreCards { didSet { save() } }
+    /// Whether the Deckhand page has been published (enables the daily cover refresh).
+    @Published var deckhandPagePublished: Bool = false { didSet { save() } }
+    static let defaultCoreCards = ["TIME", "WEATHER", "WORLD_TIME", "SENSE_TEMP", "SENSE_HUM", "CPU", "MEMORY", "NETWORK"]
+    static let allCoreCards: [(id: String, title: String, needsMac: Bool)] = [
+        ("TIME", "Clock (with Deckhand cover)", false),
+        ("WEATHER", "Weather (CoreBar's own card)", false),
+        ("WORLD_TIME", "World clock (CoreBar's own card)", false),
+        ("SENSE_TEMP", "SenseCube temperature", false),
+        ("SENSE_HUM", "SenseCube humidity", false),
+        ("CPU", "Mac CPU (fed by Deckhand)", true),
+        ("MEMORY", "Mac memory (fed by Deckhand)", true),
+        ("STORAGE", "Mac storage (fed by Deckhand)", true),
+        ("NETWORK", "Mac network (fed by Deckhand)", true),
+        ("NEXT_LAYER", "Button: next VivoCube widget", true),
+        ("MUSIC", "Button: Music play/pause", true),
+    ]
 
     private let url: URL
 
@@ -42,6 +60,8 @@ final class AppSettings: ObservableObject {
         var vivoSeconds: Int? = nil
         var coreThemes: [String]? = nil
         var coreSeconds: Int? = nil
+        var coreCards: [String]? = nil
+        var deckhandPagePublished: Bool? = nil
     }
 
     // MARK: Per-device rotation helpers
@@ -78,6 +98,8 @@ final class AppSettings: ObservableObject {
             vivoSeconds = p.vivoSeconds ?? p.rotateSeconds ?? 30
             coreThemes = p.coreThemes ?? []
             coreSeconds = p.coreSeconds ?? 30
+            coreCards = p.coreCards ?? AppSettings.defaultCoreCards
+            deckhandPagePublished = p.deckhandPagePublished ?? false
         }
     }
 
@@ -89,7 +111,8 @@ final class AppSettings: ObservableObject {
                           units: units, clock24h: clock24h,
                           enabledThemes: nil, rotateSeconds: nil,
                           vivoThemes: vivoThemes, vivoSeconds: vivoSeconds,
-                          coreThemes: coreThemes, coreSeconds: coreSeconds)
+                          coreThemes: coreThemes, coreSeconds: coreSeconds,
+                          coreCards: coreCards, deckhandPagePublished: deckhandPagePublished)
         if let data = try? JSONEncoder().encode(p) { try? data.write(to: url, options: .atomic) }
     }
 
