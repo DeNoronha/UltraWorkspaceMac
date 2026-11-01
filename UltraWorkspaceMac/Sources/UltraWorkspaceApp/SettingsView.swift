@@ -56,7 +56,7 @@ struct SettingsView: View {
     private var aboutSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Label("About", systemImage: "info.circle").font(.headline)
-            Text("UltraWorkspace for Mac — independent, community software. Not affiliated with Sanytron.")
+            Text("Deckhand — independent, community software for UltraBar X. Not affiliated with Sanytron.")
                 .font(.caption).foregroundStyle(.secondary)
             Text("Add-ons (weather, music, CPU, network, Claude) and their settings live in the Add-ons section.")
                 .font(.caption).foregroundStyle(.secondary)

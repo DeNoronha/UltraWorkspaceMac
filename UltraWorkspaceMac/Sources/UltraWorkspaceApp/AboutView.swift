@@ -11,7 +11,7 @@ struct AboutView: View {
     private var appName: String {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
             ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String)
-            ?? "UltraWorkspace for Mac"
+            ?? "Deckhand"
     }
     private var version: String {
         let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"

@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>UltraWorkspace</string>
+    <string>Deckhand</string>
     <key>CFBundleDisplayName</key>
-    <string>UltraWorkspace for Mac</string>
+    <string>Deckhand</string>
     <key>CFBundleIdentifier</key>
     <string>com.denoronha.ultraworkspacemac</string>
     <key>CFBundleVersion</key>
@@ -25,15 +25,15 @@
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>UltraWorkspace finds your CoreBar on the local network and sends it display updates.</string>
+    <string>Deckhand finds your CoreBar on the local network and sends it display updates.</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>UltraWorkspace controls Apple Music (play/pause, skip, volume) and reads the current track to show it on your VivoCube.</string>
+    <string>Deckhand controls Apple Music (play/pause, skip, volume) and reads the current track to show it on your VivoCube.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>UltraWorkspace uses your location to show local weather on your UltraBar when "Same as this Mac" is selected.</string>
+    <string>Deckhand uses your location to show local weather on your UltraBar when "Same as this Mac" is selected.</string>
     <key>NSCalendarsUsageDescription</key>
-    <string>UltraWorkspace shows your next calendar events on the connected display.</string>
+    <string>Deckhand shows your next calendar events on the connected display.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>UltraWorkspace shows your next calendar events on the connected display.</string>
+    <string>Deckhand shows your next calendar events on the connected display.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>

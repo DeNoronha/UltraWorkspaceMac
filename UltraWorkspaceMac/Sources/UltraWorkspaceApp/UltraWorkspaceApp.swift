@@ -13,7 +13,7 @@ struct UltraWorkspaceApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("UltraWorkspace") {
+        WindowGroup("Deckhand") {
             ContentView()
                 .environmentObject(model)
                 .frame(minWidth: 820, minHeight: 540)
@@ -22,7 +22,7 @@ struct UltraWorkspaceApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .appInfo) {
-                Button("About UltraWorkspace") { model.showingAbout = true }
+                Button("About Deckhand") { model.showingAbout = true }
             }
         }
     }

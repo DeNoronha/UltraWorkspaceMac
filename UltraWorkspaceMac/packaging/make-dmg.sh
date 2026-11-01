@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build UltraWorkspace.app and package it into a distributable DMG
+# Build Deckhand.app and package it into a distributable DMG
 # (app + Applications shortcut + manual).
 set -euo pipefail
 
@@ -10,7 +10,7 @@ ROOT="$(pwd)"
 
 STAGE="$ROOT/dist/dmg-stage"
 rm -rf "$STAGE"; mkdir -p "$STAGE"
-cp -R "$ROOT/dist/UltraWorkspace.app" "$STAGE/UltraWorkspace.app"
+cp -R "$ROOT/dist/Deckhand.app" "$STAGE/Deckhand.app"
 ln -s /Applications "$STAGE/Applications"
 cp "$ROOT/MANUAL.md" "$STAGE/Manual.md"
 
@@ -20,11 +20,11 @@ if command -v cupsfilter >/dev/null 2>&1; then
 fi
 
 cat > "$STAGE/Read Me First.txt" <<'TXT'
-UltraWorkspace for Mac
+Deckhand for UltraBar X
 ======================
 
-1. Drag UltraWorkspace onto the Applications folder.
-2. First launch: right-click UltraWorkspace in Applications -> Open -> Open.
+1. Drag Deckhand onto the Applications folder.
+2. First launch: right-click Deckhand in Applications -> Open -> Open.
    (It's an unsigned community app; you only approve it once.)
 3. Press Scan, then Pair with your CoreBar and tap Approve on the device.
 
@@ -32,9 +32,9 @@ See Manual.pdf / Manual.md for full instructions, including which USB port to us
 Community software. Not affiliated with Sanytron.
 TXT
 
-DMG="$ROOT/dist/UltraWorkspace.dmg"
+DMG="$ROOT/dist/Deckhand.dmg"
 rm -f "$DMG"
-hdiutil create -volname "UltraWorkspace" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+hdiutil create -volname "Deckhand" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 rm -rf "$STAGE"
 
 echo "done: $DMG ($(du -h "$DMG" | cut -f1))"

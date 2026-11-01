@@ -101,7 +101,7 @@ private struct SidebarView: View {
 
             Section {
                 Button { model.showingAbout = true } label: {
-                    Label("About UltraWorkspace", systemImage: "info.circle")
+                    Label("About Deckhand", systemImage: "info.circle")
                 }.buttonStyle(.plain)
             }
         }

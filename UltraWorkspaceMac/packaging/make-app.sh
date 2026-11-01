@@ -1,10 +1,10 @@
 #!/bin/bash
-# Build UltraWorkspace.app (a double-clickable macOS app) from the Swift package.
+# Build Deckhand.app (a double-clickable macOS app) from the Swift package.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
-APP="$ROOT/dist/UltraWorkspace.app"
+APP="$ROOT/dist/Deckhand.app"
 CONF="${1:-release}"
 
 echo "==> swift build -c $CONF"

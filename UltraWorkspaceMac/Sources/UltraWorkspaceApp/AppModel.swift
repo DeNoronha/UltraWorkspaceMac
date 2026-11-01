@@ -127,7 +127,7 @@ final class AppModel: ObservableObject {
             let client = CoreBarClient(host: bar.ip)
             do {
                 try await client.connect()
-                let token = try await client.pair(clientName: "UltraWorkspace for Mac", approvalWindow: 30)
+                let token = try await client.pair(clientName: "Deckhand for Mac", approvalWindow: 30)
                 let cert = await client.presentedCertSHA256
                 await client.close()
                 Store.shared.saveToken(token, serial: bar.serialNo)
