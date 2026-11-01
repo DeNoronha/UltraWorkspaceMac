@@ -23,6 +23,13 @@ enum WeatherPreview {
                 save(rgba, 1424, 280, out.appendingPathComponent("bar-\(name).png"))
             }
         }
+        // Stat cards with real live data.
+        let sys = SystemStats(); _ = sys.sample(); usleep(900_000)
+        if let rgba = StatCard.system(sys.sample(), size: 240) { save(rgba, 240, 240, out.appendingPathComponent("cube-cpu.png")) }
+        let net = NetworkStats(); _ = net.sample(); usleep(900_000)
+        if let rgba = StatCard.network(net.sample(), size: 240) { save(rgba, 240, 240, out.appendingPathComponent("cube-network.png")) }
+        if let rgba = StatCard.claude(ClaudeUsage.snapshot(), size: 240) { save(rgba, 240, 240, out.appendingPathComponent("cube-claude.png")) }
+
         print("wrote weather previews to \(dir)")
     }
 

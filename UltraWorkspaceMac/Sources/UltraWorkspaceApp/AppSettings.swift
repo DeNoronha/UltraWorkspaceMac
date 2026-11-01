@@ -15,6 +15,10 @@ final class AppSettings: ObservableObject {
     @Published var units: Units = .metric { didSet { save() } }
     @Published var clock24h: Bool = true { didSet { save() } }
 
+    // Display themes (VivoCube carousel)
+    @Published var enabledThemes: [String] = [Theme.weather.rawValue] { didSet { save() } }
+    @Published var rotateSeconds: Int = 30 { didSet { save() } }
+
     private let url: URL
 
     private struct Persisted: Codable {
@@ -24,6 +28,19 @@ final class AppSettings: ObservableObject {
         var manualLon = ""
         var units: Units = .metric
         var clock24h = true
+        var enabledThemes: [String] = [Theme.weather.rawValue]
+        var rotateSeconds: Int = 30
+    }
+
+    /// Enabled themes in the canonical display order.
+    var enabledThemeList: [Theme] {
+        Theme.allCases.filter { enabledThemes.contains($0.rawValue) }
+    }
+    func isThemeEnabled(_ t: Theme) -> Bool { enabledThemes.contains(t.rawValue) }
+    func setTheme(_ t: Theme, _ on: Bool) {
+        var set = Set(enabledThemes)
+        if on { set.insert(t.rawValue) } else { set.remove(t.rawValue) }
+        enabledThemes = Theme.allCases.map(\.rawValue).filter { set.contains($0) }
     }
 
     init() {
@@ -39,6 +56,8 @@ final class AppSettings: ObservableObject {
             manualLon = p.manualLon
             units = p.units
             clock24h = p.clock24h
+            enabledThemes = p.enabledThemes
+            rotateSeconds = p.rotateSeconds
         }
     }
 
@@ -47,7 +66,8 @@ final class AppSettings: ObservableObject {
         guard !saving else { return }
         let p = Persisted(locationMode: locationMode, manualCity: manualCity,
                           manualLat: manualLat, manualLon: manualLon,
-                          units: units, clock24h: clock24h)
+                          units: units, clock24h: clock24h,
+                          enabledThemes: enabledThemes, rotateSeconds: rotateSeconds)
         if let data = try? JSONEncoder().encode(p) { try? data.write(to: url, options: .atomic) }
     }
 

@@ -18,6 +18,7 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
+                    themesSection
                     weatherSection
                     unitsSection
                     deviceSection
@@ -27,6 +28,52 @@ struct SettingsView: View {
             }
         }
         .frame(width: 520, height: 560)
+    }
+
+    // MARK: Display themes (VivoCube carousel)
+
+    private var themesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("VivoCube display", systemImage: "square.stack").font(.headline)
+            Text("Tick the themes to show on your VivoCube. With more than one, they rotate.")
+                .font(.caption).foregroundStyle(.secondary)
+
+            ForEach(Theme.allCases) { t in
+                Toggle(isOn: Binding(
+                    get: { settings.isThemeEnabled(t) },
+                    set: { settings.setTheme(t, $0) }
+                )) {
+                    Label(t.title, systemImage: t.icon)
+                }
+                .toggleStyle(.checkbox)
+            }
+
+            HStack {
+                Text("Rotate every")
+                Picker("", selection: $settings.rotateSeconds) {
+                    Text("15s").tag(15); Text("30s").tag(30)
+                    Text("1 min").tag(60); Text("3 min").tag(180)
+                }.labelsHidden().frame(width: 90)
+            }
+
+            HStack(spacing: 10) {
+                if model.themeRunning {
+                    Button("Stop display") { model.stopThemeRotation() }
+                } else {
+                    Button("Start display") { model.startThemeRotation(settings: settings) }
+                        .buttonStyle(.borderedProminent)
+                }
+                if model.themeRunning {
+                    HStack(spacing: 5) {
+                        ProgressView().controlSize(.small)
+                        Text("Showing: \(model.currentThemeLabel)").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            if model.selectedCoreBar == nil {
+                Text("Pair and select a CoreBar first.").font(.caption).foregroundStyle(.orange)
+            }
+        }
     }
 
     // MARK: Weather & location

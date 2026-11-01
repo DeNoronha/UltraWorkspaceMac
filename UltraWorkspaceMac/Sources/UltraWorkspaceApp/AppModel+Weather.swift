@@ -3,7 +3,7 @@ import UltraBarKit
 
 @MainActor
 extension AppModel {
-    private var vivoCubeSerial: String? {
+    var vivoCubeSerial: String? {
         if let m = selectedModule, m.isVivoCube { return m.serial }
         return modules.first(where: { $0.isVivoCube })?.serial
     }
@@ -40,7 +40,7 @@ extension AppModel {
         }
     }
 
-    private func resolveWeather(settings: AppSettings, metric: Bool) async throws -> OpenMeteo.Now {
+    func resolveWeather(settings: AppSettings, metric: Bool) async throws -> OpenMeteo.Now {
         if settings.locationMode == .manual {
             if let lat = Double(settings.manualLat.replacingOccurrences(of: ",", with: ".")),
                let lon = Double(settings.manualLon.replacingOccurrences(of: ",", with: ".")) {

@@ -36,6 +36,14 @@ final class AppModel: ObservableObject {
     @Published var weatherAutoUpdate = false
     var weatherTask: Task<Void, Never>?
 
+    // Theme carousel
+    @Published var themeRunning = false
+    @Published var currentThemeLabel = ""
+    let sysStats = SystemStats()
+    let netStats = NetworkStats()
+    var themeTask: Task<Void, Never>?
+    var themeIndex = 0
+
     struct LogEntry: Identifiable {
         let id = UUID()
         let time = Date()
