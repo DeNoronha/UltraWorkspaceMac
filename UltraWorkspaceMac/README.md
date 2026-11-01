@@ -63,11 +63,9 @@ The local CoreBar protocol was recovered by decompiling the independent ClickOnc
 row in the app) triggers an *action* that runs on the Mac. Apple Music and the
 per-person Teams/FaceTime/Mail actions are the first providers. Next:
 
-- **Inbound button events** — the one missing protocol piece for true
-  interactivity: the `act` code the CoreBar sends when a VivoCube/DotKey is
-  pressed. Until it's mapped (from the LineOS APK), actions fire from the Mac UI,
-  not yet from a physical press. Once mapped: click/double-click/long-press and
-  KnobKey rotation bind to actions.
+- **Physical button → Mac action.** Two routes, from the campaign's "four protocol bridges":
+  - *HID bridge (works without new protocol knowledge):* when the CoreBar is USB-connected it acts as a standard HID device. Bind a module button to an otherwise-unused keystroke (e.g. F13–F24) in the official config, and have this app register a global hotkey that runs the action (mute Teams, skip track, etc.). This is how most Stream Deck alternatives bridge hardware — a near-term, reliable path.
+  - *Networked events:* subscribe to the CoreBar's button-press event over the TLS channel. This needs the inbound `act` code (to be mined from the LineOS APK). Once mapped: click/double-click/long-press and KnobKey rotation bind directly.
 - **Microsoft Teams mute/unmute** — via Teams' local *Third-party app API*
   (`ws://localhost:8124`, user enables it in Teams settings and approves a
   pairing token). Also toggle camera, raise hand, leave.
@@ -99,12 +97,22 @@ What the UltraBar X ecosystem advertises across its sources — the target surfa
 - Ports/power: USB-C (power+data) + 12 V DC on CoreBar; **PC-LINK** (5 V only — never a PD charger) and **USB-OTG** (fast charge); optional **Wireless Boot Module** (Bluetooth-Mesh / PCIe card) for BIOS-level PC wake.
 
 **Software (official UltraWorkSpace + LineOS)**
+- Positioned as "**Stream Deck + macro keyboard + secondary display**, combined" — a highly customizable macro/shortcut engine plus real-time PC monitoring (CPU/memory).
 - Profiles, multi-layer VivoCube canvas (up to 6 layers × 3 widget slots), widgets (clock, gauges, image/GIF, humidity/light/radar/sound, WebUI).
-- **SceneShift™ AI** — adapts layouts/controls to the active app/workflow.
+- **SceneShift™ AI** — context-aware engine that adapts layouts/controls to the active app/workflow.
+- **Voice Assistant** (added during the campaign) — voice commands to adjust lighting, trigger scenes, switch work modes, check system performance, launch apps.
 - Mesh device search/pair/replace incl. boot cards; automations with third-party app actions; app marketplace (install/update/uninstall).
-- **Nexus Store** — 90+ platform integrations, 300+ templates.
-- OTA firmware flashing for modules (`.bin`); SDK for plugins/scenes/integrations.
-- Management apps: Windows, iOS, Android; **macOS in development** (this project aims to go further).
+- **Nexus Store** — 90+ platform integrations, 300+ ready templates (icons, animations, interaction logic).
+- OTA firmware flashing for modules (`.bin`); open **SDK** for plugins/scenes/integrations (developer program).
+- Macro editing from phone or PC: Windows, iOS, Android; **macOS "already in the lab"** (official Mac install page: `ultrabarx.sanytron.com/mac/mac.htm`). This project aims to go further than a config app.
+
+**Four transport "protocol bridges" (CoreBar)** — important for a Mac client:
+- **USB / HID** — USB-C plug & play, no drivers, "compatible with Windows, macOS, Linux." The CoreBar presents as a standard HID device, so button macros can arrive as keystrokes, and the host app feeds it PC stats. (USB identity seen in the weather tool: `VID_1F3A&PID_2000`, via a USB serial/PC-LINK channel.)
+- **IP Network** — the TLS JSON channel this app uses (see `PROTOCOL.md`).
+- **Bluetooth Mesh** — wireless device management + one-tap PC wake (boot module / PCIe card).
+- **QuantumLink™** — the magnetic module bus between CoreBar and modules.
+
+Physical, device-level facts: ABS+PC shell, N52 magnetic cores, 0.3 s magnetic reconfigure, 45° tilt, colours Green/Gold/Black. Campaign: 810 backers, HK$2.73M pledged, ships Apr 2026; shown at Eletrolar Show Brazil and IFA Berlin; team based in Shenzhen.
 
 **Integrations named across sources**
 - Smart home: Home Assistant, Apple HomeKit (via HA), Philips Hue.

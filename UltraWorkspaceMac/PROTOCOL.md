@@ -4,7 +4,11 @@ Recovered from the decompiled "VivoCube Weather Tool" (.NET) and cross-checked
 against the official UltraWorkSpace macOS binary. Everything below is the
 **local** PC↔CoreBar protocol; the CoreBar relays to its attached modules.
 
-## Transport
+## Transports (device bridges)
+
+The campaign describes four "protocol bridges" on the CoreBar: **USB/HID**, **IP Network**, **Bluetooth Mesh**, and **QuantumLink** (the magnetic module bus). Everything documented below is the **IP Network** bridge — the one this app uses. The USB/HID bridge (USB-C, no drivers; USB identity `VID_1F3A&PID_2000` with a serial/PC-LINK channel) is unmapped here but is the likely route for driverless keystroke macros and PC-stat feeds; Bluetooth Mesh covers wireless management and one-tap PC wake.
+
+## Transport (IP Network)
 
 - **Discovery**: UDP broadcast on port **5319**. Probe payload `{"act":"discover"}`
   sent to `255.255.255.255:5319` every ~2 s. A CoreBar replies with a JSON object
