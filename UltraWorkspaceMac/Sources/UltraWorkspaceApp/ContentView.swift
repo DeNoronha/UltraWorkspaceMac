@@ -8,7 +8,7 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            SidebarView().frame(minWidth: 240)
+            SidebarView()
         } detail: {
             DetailRouter()
         }
@@ -103,13 +103,22 @@ private struct SidebarView: View {
                 Label("Logs", systemImage: "doc.text.magnifyingglass").tag(NavItem.logs)
             }
 
-            Section {
-                Button { model.showingAbout = true } label: {
-                    Label("About Deckhand", systemImage: "info.circle")
-                }.buttonStyle(.plain)
-            }
         }
         .listStyle(.sidebar)
+        .navigationSplitViewColumnWidth(min: 230, ideal: 260, max: 360)
+        // About lives in a footer outside the List, so it can never float to the
+        // top of the sidebar (seen once on macOS 27 after a sheet was dismissed).
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Button { model.showingAbout = true } label: {
+                Label("About Deckhand", systemImage: "info.circle")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .background(.bar)
+        }
     }
 
     private func selectCoreBar(_ bar: Store.PairedCoreBar) {
