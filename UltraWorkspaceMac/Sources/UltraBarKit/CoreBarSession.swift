@@ -110,7 +110,7 @@ public struct CoreBarSession: Sendable {
     /// Provision the CoreBar: scan the buses and write the discovered modules
     /// into the gateway config (SET_COREBAR_CONFIG) so they become controllable.
     /// Returns the number of modules written. This changes device configuration.
-    public func provision(scanSeconds: TimeInterval = 12) async throws -> (count: Int, diagnostic: String) {
+    public func provision(scanSeconds: TimeInterval = 16) async throws -> (modules: [AttachedModule], diagnostic: String) {
         let client = try await authedClient()
         defer { Task { await client.close() } }
         let canData = try JSONSerialization.data(withJSONObject: "can", options: [.fragmentsAllowed])
@@ -121,30 +121,29 @@ public struct CoreBarSession: Sendable {
 
         var canEps: [String: [String: Any]] = [:]
         var meshEps: [String: [String: Any]] = [:]
-        var sampleEndpoint = ""
         for line in found {
             guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
                   let d = obj["data"] as? [String: Any] else { continue }
-            if sampleEndpoint.isEmpty { sampleEndpoint = String(data: line, encoding: .utf8) ?? "" }
             let serial = (d["serialNumber"] as? String) ?? (d["serialNo"] as? String) ?? (d["uid"] as? String) ?? ""
             guard !serial.isEmpty else { continue }
             if (d["interfaceType"] as? String) == "mesh" { meshEps[serial] = d } else { canEps[serial] = d }
         }
-        let total = canEps.count + meshEps.count
-        guard total > 0 else { return (0, "no endpoints; sample=\(sampleEndpoint.prefix(300))") }
+        guard !canEps.isEmpty || !meshEps.isEmpty else { return ([], "no modules found (are they awake? tap the CoreBar screen)") }
 
+        // SET_GATEWAY_CONFIG (30300) takes the CoreBarConfiguration as the body
+        // directly (SET_COREBAR_CONFIG/30741 wraps it in a ReadWriteRequest and
+        // the device throws ClassCastException).
         let config: [String: Any] = [
             "canGateway": ["endpoints": Array(canEps.values)],
             "meshGateway": ["endpoints": Array(meshEps.values)],
         ]
-        let req: [String: Any] = ["type": "GATEWAY_CONFIG", "value": config]
-        let reqData = try JSONSerialization.data(withJSONObject: req)
+        let reqData = try JSONSerialization.data(withJSONObject: config)
         var replyStr = "<no reply>"
-        if let line = try await client.request(act: Proto.actSetCoreBarConfig, dataJSON: reqData, timeout: 15) {
+        if let line = try await client.request(act: Proto.actSetGatewayConfig, dataJSON: reqData, timeout: 15) {
             replyStr = String(data: line, encoding: .utf8) ?? "<non-utf8>"
         }
-        let diag = "ep0=\(sampleEndpoint.prefix(360)) | setReply=\(replyStr.prefix(200))"
-        return (total, diag)
+        let modules = (Array(canEps.values) + Array(meshEps.values)).map { Self.endpoint($0) }
+        return (modules, "wrote \(modules.count) modules · setReply=\(replyStr.prefix(160))")
     }
 
     private static func endpoint(_ e: [String: Any]) -> AttachedModule {

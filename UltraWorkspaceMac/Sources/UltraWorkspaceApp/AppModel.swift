@@ -144,26 +144,25 @@ final class AppModel: ObservableObject {
             return
         }
         isWorking = true
-        say("Loading modules on \(bar.name)…")
+        say("Scanning the bus and registering modules on \(bar.name)…")
         Task {
             do {
-                let mods = try await session.listModules()
+                // Scan + write the gateway config in one step, so modules are
+                // registered (controllable) right after a refresh.
+                let (mods, diag) = try await session.provision()
                 self.modules = mods
-                // Prefer a VivoCube for the display controls, else the first device.
+                self.say("setup: \(diag)")
                 if self.selectedModuleSerial == nil || !mods.contains(where: { $0.serial == self.selectedModuleSerial }) {
                     self.selectedModuleSerial = (mods.first(where: { $0.isVivoCube }) ?? mods.first)?.serial
                 }
                 if mods.isEmpty {
-                    self.say("No modules reported.")
-                    if let raw = try? await session.rawRequest(act: Proto.actGetCoreBarConfig, data: ["type": "GATEWAY_CONFIG"]) {
-                        self.say("raw 30740 → \(raw.prefix(700))")
-                    }
+                    self.say("No modules found. Tap the CoreBar's screen to wake the modules, then Refresh.")
                 } else {
-                    let names = mods.map { "\($0.displayName) (\($0.prettyType))" }.joined(separator: ", ")
-                    self.say("Found \(mods.count) device\(mods.count == 1 ? "" : "s"): \(names)")
+                    let names = mods.map { "\($0.displayName)" }.joined(separator: ", ")
+                    self.say("Ready: \(mods.count) module\(mods.count == 1 ? "" : "s") (\(names)).")
                 }
             } catch {
-                self.say("Could not load devices: \(error.localizedDescription)")
+                self.say("Could not set up modules: \(error.localizedDescription)")
             }
             self.isWorking = false
         }
@@ -176,24 +175,9 @@ final class AppModel: ObservableObject {
             if selectedCoreBar != nil { say("No stored token — pair this CoreBar again.") }
             return
         }
-        isWorking = true
-        say("Setting up modules on \(bar.name) — scanning the bus and writing the config…")
-        Task {
-            do {
-                let (n, diag) = try await session.provision()
-                self.isWorking = false
-                self.say("provision diag: \(diag)")
-                if n == 0 {
-                    self.say("No modules found to set up. Make sure they're attached, then try again.")
-                } else {
-                    self.say("Set up \(n) module\(n == 1 ? "" : "s") on the CoreBar. They should be controllable now.")
-                    self.refreshModules()
-                }
-            } catch {
-                self.isWorking = false
-                self.say("Setup failed: \(error.localizedDescription)")
-            }
-        }
+        // Refresh now also writes the config, so "Set up modules" == Refresh.
+        _ = bar; _ = session
+        refreshModules()
     }
 
     // MARK: Control

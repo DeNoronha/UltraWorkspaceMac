@@ -22,6 +22,7 @@ public enum Proto {
     public static let actModuleStartDiscovery = 30100 // MODULE_START_DISCOVERY — scan the bus
     public static let actModuleStopDiscovery = 30101  // MODULE_STOP_DISCOVERY
     public static let actModuleDiscoveryReplay = 30102 // MODULE_START_DISCOVERY_REPLAY — pushed per found module
+    public static let actSetGatewayConfig = 30300 // SET_GATEWAY_CONFIG — body is a CoreBarConfiguration directly
     public static let actReadProp = 30200         // MODULE_PROPERTY_READ — {serialNo, deviceId, propertyId, extra}
     public static let actWriteProp = 30201        // MODULE_PROPERTY_WRITE — {serialNo, deviceId, propertyId, value}
     public static let actQueryModuleState = 30730 // QUERY_MODULE_STATE
