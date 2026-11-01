@@ -20,6 +20,7 @@ final class AppModel: ObservableObject {
     @Published var statusLine = "Ready."
     @Published var log: [LogEntry] = []
     @Published var pairingPrompt: String?
+    @Published var showingSettings = false
 
     // Upload options
     @Published var canvasSize = 320

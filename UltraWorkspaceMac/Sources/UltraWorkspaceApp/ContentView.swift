@@ -4,6 +4,7 @@ import UltraBarKit
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
     @StateObject private var contacts = ContactStore()
+    @StateObject private var settings = AppSettings()
 
     var body: some View {
         NavigationSplitView {
@@ -13,7 +14,13 @@ struct ContentView: View {
             DetailView()
         }
         .environmentObject(contacts)
+        .environmentObject(settings)
         .onAppear { model.startMusicPolling() }
+        .sheet(isPresented: $model.showingSettings) {
+            SettingsView()
+                .environmentObject(model)
+                .environmentObject(settings)
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -22,6 +29,13 @@ struct ContentView: View {
                     Label("Scan", systemImage: "antenna.radiowaves.left.and.right")
                 }
                 .disabled(model.isScanning)
+            }
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    model.showingSettings = true
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
             }
         }
         .overlay(alignment: .bottom) { StatusBar() }
