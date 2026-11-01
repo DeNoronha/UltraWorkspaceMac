@@ -100,6 +100,20 @@ public enum OpenMeteo {
         )
     }
 
+    /// Approximate location from this machine's public IP (no permission, no key).
+    /// Used as a fallback when CoreLocation is unavailable (e.g. an ad-hoc-signed
+    /// app that was never granted Location access).
+    public struct IPLoc: Sendable { public var lat: Double; public var lon: Double; public var city: String }
+    public static func ipLocate() async -> IPLoc? {
+        guard let url = URL(string: "https://ipwho.is/") else { return nil }
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (obj["success"] as? Bool) != false else { return nil }
+        func dbl(_ k: String) -> Double? { (obj[k] as? Double) ?? (obj[k] as? NSNumber)?.doubleValue }
+        guard let lat = dbl("latitude"), let lon = dbl("longitude") else { return nil }
+        return IPLoc(lat: lat, lon: lon, city: (obj["city"] as? String) ?? "")
+    }
+
     public static func sky(for code: Int) -> Sky {
         switch code {
         case 0: return .clear

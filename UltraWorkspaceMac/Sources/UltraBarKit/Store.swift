@@ -99,4 +99,25 @@ public final class Store: @unchecked Sendable {
     public func deleteToken(serial: String) {
         try? FileManager.default.removeItem(at: tokenURL(serial))
     }
+
+    // MARK: Gateway endpoint cache
+    //
+    // Remembers the raw module endpoints last written to a CoreBar's gateway
+    // config. Re-provisioning merges freshly discovered modules with this cache
+    // so a module that happens to be asleep during a scan is not dropped.
+
+    private func endpointsURL(_ serial: String) -> URL {
+        let dir = fileURL.deletingLastPathComponent().appendingPathComponent("endpoints", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let safe = serial.filter { $0.isLetter || $0.isNumber }
+        return dir.appendingPathComponent("\(safe).json")
+    }
+
+    public func saveEndpoints(_ data: Data, serial: String) {
+        try? data.write(to: endpointsURL(serial), options: .atomic)
+    }
+
+    public func loadEndpoints(serial: String) -> Data? {
+        try? Data(contentsOf: endpointsURL(serial))
+    }
 }

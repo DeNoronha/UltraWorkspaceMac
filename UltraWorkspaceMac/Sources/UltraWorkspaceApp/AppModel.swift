@@ -148,8 +148,12 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 // Scan + write the gateway config in one step, so modules are
-                // registered (controllable) right after a refresh.
-                let (mods, diag) = try await session.provision()
+                // registered (controllable) right after a refresh. Merge with the
+                // modules we wrote last time so a module that is asleep during this
+                // scan (often the DotKey) isn't dropped from the config.
+                let prior = Store.shared.loadEndpoints(serial: bar.serialNo)
+                let (mods, endpointsJSON, diag) = try await session.provision(priorEndpoints: prior)
+                Store.shared.saveEndpoints(endpointsJSON, serial: bar.serialNo)
                 self.modules = mods
                 self.say("setup: \(diag)")
                 if self.selectedModuleSerial == nil || !mods.contains(where: { $0.serial == self.selectedModuleSerial }) {

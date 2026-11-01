@@ -110,7 +110,7 @@ public struct CoreBarSession: Sendable {
     /// Provision the CoreBar: scan the buses and write the discovered modules
     /// into the gateway config (SET_COREBAR_CONFIG) so they become controllable.
     /// Returns the number of modules written. This changes device configuration.
-    public func provision(scanSeconds: TimeInterval = 16) async throws -> (modules: [AttachedModule], diagnostic: String) {
+    public func provision(scanSeconds: TimeInterval = 16, priorEndpoints: Data? = nil) async throws -> (modules: [AttachedModule], endpointsJSON: Data, diagnostic: String) {
         let client = try await authedClient()
         defer { Task { await client.close() } }
         let canData = try JSONSerialization.data(withJSONObject: "can", options: [.fragmentsAllowed])
@@ -119,31 +119,52 @@ public struct CoreBarSession: Sendable {
         try await client.fire(act: Proto.actModuleStartDiscovery, dataJSON: meshData)
         let found = await client.collect(act: Proto.actModuleDiscoveryReplay, duration: scanSeconds)
 
-        var canEps: [String: [String: Any]] = [:]
-        var meshEps: [String: [String: Any]] = [:]
+        // Start from the previously-written endpoints so a module that is asleep
+        // during this scan (common for the DotKey) is not dropped from the config.
+        // A freshly discovered endpoint overrides its remembered copy.
+        var bySerial: [String: [String: Any]] = [:]
+        if let priorEndpoints,
+           let arr = try? JSONSerialization.jsonObject(with: priorEndpoints) as? [[String: Any]] {
+            for d in arr {
+                let s = Self.serialOf(d); if !s.isEmpty { bySerial[s] = d }
+            }
+        }
+        let remembered = bySerial.count
+        var freshCount = 0
         for line in found {
             guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
                   let d = obj["data"] as? [String: Any] else { continue }
-            let serial = (d["serialNumber"] as? String) ?? (d["serialNo"] as? String) ?? (d["uid"] as? String) ?? ""
+            let serial = Self.serialOf(d)
             guard !serial.isEmpty else { continue }
-            if (d["interfaceType"] as? String) == "mesh" { meshEps[serial] = d } else { canEps[serial] = d }
+            bySerial[serial] = d
+            freshCount += 1
         }
-        guard !canEps.isEmpty || !meshEps.isEmpty else { return ([], "no modules found (are they awake? tap the CoreBar screen)") }
+        guard !bySerial.isEmpty else {
+            return ([], Data("[]".utf8), "no modules found (are they awake? tap the CoreBar screen)")
+        }
 
         // SET_GATEWAY_CONFIG (30300) takes the CoreBarConfiguration as the body
         // directly (SET_COREBAR_CONFIG/30741 wraps it in a ReadWriteRequest and
         // the device throws ClassCastException).
+        let all = Array(bySerial.values)
+        let canEps = all.filter { ($0["interfaceType"] as? String) != "mesh" }
+        let meshEps = all.filter { ($0["interfaceType"] as? String) == "mesh" }
         let config: [String: Any] = [
-            "canGateway": ["endpoints": Array(canEps.values)],
-            "meshGateway": ["endpoints": Array(meshEps.values)],
+            "canGateway": ["endpoints": canEps],
+            "meshGateway": ["endpoints": meshEps],
         ]
         let reqData = try JSONSerialization.data(withJSONObject: config)
         var replyStr = "<no reply>"
         if let line = try await client.request(act: Proto.actSetGatewayConfig, dataJSON: reqData, timeout: 15) {
             replyStr = String(data: line, encoding: .utf8) ?? "<non-utf8>"
         }
-        let modules = (Array(canEps.values) + Array(meshEps.values)).map { Self.endpoint($0) }
-        return (modules, "wrote \(modules.count) modules · setReply=\(replyStr.prefix(160))")
+        let endpointsJSON = (try? JSONSerialization.data(withJSONObject: all)) ?? Data("[]".utf8)
+        let modules = all.map { Self.endpoint($0) }
+        return (modules, endpointsJSON, "wrote \(modules.count) modules (\(freshCount) awake now, \(remembered) remembered) · setReply=\(replyStr.prefix(140))")
+    }
+
+    private static func serialOf(_ d: [String: Any]) -> String {
+        (d["serialNumber"] as? String) ?? (d["serialNo"] as? String) ?? (d["uid"] as? String) ?? ""
     }
 
     private static func endpoint(_ e: [String: Any]) -> AttachedModule {

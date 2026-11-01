@@ -69,6 +69,7 @@ extension AppModel {
         case .weather:
             let now = try? await resolveWeather(settings: settings, metric: settings.units == .metric)
             if let now { lastWeather = now }
+            else { say("Weather unavailable — check the internet connection, or set a city in Settings → Weather.") }
             return WeatherCard.render(width: 240, height: 240, now: now, clock24h: settings.clock24h)
         case .music:
             refreshNowPlaying()

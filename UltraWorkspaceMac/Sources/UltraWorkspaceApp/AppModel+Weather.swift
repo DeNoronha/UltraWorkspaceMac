@@ -57,6 +57,12 @@ extension AppModel {
             if !settings.manualCity.isEmpty, let p = try await OpenMeteo.geocode(settings.manualCity) {
                 return try await OpenMeteo.current(latitude: p.latitude, longitude: p.longitude, metric: metric, placeName: p.name)
             }
+            // No Location permission and no manual city: fall back to IP geolocation
+            // so the weather still works out of the box (ad-hoc-signed apps often
+            // can't use CoreLocation).
+            if let ip = await OpenMeteo.ipLocate() {
+                return try await OpenMeteo.current(latitude: ip.lat, longitude: ip.lon, metric: metric, placeName: ip.city)
+            }
             throw UltraBarError.protocolError("Allow Location access, or set a city in Settings → Weather.")
         }
     }
