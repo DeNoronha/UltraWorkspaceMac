@@ -188,6 +188,13 @@ The launcher does **not** push raw key/knob events over :7431. Raw input is cons
 - **DotKey → Mac**: a key press only reaches the PC if its bound scene uses a `PC_CONTROL` action (pushes `{type:"PC_CONTROL", payload}`) or an HID-keycode action (sent over a separate keyboard channel). The 3 keys report per-key 16-bit keyCodes + up/down/hold; single/double/long is computed on-device.
 - Bindings are **settable over the protocol** by writing the Profile: `BATCH_SAVE_PROFILE` (1108), `GET_PROFILE_WIDGET` (1002), `TRIGGER_PROFILE_CHANGE` (1103). So the Mac app can bind a knob direction to PC_VOLUME, or a key to PC_CONTROL, by writing the profile — then listen for `act:1000000`.
 
+## Scenes / automations (presence → action)
+
+The device has an automation engine: a `Scene` = `triggers[]` + `conditions[]` + `actions[]`, `type` AUTO (trigger-driven) or MANUAL (button). Saved with `BATCH_CREATE_SCENE` (30500), `data` = an array of `Scene` — this **full-replaces** the scene list (no "get scenes" op, so the client must own the authoritative array, same pattern as profiles).
+
+- **Presence trigger** (works): `{"type":"DEVICE_STATE","params":{"id":"<senseCubeId>","property":"state","from":"UNOCCUPIED","to":"OCCUPIED"}}`. Read helpers: `SCENE_DEPENDS_DEVICES` (30701, data `"SENSE_CUBE"` → id), 30702 (props), 30703 (values).
+- **Actions** — the gap for "wake": `START_SCREEN`/`CLOSE_SCREEN` exist in the enum but have **no handler** (dead). Available display actions: `BRIGHT` (target `"corebar"`, sets screen brightness — doesn't dismiss the screensaver), `ACTIVITY` (launch an app — the best candidate to actually wake the panel), `VIVO_CUBE_TOGGLE` (change a VivoCube's shown layer), `CHANGE_PROFILE`. So **motion → wake** is approximate (ACTIVITY or BRIGHT) and must be verified on hardware; it is not a built-in behavior and there's no clean screen-power action.
+
 ## Not yet mapped
 
 - Persistent CoreBar **wallpaper/pages** via `BATCH_SAVE_PROFILE` (1108): needs the full authoritative profile array (open question: does `albumId` alone repaint, or must the TIME-widget `icon` be set; exact `/upload/zip` success JSON; the screensaver app's `packageName`/`ver`).
