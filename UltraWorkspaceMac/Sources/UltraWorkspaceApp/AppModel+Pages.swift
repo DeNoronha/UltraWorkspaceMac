@@ -84,23 +84,33 @@ extension AppModel {
                     ],
                 ]
                 var w: [[String: Any]] = []
-                if cards.contains("TIME") { w.append(["id": "sys.component.time", "type": "TIME", "name": "Deckhand", "icon": "deckhand/cover.png"]) }
-                if cards.contains("WEATHER") { w.append(["id": "sys.component.weather", "type": "WEATHER", "name": "Weather", "param": weatherParam]) }
-                if cards.contains("WORLD_TIME") { w.append(["id": "deckhand.worldtime", "type": "WORLD_TIME", "name": Self.worldTimeName(), "icon": "", "iconScale": 0, "param": ["offset": Self.worldTimeOffset()]]) }
-                if let senseSerial {
-                    if cards.contains("SENSE_TEMP") { w.append(["id": "deckhand.sense.temp", "type": "SENSE_CUBE_TEMP", "name": "Temperature", "param": ["uid": senseSerial]]) }
-                    if cards.contains("SENSE_HUM") { w.append(["id": "deckhand.sense.hum", "type": "SENSE_CUBE_HUM", "name": "Humidity", "param": ["uid": senseSerial]]) }
-                }
-                for (id, type, name) in [("deckhand.cpu", "CPU", "Mac CPU"), ("deckhand.mem", "MEMORY", "Mac memory"), ("deckhand.storage", "STORAGE", "Mac storage"), ("deckhand.net", "NETWORK", "Mac network")] where cards.contains(type) {
-                    w.append(["id": id, "type": type, "name": name, "param": ["data": ""]])
-                }
-                if cards.contains("NEXT_LAYER") {
-                    w.append(["id": "deckhand.next", "type": "PC_CONTROL", "name": "Next widget", "icon": "deckhand/btn-next.png", "iconScale": 80,
-                              "param": ["output": 10, "payload": ["deckhand": "next"]]])
-                }
-                if cards.contains("MUSIC") {
-                    w.append(["id": "deckhand.music", "type": "PC_CONTROL", "name": "Play / Pause", "icon": "deckhand/btn-music.png", "iconScale": 80,
-                              "param": ["output": 10, "payload": ["deckhand": "music.playpause"]]])
+                for card in settings.coreCards {
+                    switch card {
+                    case "TIME":
+                        // Own id: TimeParamConverter copies the DEVICE-stored picture for a
+                        // widget id if one exists (that is how the tiger kept winning on
+                        // sys.component.time). A Deckhand-only id has no stored picture.
+                        w.append(["id": "deckhand.time", "type": "TIME", "name": "Deckhand", "icon": "deckhand/cover.png"])
+                    case "WEATHER":
+                        w.append(["id": "sys.component.weather", "type": "WEATHER", "name": "Weather", "param": weatherParam])
+                    case "WORLD_TIME":
+                        w.append(["id": "deckhand.worldtime", "type": "WORLD_TIME", "name": Self.worldTimeName(), "icon": "", "iconScale": 0, "param": ["offset": Self.worldTimeOffset()]])
+                    case "SENSE_TEMP":
+                        if let senseSerial { w.append(["id": "deckhand.sense.temp", "type": "SENSE_CUBE_TEMP", "name": "Temperature", "param": ["uid": senseSerial]]) }
+                    case "SENSE_HUM":
+                        if let senseSerial { w.append(["id": "deckhand.sense.hum", "type": "SENSE_CUBE_HUM", "name": "Humidity", "param": ["uid": senseSerial]]) }
+                    case "CPU": w.append(["id": "deckhand.cpu", "type": "CPU", "name": "Mac CPU", "param": ["data": ""]])
+                    case "MEMORY": w.append(["id": "deckhand.mem", "type": "MEMORY", "name": "Mac memory", "param": ["data": ""]])
+                    case "STORAGE": w.append(["id": "deckhand.storage", "type": "STORAGE", "name": "Mac storage", "param": ["data": ""]])
+                    case "NETWORK": w.append(["id": "deckhand.net", "type": "NETWORK", "name": "Mac network", "param": ["data": ""]])
+                    case "NEXT_LAYER":
+                        w.append(["id": "deckhand.next", "type": "PC_CONTROL", "name": "Next widget", "icon": "deckhand/btn-next.png", "iconScale": 80,
+                                  "param": ["output": 10, "payload": ["deckhand": "next"]]])
+                    case "MUSIC":
+                        w.append(["id": "deckhand.music", "type": "PC_CONTROL", "name": "Play / Pause", "icon": "deckhand/btn-music.png", "iconScale": 80,
+                                  "param": ["output": 10, "payload": ["deckhand": "music.playpause"]]])
+                    default: break
+                    }
                 }
                 let deckhandWidgets = w
                 let deckhand: [String: Any] = [

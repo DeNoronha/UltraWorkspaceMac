@@ -271,8 +271,12 @@ private struct CoreBarPagesView: View {
             }
 
             Text("Cards on the Deckhand page").font(.subheadline)
-            Text("All of these are drawn and kept up to date by the CoreBar itself. Cards marked “fed by Deckhand” get their numbers over the live link while this Mac is on.")
+            Text("All of these are drawn and kept up to date by the CoreBar itself. Cards marked “needs Mac” get their numbers over the live link while this Mac is on. Order = order on the screen (tick in the order you want).")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if settings.coreCards.count > AppSettings.coreCardsThatFit {
+                Label("\(settings.coreCards.count) cards: the CoreBar shows about \(AppSettings.coreCardsThatFit) at once and scrolls sideways for the rest.", systemImage: "arrow.left.and.right")
+                    .font(.caption).foregroundStyle(.orange)
+            }
             ForEach(AppSettings.allCoreCards, id: \.id) { card in
                 Toggle(isOn: Binding(get: { settings.coreCards.contains(card.id) },
                                      set: { on in var c = settings.coreCards; c.removeAll { $0 == card.id }; if on { c.append(card.id) }; settings.coreCards = c })) {

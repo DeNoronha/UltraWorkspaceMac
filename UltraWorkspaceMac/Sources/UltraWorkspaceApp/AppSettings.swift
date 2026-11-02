@@ -29,10 +29,12 @@ final class AppSettings: ObservableObject {
     @Published var coreCards: [String] = AppSettings.defaultCoreCards { didSet { save() } }
     /// Whether the Deckhand page has been published (enables the daily cover refresh).
     @Published var deckhandPagePublished: Bool = false { didSet { save() } }
-    static let defaultCoreCards = ["TIME", "WEATHER", "WORLD_TIME", "SENSE_TEMP", "SENSE_HUM", "CPU", "MEMORY", "NETWORK"]
+    static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
+    /// The 1424-px strip shows about this many cards without scrolling (the clock card is double width).
+    static let coreCardsThatFit = 4
     static let allCoreCards: [(id: String, title: String, needsMac: Bool)] = [
         ("TIME", "Clock (with Deckhand cover)", false),
-        ("WEATHER", "Weather (CoreBar's own card)", false),
+        ("WEATHER", "Weather (CoreBar's own card — needs internet on the CoreBar)", false),
         ("WORLD_TIME", "World clock (CoreBar's own card)", false),
         ("SENSE_TEMP", "SenseCube temperature", false),
         ("SENSE_HUM", "SenseCube humidity", false),
