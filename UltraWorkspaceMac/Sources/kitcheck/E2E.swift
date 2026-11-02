@@ -122,6 +122,17 @@ enum E2E {
             } else { check(false, "fetch decoded PNG from viewer") }
         } else { check(false, "VivoCube present") }
 
+        // 7a. VivoCube Wi-Fi (property 7): decode the hotspot default, write a network, read it back
+        if let vivo {
+            let w0 = await session.readModuleWiFi(serial: vivo.serial)
+            check(w0?.ssid == "AndroidAP_7757" && w0?.isCoreBarHotspot == true, "cube reports the CoreBar hotspot", "\(String(describing: w0))")
+            check(CoreBarSession.decodeWiFi(CoreBarSession.encodeWiFi(.init(ssid: "Huis 2.4", password: "p@ss wörd"))) == .init(ssid: "Huis 2.4", password: "p@ss wörd"), "Wi-Fi codec round-trips UTF-8")
+            let wc = await session.writeModuleWiFi(serial: vivo.serial, .init(ssid: "DeckhandTestNet", password: "secret123"))
+            check(wc == 200, "Wi-Fi write acknowledged")
+            let w1 = await session.readModuleWiFi(serial: vivo.serial)
+            check(w1?.ssid == "DeckhandTestNet" && w1?.password == "secret123" && w1?.isCoreBarHotspot == false, "cube reports the new network", "\(String(describing: w1))")
+        }
+
         // 7b. Multi-layer package + layer switching via property 9 (official rotation model)
         if let vivo {
             func solid(_ r: UInt8, _ g: UInt8, _ b: UInt8) -> [UInt8] {

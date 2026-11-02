@@ -77,6 +77,8 @@ class AppState {
   readonly widgetImages = new Map<string, Map<number, StoredImage>>();
   /** Cached property 9 (layer<<16 | widget) per module, like VCWidgetMain. */
   readonly layerWidget = new Map<string, number>();
+  /** Property 7 per module: hex([len]ssid[len]password); default = the CoreBar hotspot. */
+  readonly moduleWiFi = new Map<string, string>();
   /** Cached property 4 (screen on/off) per module. */
   readonly screenOn = new Map<string, boolean>();
 

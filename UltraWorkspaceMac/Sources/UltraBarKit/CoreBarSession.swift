@@ -238,6 +238,70 @@ public struct CoreBarSession: Sendable {
         } catch { return nil }
     }
 
+    /// Raw property read: returns `data.result` as-is (string/number) or nil.
+    public func readPropertyRaw(serial: String, deviceId: Int = Proto.deviceMain, propertyId: Int, timeout: TimeInterval = 8) async -> Any? {
+        do {
+            let client = try await authedClient()
+            defer { Task { await client.close() } }
+            let json = try JSONSerialization.data(withJSONObject: ["serialNo": serial, "deviceId": deviceId, "propertyId": propertyId, "extra": NSNull()])
+            guard let line = try await client.request(act: Proto.actReadProp, dataJSON: json, timeout: timeout),
+                  let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                  code(reply) == 200, let d = reply["data"] as? [String: Any] else { return nil }
+            return d["result"]
+        } catch { return nil }
+    }
+
+    // MARK: VivoCube Wi-Fi (property 7)
+    //
+    // The module downloads its packages itself. Out of the box it is joined to the
+    // CoreBar's own hotspot ("AndroidAP_xxxx"), which Android may switch off when
+    // idle → "hotspotIp ip address is empty" on upload. Joining the module to the
+    // house Wi-Fi (what the vendor client does) makes the CoreBar hand out its LAN
+    // address instead. Wire format (CONFIRMED by reading a real cube):
+    // hex( [len][ssid bytes][len][password bytes] ).
+
+    public struct ModuleWiFi: Sendable, Equatable {
+        public var ssid: String
+        public var password: String
+        public init(ssid: String, password: String) { self.ssid = ssid; self.password = password }
+        public var isCoreBarHotspot: Bool { ssid.hasPrefix("AndroidAP") }
+    }
+
+    public static func encodeWiFi(_ w: ModuleWiFi) -> String {
+        func field(_ s: String) -> [UInt8] { let b = Array(s.utf8.prefix(255)); return [UInt8(b.count)] + b }
+        return (field(w.ssid) + field(w.password)).map { String(format: "%02X", $0) }.joined()
+    }
+
+    public static func decodeWiFi(_ hex: String) -> ModuleWiFi? {
+        var bytes: [UInt8] = []
+        var idx = hex.startIndex
+        while idx < hex.endIndex {
+            guard let next = hex.index(idx, offsetBy: 2, limitedBy: hex.endIndex), let b = UInt8(hex[idx..<next], radix: 16) else { return nil }
+            bytes.append(b); idx = next
+        }
+        var fields: [String] = []
+        var i = 0
+        while i < bytes.count {
+            let n = Int(bytes[i]); i += 1
+            guard i + n <= bytes.count else { return nil }
+            fields.append(String(decoding: bytes[i..<i + n], as: UTF8.self)); i += n
+        }
+        guard fields.count >= 1 else { return nil }
+        return ModuleWiFi(ssid: fields[0], password: fields.count > 1 ? fields[1] : "")
+    }
+
+    public func readModuleWiFi(serial: String) async -> ModuleWiFi? {
+        guard let raw = await readPropertyRaw(serial: serial, propertyId: Proto.Property.wifiConfig) as? String else { return nil }
+        return Self.decodeWiFi(raw)
+    }
+
+    /// Write the module's Wi-Fi credentials (property 7). The module reconnects
+    /// on its own; give it ~20 s before the next upload.
+    @discardableResult
+    public func writeModuleWiFi(serial: String, _ w: ModuleWiFi) async -> Int? {
+        await writeProperty(serial: serial, propertyId: Proto.Property.wifiConfig, value: Self.encodeWiFi(w))
+    }
+
     @discardableResult
     public func writeProperty(serial: String, propertyId: Int, value: Any, timeout: TimeInterval = 8) async -> Int? {
         do {

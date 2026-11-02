@@ -184,6 +184,11 @@ function handleFrame(socket: tls.TLSSocket, req: RequestFrame): void {
       let result: number | null = null;
       if (key in state.sensors) {
         result = state.sensors[key];
+      } else if (d.propertyId === 7 && d.serialNo) {
+        // Default like a real cube: joined to the CoreBar hotspot AndroidAP_7757 / [redacted-hotspot-password].
+        const hex = state.moduleWiFi.get(d.serialNo) ?? '0E416E64726F696441505F373735370C383139363534623335616234';
+        sendFrame(socket, reply(Act.MODULE_PROPERTY_READ, id, { serialNo: d.serialNo, deviceId: d.deviceId, propertyId: d.propertyId, result: hex }));
+        return;
       } else if (d.propertyId === 9 && d.serialNo) {
         result = state.layerWidget.get(d.serialNo) ?? 0;
       } else if (d.propertyId === 4 && d.serialNo) {
@@ -211,6 +216,10 @@ function handleFrame(socket: tls.TLSSocket, req: RequestFrame): void {
         state.layerWidget.set(d.serialNo, d.value);
         state.record('evt', 'tls', `module ${d.serialNo}: layer ${d.value >> 16} / widget ${d.value & 0xffff}`);
         state.applyLayerWidget(d.serialNo);
+      }
+      if (d.serialNo && d.propertyId === 7 && typeof d.value === 'string' && /^[0-9A-Fa-f]*$/.test(d.value)) {
+        state.moduleWiFi.set(d.serialNo, d.value.toUpperCase());
+        state.record('evt', 'tls', `module ${d.serialNo}: Wi-Fi config updated (${d.value.length / 2} bytes)`);
       }
       if (d.serialNo && d.propertyId === 4) {
         state.screenOn.set(d.serialNo, Number(d.value) !== 0);

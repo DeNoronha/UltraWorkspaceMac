@@ -230,6 +230,37 @@ private struct CoreBarView: View {
 }
 
 
+// MARK: - VivoCube Wi-Fi sheet
+
+private struct VivoWiFiSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    let serial: String
+    @StateObject private var draft = Draft()
+    private final class Draft: ObservableObject { @Published var ssid = ""; @Published var password = "" }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Join the VivoCube to a Wi-Fi network").font(.title3).bold()
+            Text("2.4 GHz networks only (the module has no 5 GHz radio). The CoreBar must be on the same network. The password is sent to the cube and is not stored on this Mac.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Form {
+                TextField("Wi-Fi name (SSID)", text: $draft.ssid)
+                SecureField("Password", text: $draft.password)
+            }
+            .formStyle(.grouped)
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Save to VivoCube") { model.setVivoWiFi(serial: serial, ssid: draft.ssid, password: draft.password); dismiss() }
+                    .keyboardShortcut(.defaultAction).disabled(draft.ssid.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20).frame(width: 460)
+        .onAppear { if let w = model.vivoWiFi[serial] ?? nil, !w.isCoreBarHotspot { draft.ssid = w.ssid } }
+    }
+}
+
 // MARK: - CoreBar pages (profiles)
 
 /// The CoreBar has no wallpaper: a page is a strip of the device's own cards and
@@ -281,26 +312,32 @@ private struct CoreBarPagesView: View {
                 Label("\(settings.coreCards.count) cards: the CoreBar shows about \(AppSettings.coreCardsThatFit) at once and scrolls sideways for the rest.", systemImage: "arrow.left.and.right")
                     .font(.caption).foregroundStyle(.orange)
             }
-            // Ticked cards first, in screen order, with move up/down; then the rest.
-            let ordered = settings.coreCards.compactMap { id in AppSettings.allCoreCards.first { $0.id == id } }
-                + AppSettings.allCoreCards.filter { !settings.coreCards.contains($0.id) }
-            ForEach(Array(ordered.enumerated()), id: \.element.id) { idx, card in
-                let on = settings.coreCards.contains(card.id)
-                HStack(spacing: 6) {
-                    Toggle(isOn: Binding(get: { on },
-                                         set: { v in var c = settings.coreCards; c.removeAll { $0 == card.id }; if v { c.append(card.id) }; settings.coreCards = c })) {
-                        HStack(spacing: 6) {
-                            if on { Text("\(idx + 1).").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 18, alignment: .trailing) }
-                            Text(card.title)
-                            if card.needsMac { Text("needs Mac").font(.caption2).padding(.horizontal, 5).padding(.vertical, 1).background(Color.orange.opacity(0.2)).clipShape(Capsule()) }
-                        }
-                    }.toggleStyle(.checkbox)
-                    Spacer()
-                    if on {
-                        Button { settings.moveCoreCard(card.id, by: -1) } label: { Image(systemName: "chevron.up") }
-                            .buttonStyle(.borderless).disabled(idx == 0).help("Move left on the CoreBar")
-                        Button { settings.moveCoreCard(card.id, by: 1) } label: { Image(systemName: "chevron.down") }
-                            .buttonStyle(.borderless).disabled(idx >= settings.coreCards.count - 1).help("Move right on the CoreBar")
+            // On-page cards: drag to reorder (left → right on the CoreBar). Below: available cards.
+            let onPage = settings.coreCards.compactMap { id in AppSettings.allCoreCards.first { $0.id == id } }
+            let available = AppSettings.allCoreCards.filter { !settings.coreCards.contains($0.id) }
+            Text("On the page — drag to reorder").font(.caption).foregroundStyle(.secondary)
+            List {
+                ForEach(onPage, id: \.id) { card in
+                    HStack(spacing: 8) {
+                        Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary)
+                        Text(card.title)
+                        if card.needsMac { Text("needs Mac").font(.caption2).padding(.horizontal, 5).padding(.vertical, 1).background(Color.orange.opacity(0.2)).clipShape(Capsule()) }
+                        Spacer()
+                        Button { settings.coreCards.removeAll { $0 == card.id } } label: { Image(systemName: "minus.circle") }
+                            .buttonStyle(.borderless).help("Remove from the page")
+                    }
+                }
+                .onMove { from, to in var c = settings.coreCards; c.move(fromOffsets: from, toOffset: to); settings.coreCards = c }
+            }
+            .listStyle(.inset)
+            .frame(height: CGFloat(max(1, onPage.count)) * 30 + 12)
+            if !available.isEmpty {
+                Text("Available").font(.caption).foregroundStyle(.secondary)
+                ForEach(available, id: \.id) { card in
+                    HStack(spacing: 8) {
+                        Button { settings.coreCards.append(card.id) } label: { Image(systemName: "plus.circle") }.buttonStyle(.borderless).help("Add to the page")
+                        Text(card.title).foregroundStyle(.secondary)
+                        if card.needsMac { Text("needs Mac").font(.caption2).padding(.horizontal, 5).padding(.vertical, 1).background(Color.orange.opacity(0.2)).clipShape(Capsule()) }
                     }
                 }
             }
@@ -368,6 +405,19 @@ private struct VivoCubeView: View {
                         }
                         Text("Uploads are applied by the VivoCube itself a few seconds after the CoreBar accepts them. \"Screen Off\" is remembered by the CoreBar until you turn it on again.")
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Divider()
+                        Text("Network").font(.headline)
+                        HStack(spacing: 10) {
+                            let w = model.vivoWiFi[module.serial] ?? nil
+                            Image(systemName: w == nil ? "wifi.slash" : (w!.isCoreBarHotspot ? "wifi.exclamationmark" : "wifi"))
+                                .foregroundStyle(w == nil ? Color.secondary : (w!.isCoreBarHotspot ? Color.orange : Color.green))
+                            Text(w == nil ? "Wi-Fi: not read yet" : (w!.isCoreBarHotspot ? "On the CoreBar's hotspot (\(w!.ssid))" : "On Wi-Fi “\(w!.ssid)”"))
+                            Button("Read") { model.refreshVivoWiFi(serial: module.serial) }.buttonStyle(.link)
+                            Button { model.showingVivoWiFi = true } label: { Label("Set VivoCube Wi-Fi…", systemImage: "wifi.router") }
+                                .disabled(model.isWorking)
+                        }
+                        Text("The cube downloads its widgets itself. On the CoreBar's own hotspot that fails whenever the hotspot is asleep (“hotspotIp is empty”). Joining the cube to your Wi-Fi makes uploads go over your network — that is what the official app does.")
+                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         HStack {
                             Menu {
                                 ForEach([240, 280, 320, 360, 390, 412, 454, 466, 480], id: \.self) { s in
@@ -392,6 +442,8 @@ private struct VivoCubeView: View {
                 ActivityLog().frame(minWidth: 240)
             }
         }
+        .onAppear { if model.vivoWiFi[module.serial] == nil { model.refreshVivoWiFi(serial: module.serial) } }
+        .sheet(isPresented: $model.showingVivoWiFi) { VivoWiFiSheet(serial: module.serial).environmentObject(model) }
         .onAppear { model.selectedModuleSerial = module.serial }
     }
 

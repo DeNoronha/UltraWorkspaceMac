@@ -51,7 +51,8 @@ public enum Proto {
         public static let runTime = 3   // uptime seconds (read)
         public static let screen = 4    // 0 = off, 1 = on (write)
         public static let reboot = 5    // true (write)
-        public static let wifi = 6
+        public static let wifi = 6        // Wi-Fi state (read; 3 seen while connected)
+        public static let wifiConfig = 7  // hex([len]ssid[len]password) — read/write
         public static let layerWidget = 9
     }
 }

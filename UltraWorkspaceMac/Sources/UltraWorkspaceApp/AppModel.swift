@@ -54,6 +54,8 @@ final class AppModel: ObservableObject {
     /// Layers in the last VivoCube package (for DotKey / card "next" stepping).
     var lastPublishedVivoLayers = 1
     var coverRefreshTask: Task<Void, Never>?
+    @Published var vivoWiFi: [String: CoreBarSession.ModuleWiFi?] = [:]
+    @Published var showingVivoWiFi = false
     var vivoLayerIndex = 0
     @Published var currentPageId: String?
     let sysStats = SystemStats()
