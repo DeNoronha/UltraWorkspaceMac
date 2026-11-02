@@ -319,8 +319,24 @@ public struct CoreBarSession: Sendable {
     /// Upload a layer package (tgz) to a module over HTTP. If the module isn't
     /// registered yet ("module not found"), provision the CoreBar once and retry.
     public func upload(serial: String, tgz: Data) async throws -> Bool {
-        let (accepted, text) = try await postUpload(serial: serial, tgz: tgz)
+        var (accepted, text) = try await postUpload(serial: serial, tgz: tgz)
         if accepted { return true }
+        // "hotspotIp ip address is empty": the CoreBar hands the package to the
+        // module over its own module hotspot (or the house Wi-Fi), and that
+        // interface had no address right now — typically right after the
+        // CoreBar (re)booted or while the module's Wi-Fi link is re-forming.
+        // It clears by itself; retry a few times before giving up.
+        var attempt = 0
+        while !accepted, text.contains("hotspotIp"), attempt < 3 {
+            attempt += 1
+            WireLog.shared.event("upload: module link not ready (hotspot has no IP) — retry \(attempt)/3 in 6 s")
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            (accepted, text) = try await postUpload(serial: serial, tgz: tgz)
+            if accepted { return true }
+        }
+        if text.contains("hotspotIp") {
+            throw UltraBarError.uploadRejected("the CoreBar's link to the module is not up yet (its module hotspot has no IP address). Wait a minute, or detach and re-attach the VivoCube, then publish again")
+        }
         if text.contains("module not found") {
             WireLog.shared.event("upload: module not registered — provisioning then retrying")
             _ = try? await provision(scanSeconds: 14)
