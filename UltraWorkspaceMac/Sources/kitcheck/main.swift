@@ -22,6 +22,45 @@ if let i = CommandLine.arguments.firstIndex(of: "e2e") {
     exit(Int32(await E2E.run(ip: ip)))
 }
 
+// `kitcheck linkwatch <ip> <serial> [seconds] [noreply]` — open a persistent link
+// with the app's stored token and print every push the CoreBar sends; reply
+// with plausible values unless "noreply" is given. Diagnoses push cadence.
+if let i = CommandLine.arguments.firstIndex(of: "linkwatch"), CommandLine.arguments.count > i + 2 {
+    let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2]
+    let secs = CommandLine.arguments.count > i + 3 ? (Int(CommandLine.arguments[i + 3]) ?? 30) : 30
+    let noReply = CommandLine.arguments.contains("noreply")
+    guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token for \(serial)"); exit(2) }
+    let link = CoreBarLink(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
+    let t0 = Date()
+    @Sendable func stamp() -> String { String(format: "%6.2fs", Date().timeIntervalSince(t0)) }
+    await link.start(onState: { st in print("\(stamp()) link \(st)") }) { type, payloadJSON in
+        let p = payloadJSON.flatMap { String(data: $0, encoding: .utf8) } ?? "-"
+        print("\(stamp()) PUSH \(type) payload=\(p)\(noReply ? "  (not replying)" : "")")
+        if noReply { return nil }
+        switch type {
+        case "CPU", "MEMORY", "STORAGE": return CoreBarLink.json(42)
+        case "NETWORK": return CoreBarLink.json(["totalReceived": 1_000_000, "totalSent": 500_000])
+        case "GET_VOLUME": return CoreBarLink.json(50)
+        case "SET_VOLUME", "SET_BRIGHTNESS": return payloadJSON
+        case "GET_BRIGHTNESS": return CoreBarLink.json(50)
+        default: return Data()
+        }
+    }
+    try? await Task.sleep(nanoseconds: UInt64(secs) * 1_000_000_000)
+    print("\(stamp()) done — pushes handled: \(await link.pushesHandled)")
+    await link.stop()
+    exit(0)
+}
+
+// `kitcheck switchpage <ip> <serial> <pageId>` — TRIGGER_PROFILE_CHANGE with the stored token.
+if let i = CommandLine.arguments.firstIndex(of: "switchpage"), CommandLine.arguments.count > i + 3 {
+    let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2], page = CommandLine.arguments[i + 3]
+    guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token"); exit(2) }
+    let s = CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
+    do { print(try await s.switchPage(id: page)) } catch { print("switch failed: \(error)"); exit(1) }
+    exit(0)
+}
+
 if CommandLine.arguments.contains("discover") {
     print("scanning UDP \(Proto.discoveryPort) for 8s…")
     let bars = await Discovery.listen(timeout: 8)
