@@ -30,6 +30,7 @@ extension AppModel {
             themes = Array(themes.prefix(Self.maxVivoLayers))
         }
         themeRunning = true
+        settings.vivoRotationOn = true
         themeIndex = 0
         let interval = max(10, settings.vivoSeconds)
         let refreshEvery = TimeInterval(max(300, interval * themes.count)) // re-render + re-upload cadence
@@ -164,9 +165,10 @@ extension AppModel {
         }
     }
 
-    func stopThemeRotation() {
+    func stopThemeRotation(settings: AppSettings? = nil) {
         themeTask?.cancel(); themeTask = nil
         themeRunning = false
+        settings?.vivoRotationOn = false
         say("Display stopped.")
     }
 

@@ -14,7 +14,11 @@ struct ContentView: View {
         }
         .environmentObject(contacts)
         .environmentObject(settings)
-        .onAppear { model.startMusicPolling(); model.startDailyCoverRefresh(settings: settings) }
+        .onAppear {
+            model.startMusicPolling(); model.startDailyCoverRefresh(settings: settings)
+            // Resume the VivoCube rotation if it was running when the app last quit.
+            if settings.vivoRotationOn, !model.themeRunning { model.startThemeRotation(settings: settings) }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { model.scan() } label: { Label("Scan", systemImage: "antenna.radiowaves.left.and.right") }
@@ -619,7 +623,7 @@ private struct RotationView: View {
                 .disabled(publishSerial == nil || enabled.isEmpty || model.isWorking)
 
                 if target == .vivocube && model.themeRunning {
-                    Button("Stop") { model.stopThemeRotation() }
+                    Button("Stop") { model.stopThemeRotation(settings: settings) }
                     if !model.currentThemeLabel.isEmpty {
                         Text("Showing: \(model.currentThemeLabel)").font(.caption).foregroundStyle(.secondary)
                     }
