@@ -95,6 +95,7 @@ extension AppModel {
         do {
             _ = try await session.upload(serial: serial, tgz: tgz)
             lastPublishedVivoLayers = layers.count
+            settings.vivoLayerCount = layers.count
             vivoLayerIndex = 0
             return true
         } catch {

@@ -281,22 +281,31 @@ private struct CoreBarPagesView: View {
                 Label("\(settings.coreCards.count) cards: the CoreBar shows about \(AppSettings.coreCardsThatFit) at once and scrolls sideways for the rest.", systemImage: "arrow.left.and.right")
                     .font(.caption).foregroundStyle(.orange)
             }
-            ForEach(AppSettings.allCoreCards, id: \.id) { card in
-                Toggle(isOn: Binding(get: { settings.coreCards.contains(card.id) },
-                                     set: { on in var c = settings.coreCards; c.removeAll { $0 == card.id }; if on { c.append(card.id) }; settings.coreCards = c })) {
-                    HStack(spacing: 6) {
-                        Text(card.title)
-                        if card.needsMac { Text("needs Mac").font(.caption2).padding(.horizontal, 5).padding(.vertical, 1).background(Color.orange.opacity(0.2)).clipShape(Capsule()) }
+            // Ticked cards first, in screen order, with move up/down; then the rest.
+            let ordered = settings.coreCards.compactMap { id in AppSettings.allCoreCards.first { $0.id == id } }
+                + AppSettings.allCoreCards.filter { !settings.coreCards.contains($0.id) }
+            ForEach(Array(ordered.enumerated()), id: \.element.id) { idx, card in
+                let on = settings.coreCards.contains(card.id)
+                HStack(spacing: 6) {
+                    Toggle(isOn: Binding(get: { on },
+                                         set: { v in var c = settings.coreCards; c.removeAll { $0 == card.id }; if v { c.append(card.id) }; settings.coreCards = c })) {
+                        HStack(spacing: 6) {
+                            if on { Text("\(idx + 1).").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 18, alignment: .trailing) }
+                            Text(card.title)
+                            if card.needsMac { Text("needs Mac").font(.caption2).padding(.horizontal, 5).padding(.vertical, 1).background(Color.orange.opacity(0.2)).clipShape(Capsule()) }
+                        }
+                    }.toggleStyle(.checkbox)
+                    Spacer()
+                    if on {
+                        Button { settings.moveCoreCard(card.id, by: -1) } label: { Image(systemName: "chevron.up") }
+                            .buttonStyle(.borderless).disabled(idx == 0).help("Move left on the CoreBar")
+                        Button { settings.moveCoreCard(card.id, by: 1) } label: { Image(systemName: "chevron.down") }
+                            .buttonStyle(.borderless).disabled(idx >= settings.coreCards.count - 1).help("Move right on the CoreBar")
                     }
-                }.toggleStyle(.checkbox)
+                }
             }
-            HStack(spacing: 8) {
-                Text("AccuWeather API key").font(.caption)
-                TextField("needed by the CoreBar's own weather card", text: $settings.accuWeatherKey).textFieldStyle(.roundedBorder).frame(maxWidth: 320)
-                Link("Get one (free)", destination: URL(string: "https://developer.accuweather.com")!).font(.caption)
-            }
-            Text("The CoreBar fetches its weather itself (AccuWeather) and ships without a key, so its card shows “--” until a key is stored on the device. Deckhand's own weather widget (Open-Meteo) does not need this.")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("Order here = left-to-right on the CoreBar. Publish the page after changing it.")
+                .font(.caption).foregroundStyle(.secondary)
             Text("Modules on this page: KnobKey → Mac volume (button = mute), DotKey buttons 1/2 → VivoCube widgets 1/2 on the device, button 3 → next widget, long-press → standard page.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
 

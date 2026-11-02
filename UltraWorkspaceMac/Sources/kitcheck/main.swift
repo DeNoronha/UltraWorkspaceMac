@@ -61,6 +61,18 @@ if let i = CommandLine.arguments.firstIndex(of: "switchpage"), CommandLine.argum
     exit(0)
 }
 
+// `kitcheck readprop <ip> <serial> <deviceId> <propertyId>` — raw MODULE_PROPERTY_READ reply.
+if let i = CommandLine.arguments.firstIndex(of: "readprop"), CommandLine.arguments.count > i + 4 {
+    let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2]
+    let dev = Int(CommandLine.arguments[i + 3]) ?? 256, prop = Int(CommandLine.arguments[i + 4]) ?? 7
+    guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token"); exit(2) }
+    let s = CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
+    let modSerial = CommandLine.arguments.count > i + 5 ? CommandLine.arguments[i + 5] : serial
+    do { print(try await s.rawRequest(act: Proto.actReadProp, data: ["serialNo": modSerial, "deviceId": dev, "propertyId": prop, "extra": NSNull()], timeout: 8)) }
+    catch { print("read failed: \(error)") }
+    exit(0)
+}
+
 if CommandLine.arguments.contains("discover") {
     print("scanning UDP \(Proto.discoveryPort) for 8s…")
     let bars = await Discovery.listen(timeout: 8)

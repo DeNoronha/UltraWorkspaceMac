@@ -33,6 +33,8 @@ final class AppSettings: ObservableObject {
     @Published var accuWeatherKey: String = "" { didSet { save() } }
     /// VivoCube rotation was running when the app last quit → resume at launch.
     @Published var vivoRotationOn: Bool = false { didSet { save() } }
+    /// Layers in the last VivoCube package that the module accepted (for "next" stepping).
+    @Published var vivoLayerCount: Int = 1 { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows about this many cards without scrolling (the clock card is double width).
     static let coreCardsThatFit = 4
@@ -70,6 +72,15 @@ final class AppSettings: ObservableObject {
         var deckhandPagePublished: Bool? = nil
         var accuWeatherKey: String? = nil
         var vivoRotationOn: Bool? = nil
+        var vivoLayerCount: Int? = nil
+    }
+
+    /// Move a ticked card left/right in the on-screen order.
+    func moveCoreCard(_ id: String, by delta: Int) {
+        guard let i = coreCards.firstIndex(of: id) else { return }
+        let j = i + delta
+        guard j >= 0, j < coreCards.count else { return }
+        var c = coreCards; c.swapAt(i, j); coreCards = c
     }
 
     // MARK: Per-device rotation helpers
@@ -110,6 +121,7 @@ final class AppSettings: ObservableObject {
             deckhandPagePublished = p.deckhandPagePublished ?? false
             accuWeatherKey = p.accuWeatherKey ?? ""
             vivoRotationOn = p.vivoRotationOn ?? false
+            vivoLayerCount = p.vivoLayerCount ?? 1
         }
     }
 
@@ -122,7 +134,7 @@ final class AppSettings: ObservableObject {
                           enabledThemes: nil, rotateSeconds: nil,
                           vivoThemes: vivoThemes, vivoSeconds: vivoSeconds,
                           coreThemes: coreThemes, coreSeconds: coreSeconds,
-                          coreCards: coreCards, deckhandPagePublished: deckhandPagePublished, accuWeatherKey: accuWeatherKey, vivoRotationOn: vivoRotationOn)
+                          coreCards: coreCards, deckhandPagePublished: deckhandPagePublished, accuWeatherKey: accuWeatherKey, vivoRotationOn: vivoRotationOn, vivoLayerCount: vivoLayerCount)
         if let data = try? JSONEncoder().encode(p) { try? data.write(to: url, options: .atomic) }
     }
 
