@@ -129,6 +129,13 @@ extension AppModel {
                 ]
                 let reply = try await session.savePages([standard, deckhand])
                 self.say("Pages written (\(reply.prefix(80))). Switching to the Deckhand page…")
+                // The launcher ignores a switch to the page that is already showing, so
+                // a re-publish would keep the old card order on screen. Bounce via the
+                // standard page to force a reload of the new layout.
+                if self.currentPageId == Self.deckhandPageId {
+                    _ = try? await session.switchPage(id: Self.defaultPageId)
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                }
                 _ = try await session.switchPage(id: Self.deckhandPageId)
                 self.currentPageId = Self.deckhandPageId
                 settings.deckhandPagePublished = true
