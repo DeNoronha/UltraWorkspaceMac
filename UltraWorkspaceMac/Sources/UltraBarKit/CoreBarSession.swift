@@ -153,7 +153,17 @@ public struct CoreBarSession: Sendable {
         // SET_GATEWAY_CONFIG (30300) takes the CoreBarConfiguration as the body
         // directly (SET_COREBAR_CONFIG/30741 wraps it in a ReadWriteRequest and
         // the device throws ClassCastException).
-        let all = Array(bySerial.values)
+        // The launcher keys module ids ("uid") from the gateway config: profile
+        // module bindings, SenseCube card topics and VIVO_CUBE_TOGGLE all look the
+        // module up by uid. Discovery pushes omit it, so default uid = serial (the
+        // vendor client writes the same) and give unnamed modules a readable name.
+        let all: [[String: Any]] = bySerial.values.map { ep in
+            var e = ep
+            let serial = Self.serialOf(e)
+            if (e["uid"] as? String)?.isEmpty ?? true { e["uid"] = serial }
+            if (e["name"] as? String)?.isEmpty ?? true { e["name"] = Self.productType(e["productId"]) }
+            return e
+        }
         let canEps = all.filter { ($0["interfaceType"] as? String) != "mesh" }
         let meshEps = all.filter { ($0["interfaceType"] as? String) == "mesh" }
         let config: [String: Any] = [

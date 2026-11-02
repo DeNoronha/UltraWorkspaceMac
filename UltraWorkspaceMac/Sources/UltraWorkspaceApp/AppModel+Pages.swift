@@ -81,7 +81,8 @@ extension AppModel {
                     self.say("Note: the CoreBar's weather card shows “--” without an AccuWeather API key (14-day free trial, paid afterwards). Deckhand's own weather on the clock cover is free.")
                 }
                 let cards = Set(settings.coreCards)
-                let senseSerial = self.modules.first(where: { $0.type == "SENSE_CUBE" })?.serial
+                // Cards subscribe to the module uid (= serial in our gateway config).
+                let senseSerial = self.modules.first(where: { $0.type == "SENSE_CUBE" }).map { $0.deviceId.isEmpty ? $0.serial : $0.deviceId }
                 let standard: [String: Any] = [
                     "id": Self.defaultPageId, "name": "Standard Mode", "isDefault": true, "showName": true, "iconScale": 100,
                     "icon": "http://cdn.lifex360.com/ultrabar/desktop/default.png",
@@ -166,6 +167,12 @@ extension AppModel {
                     "counterclockwise": ["id": "pc:volume", "type": "PC_VOLUME"],
                 ],
             ])
+        }
+        if let sense = modules.first(where: { $0.type == "SENSE_CUBE" }) {
+            // A SENSE_CUBE module entry makes the launcher instantiate the module for
+            // this profile; it then publishes temp/humidity/light on the module uid,
+            // which is what the SENSE_CUBE_* cards subscribe to. No details needed.
+            out.append(["productId": "SENSE_CUBE", "serialNo": sense.serial, "config": []])
         }
         if let dot = modules.first(where: { $0.type == "DOT_KEY" }) {
             var buttons: [[String: Any]] = []
