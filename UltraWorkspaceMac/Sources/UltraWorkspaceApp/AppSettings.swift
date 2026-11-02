@@ -39,8 +39,8 @@ final class AppSettings: ObservableObject {
     /// The 1424-px strip shows about this many cards without scrolling (the clock card is double width).
     static let coreCardsThatFit = 4
     static let allCoreCards: [(id: String, title: String, needsMac: Bool)] = [
-        ("TIME", "Clock (with Deckhand cover)", false),
-        ("WEATHER", "Weather (CoreBar's own card — needs internet on the CoreBar)", false),
+        ("TIME", "Clock + Deckhand weather cover (Open-Meteo, free — refreshed hourly while the Mac is on)", false),
+        ("WEATHER", "Weather — CoreBar's own card (AccuWeather: free 14-day trial, PAID afterwards)", false),
         ("WORLD_TIME", "World clock (CoreBar's own card)", false),
         ("SENSE_TEMP", "SenseCube temperature (experimental — rendered empty on current firmware)", false),
         ("SENSE_HUM", "SenseCube humidity (experimental — rendered empty on current firmware)", false),

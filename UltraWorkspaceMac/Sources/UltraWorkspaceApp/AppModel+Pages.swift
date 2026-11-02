@@ -78,7 +78,7 @@ extension AppModel {
                     do { _ = try await session.setWeatherAPIKey(key, metric: settings.units == .metric); self.say("AccuWeather key stored on the CoreBar for its weather card.") }
                     catch { self.say("Weather key not accepted: \(error.localizedDescription)") }
                 } else if settings.coreCards.contains("WEATHER") {
-                    self.say("Note: the CoreBar's weather card shows “--” until you enter an AccuWeather API key (free at developer.accuweather.com).")
+                    self.say("Note: the CoreBar's weather card shows “--” without an AccuWeather API key (14-day free trial, paid afterwards). Deckhand's own weather on the clock cover is free.")
                 }
                 let cards = Set(settings.coreCards)
                 let senseSerial = self.modules.first(where: { $0.type == "SENSE_CUBE" })?.serial
@@ -225,19 +225,15 @@ extension AppModel {
         tz.identifier.split(separator: "/").last.map(String.init)?.replacingOccurrences(of: "_", with: " ") ?? tz.identifier
     }
 
-    /// Keep the clock-card cover's DATE right without rendering a clock on the
-    /// Mac every minute: refresh the cover once a day shortly after midnight
-    /// (and at launch) — only if the Deckhand page was published.
+    /// The clock-card cover carries Deckhand's free (Open-Meteo) weather + date.
+    /// Refresh it once an hour (and at launch) while the Deckhand page is
+    /// published — the CoreBar's own clock shows the live time next to it.
     func startDailyCoverRefresh(settings: AppSettings) {
         coverRefreshTask?.cancel()
         coverRefreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 if settings.deckhandPagePublished, let self { self.refreshDeckhandCover(settings: settings) }
-                // Sleep until 00:02 local time.
-                let cal = Calendar.current
-                let next = cal.nextDate(after: Date(), matching: DateComponents(hour: 0, minute: 2), matchingPolicy: .nextTime) ?? Date().addingTimeInterval(86_400)
-                let secs = max(60, next.timeIntervalSinceNow)
-                try? await Task.sleep(nanoseconds: UInt64(secs * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: 3_600_000_000_000) // 1 h
             }
         }
     }

@@ -343,6 +343,14 @@ private struct CoreBarPagesView: View {
             }
             Text("Order here = left-to-right on the CoreBar. Publish the page after changing it.")
                 .font(.caption).foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Text("AccuWeather API key").font(.caption)
+                TextField("only for the CoreBar's own weather card", text: $settings.accuWeatherKey).textFieldStyle(.roundedBorder).frame(maxWidth: 320)
+                Link("developer.accuweather.com", destination: URL(string: "https://developer.accuweather.com")!).font(.caption)
+            }
+            Label("AccuWeather is not free: the developer portal offers a 14-day trial, after that it is a paid subscription (the old free tier was retired in 2025). Only the CoreBar's own weather card needs it. Deckhand's weather (Open-Meteo — on the clock cover, refreshed hourly, and on the VivoCube) costs nothing.", systemImage: "eurosign.circle")
+                .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             Text("Modules on this page: KnobKey → Mac volume (button = mute), DotKey buttons 1/2 → VivoCube widgets 1/2 on the device, button 3 → next widget, long-press → standard page.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
 
