@@ -28,7 +28,7 @@ Deckhand talks to the CoreBar over **Wi-Fi / your LAN**, not over USB; the cable
 
 **Device connection**
 - **Discovery** — finds CoreBars on the LAN over UDP broadcast (port 5319, probe `{"act":"discover"}`, 8 s scan). The vendor client sends the plain string `discovery.ultrabar` instead; the firmware answers both.
-- **Add CoreBar by IP** — sidebar → CoreBars → **Add by IP…** sends the same discovery probe as a unicast to one address. Use it when broadcast can't reach the device (other subnet, VPN, or the mock CoreBar running in Docker — see *Testing without hardware*).
+- **Add CoreBar by IP** — **Connect by address…** (connect flow) sends the same discovery probe as a unicast to one address. Use it when broadcast can't reach the device (other subnet, VPN, or the mock CoreBar running in Docker — see *Testing without hardware*).
 - **Pairing** — pairs with a CoreBar (`REQ_AUTH_TOKEN` / act 101 with `{id, name}`); the user taps *Approve* on the CoreBar within ~30 s and a token comes back. The token is stored in a `0600` file in Application Support (not the Keychain — see Limitations). The CoreBar's self-signed certificate is pinned on first use (trust-on-first-use); a later certificate mismatch aborts *before* the token is ever sent. (The vendor client verifies nothing at all — see `docs/SECURITY.md`.)
 - **Control channel** — one TLS connection per operation (line-delimited JSON, port 7431, SNI `ultrabar.local`; the device negotiates TLS 1.3, the client allows ≥ 1.2). The vendor client keeps one persistent connection with a 3 s heartbeat instead; Deckhand will need the same once it answers the device's `PUSH_MESSAGE` requests (inputs).
 
@@ -68,10 +68,13 @@ Pick any image (or let a widget render one); it is encoded as an LVGL v8 image �
 
 Deckhand is a single window with a sidebar:
 
-- **CoreBars** — discovered and paired CoreBars, **Scan for CoreBars**, **Add by IP…**.
-- **Device section** (the selected CoreBar) — **Overview** (big-screen preview, CoreBar rotation placeholder, module list, activity log, **Refresh / set up**) and one page per module: **VivoCube** (screen on/off, reboot, Recover display, panel size test, widget rotation, custom image), **SenseCube** (live readings), **KnobKey** and **DotKey** (info-only for now).
-- **Configure** — **Widgets** (per-widget settings, including weather location/units and the Music transport), **People**, **Logs** (every Mac↔CoreBar message, token redacted).
-- **About Deckhand** at the bottom of the sidebar; the **Settings** gear (toolbar) holds the CoreBar summary, the connection/USB-port guidance, and what has to be set on the CoreBar itself.
+- **Your CoreBar** at the top (menu: switch bars, **Add another CoreBar…**, **Find modules**, **Forget**). First run shows a connect flow (find → pair with a countdown → modules found automatically).
+- **Screens** — **CoreBar page** (preview strip, drag-ordered cards, one **Publish page** button with an inline stepper) and **VivoCube** (the card the cube reports it is showing, an ordered list of up to 6 cards, switch mode, **Send to cube**, maintenance tucked away).
+- **Controls** — **KnobKey**, **DotKey**: the bindings as they are written with every page publish.
+- **Sensors** — **SenseCube** live readings.
+- **Library** — **Widgets** (preview + settings, "Add to the cube"), **People**.
+- **Health** — **Status** (device truth, worst first, one button per problem, **Copy report**) and **Logs**.
+- Every device page carries a status strip (connected? what is the device showing? last sent? one fault + one fix). **Activity** (toolbar) shows Deckhand's own log.
 
 ## Build & run
 
@@ -101,7 +104,7 @@ cd mock-corebar && npm install && npm run dev     # or: docker compose up --buil
 # ports: 5319/udp discovery, 7431 TLS control, 8080 upload, 8081 viewer (http://127.0.0.1:8081)
 ```
 
-- With Docker on macOS, UDP broadcast doesn't cross Docker's NAT, so in Deckhand use **CoreBars → Add by IP… → 127.0.0.1**. Running natively (`npm run dev`) supports broadcast discovery.
+- With Docker on macOS, UDP broadcast doesn't cross Docker's NAT, so in Deckhand use **Connect by address… → 127.0.0.1**. Running natively (`npm run dev`) supports broadcast discovery.
 - The mock auto-approves pairing after about 1 s (a real device waits for you to tap Approve within 30 s), answers the vendor's `discovery.ultrabar` probe too (so the official app can be pointed at it), emulates the CoreBar's cached screen/layer properties, and writes every upload to `mock-corebar/captures/`.
 - `kitcheck e2e` drives the whole UltraBarKit protocol path against the mock and exits non-zero on any failure (see *Project layout*).
 

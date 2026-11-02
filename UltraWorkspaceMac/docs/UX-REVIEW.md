@@ -1,5 +1,7 @@
 # Deckhand — UX review
 
+> **Status (3 Nov 2026):** implemented in the UI rewrite — goal-based sidebar with a device menu (Screens / Controls / Sensors / Library / Health), the device status strip with one fault + one action on every device page, the VivoCube twin from property-9 read-backs with ◀ ▶, the ordered picked list (max 6, drag, remove, Picture as a card), the switch-mode radio, inline publish steppers for both publish paths, confirmation only when something would be lost, per-row AccuWeather key, Maintenance disclosure, KnobKey/DotKey bindings tables, Status auto-run with severity order and action buttons, protocol ids scrubbed from user-facing strings, status bar as a safe-area inset, Activity as a toolbar toggle, first-run connect flow with progress and countdown, accessibility labels and keyboard shortcuts (⌘↩ primary action, ⌘R check again). Still open: editable bindings (row 21), the global "Publish changes" button (22), `Form(.grouped)` everywhere (20), a full first-run wizard with module tiles (19).
+
 Reviewed 2026-11-02 against `Sources/UltraWorkspaceApp/*` (ContentView.swift at commit bebfa0e plus the uncommitted Status/Doctor work), MANUAL.md, docs/ROADMAP.md, docs/WIDGETS.md, the app screenshots and the device photos from 1–2 November. Read-only critique; nothing in the source was touched. Opinions are deliberate — push back where you disagree, but every claim below quotes a real label or line.
 
 ---

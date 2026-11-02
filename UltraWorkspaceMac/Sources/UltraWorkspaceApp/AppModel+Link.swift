@@ -127,8 +127,8 @@ extension AppModel {
         let count = max(1, min(Self.maxVivoLayers, max(lastPublishedVivoLayers, UserDefaultsLayerCount.read())))
         vivoLayerIndex = ((vivoLayerIndex + delta) % count + count) % count
         let layer = vivoLayerIndex + 1
-        Task { _ = await session.setLayer(serial: serial, layer: layer, widget: Self.widgetId(forLayer: layer)) }
-        say("VivoCube → layer \(layer) (from the CoreBar).")
+        Task { _ = await self.showCubeCard(layer, session: session, serial: serial) }
+        say("Cube → card \(layer)\(layer - 1 < vivoLayerNames.count ? " (\(vivoLayerNames[layer - 1]))" : "") — from the bar.")
     }
 
     // MARK: Mac helpers

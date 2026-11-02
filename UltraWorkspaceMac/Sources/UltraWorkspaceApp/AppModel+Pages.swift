@@ -20,9 +20,8 @@ extension AppModel {
             do {
                 let pages = try await session.listPages()
                 self.corebarPages = pages
-                self.say(pages.isEmpty ? "The CoreBar reports no pages (30710 returned an empty list)."
-                                       : "Pages on the CoreBar: " + pages.map { "\($0.name) [\($0.id)]" }.joined(separator: ", "))
-            } catch { self.say("Could not list pages: \(error.localizedDescription)") }
+                WireLog.shared.event("pages: " + pages.map { "\($0.name) [\($0.id)]" }.joined(separator: ", "))
+            } catch { self.say("The bar did not answer when asked for its pages: \(FriendlyError.text(error))") }
         }
     }
 
@@ -50,37 +49,36 @@ extension AppModel {
         return Self.pngData(fromRGBA: rgba, width: 480, height: 480)
     }
 
-    /// DESTRUCTIVE (user-confirmed): upload the cover, then write the page list =
-    /// the device's standard page (re-sent so it survives; its clock keeps the
-    /// image the user picked on the device because `icon` is empty) + a
-    /// Deckhand page whose clock cover is our image, then switch to it.
+    /// Pages other than the standard one and Deckhand's own — made in the official app; a publish removes them.
+    var foreignPages: [CoreBarSession.PageInfo] { corebarPages.filter { ![Self.defaultPageId, Self.deckhandPageId].contains($0.id) } }
+    /// Confirm only when something could be lost: first publish, or foreign pages present.
+    func publishNeedsConfirmation(settings: AppSettings) -> Bool { !settings.deckhandPagePublished || !foreignPages.isEmpty }
+
+    /// Replace the bar's pages with: its standard page + the Deckhand page, then show the Deckhand page.
+    /// Destructive for pages made in the official app (confirmed in the UI when that applies).
     func publishDeckhandPage(settings: AppSettings) {
-        guard let bar = selectedCoreBar, let session = session(for: bar) else { say("Pair a CoreBar first."); return }
+        guard let bar = selectedCoreBar, let session = session(for: bar) else { pageProgress.failNow("Pair a CoreBar first."); return }
         guard !isWorking else { return }
         isWorking = true
-        say("Rendering the clock-card cover…")
+        pageProgress.begin([("cover", "Clock picture"), ("icons", "Button icons"), ("pages", "Pages written"), ("show", "Showing the Deckhand page")])
         Task {
             defer { self.isWorking = false }
-            guard let png = await self.renderPageCover(settings: settings) else { self.say("Could not render the cover."); return }
+            self.pageProgress.run("cover")
+            guard let png = await self.renderPageCover(settings: settings) else { self.pageProgress.fail("cover", "Could not draw the clock picture."); return }
             do {
                 try await session.uploadPageAsset(png, name: "cover.png")
-                self.say("Cover uploaded (deckhand/cover.png). Writing pages…")
-                // Device-first: every card below is rendered and updated by the CoreBar
-                // itself. Cards marked "fed by Deckhand" get their numbers from the
-                // persistent link (the Mac answers CPU/MEMORY/STORAGE/NETWORK queries).
+                self.pageProgress.done("cover")
+                self.pageProgress.run("icons")
                 let coords = await self.resolveCoordinates(settings: settings)
                 let weatherParam: [String: String] = ["lat": coords?.lat ?? "", "lon": coords?.lon ?? ""]
-                if coords == nil { self.say("No location available — the CoreBar's weather card will use the device's network location.") }
                 try await self.uploadButtonIcons(session: session)
-                // The CoreBar's own weather card needs an AccuWeather key (the firmware ships a placeholder).
                 let key = settings.accuWeatherKey.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !key.isEmpty {
-                    do { _ = try await session.setWeatherAPIKey(key, metric: settings.units == .metric); self.say("AccuWeather key stored on the CoreBar for its weather card.") }
-                    catch { self.say("Weather key not accepted: \(error.localizedDescription)") }
-                } else if settings.coreCards.contains("WEATHER") {
-                    self.say("Note: the CoreBar's weather card shows “--” without an AccuWeather API key (14-day free trial, paid afterwards). Deckhand's own weather on the clock cover is free.")
+                    do { _ = try await session.setWeatherAPIKey(key, metric: settings.units == .metric) }
+                    catch { self.say("The bar did not accept the AccuWeather key: \(FriendlyError.text(error))") }
                 }
-                let cards = Set(settings.coreCards)
+                self.pageProgress.done("icons")
+                self.pageProgress.run("pages")
                 // Cards subscribe to the module uid (= serial in our gateway config).
                 let senseSerial = self.modules.first(where: { $0.type == "SENSE_CUBE" }).map { $0.deviceId.isEmpty ? $0.serial : $0.deviceId }
                 let standard: [String: Any] = [
@@ -96,9 +94,8 @@ extension AppModel {
                 for card in settings.coreCards {
                     switch card {
                     case "TIME":
-                        // Own id: TimeParamConverter copies the DEVICE-stored picture for a
-                        // widget id if one exists (that is how the tiger kept winning on
-                        // sys.component.time). A Deckhand-only id has no stored picture.
+                        // Own id: the bar copies a DEVICE-stored picture for a known widget id
+                        // (that is how the stock tiger kept winning on sys.component.time).
                         w.append(["id": "deckhand.time", "type": "TIME", "name": "Deckhand", "icon": "deckhand/cover.png"])
                     case "WEATHER":
                         w.append(["id": "sys.component.weather", "type": "WEATHER", "name": "Weather", "param": weatherParam])
@@ -113,7 +110,7 @@ extension AppModel {
                     case "STORAGE": w.append(["id": "deckhand.storage", "type": "STORAGE", "name": "Mac storage", "param": ["data": ""]])
                     case "NETWORK": w.append(["id": "deckhand.net", "type": "NETWORK", "name": "Mac network", "param": ["data": ""]])
                     case "NEXT_LAYER":
-                        w.append(["id": "deckhand.next", "type": "PC_CONTROL", "name": "Next widget", "icon": "deckhand/btn-next.png", "iconScale": 80,
+                        w.append(["id": "deckhand.next", "type": "PC_CONTROL", "name": "Next card", "icon": "deckhand/btn-next.png", "iconScale": 80,
                                   "param": ["output": 10, "payload": ["deckhand": "next"]]])
                     case "MUSIC":
                         w.append(["id": "deckhand.music", "type": "PC_CONTROL", "name": "Play / Pause", "icon": "deckhand/btn-music.png", "iconScale": 80,
@@ -121,18 +118,17 @@ extension AppModel {
                     default: break
                     }
                 }
-                let deckhandWidgets = w
                 let deckhand: [String: Any] = [
                     "id": Self.deckhandPageId, "name": "Deckhand", "isDefault": false, "showName": true, "iconScale": 100,
                     "icon": "deckhand/cover.png",
                     "module": self.moduleBindings(),
-                    "widget": deckhandWidgets,
+                    "widget": w,
                 ]
-                let reply = try await session.savePages([standard, deckhand])
-                self.say("Pages written (\(reply.prefix(80))). Switching to the Deckhand page…")
-                // The launcher ignores a switch to the page that is already showing, so
-                // a re-publish would keep the old card order on screen. Bounce via the
-                // standard page to force a reload of the new layout.
+                _ = try await session.savePages([standard, deckhand])
+                self.pageProgress.done("pages", note: "\(w.count) cards")
+                self.pageProgress.run("show")
+                // The bar ignores a switch to the page already showing; bounce via the
+                // standard page so a re-publish reloads the new layout.
                 if self.currentPageId == Self.deckhandPageId {
                     _ = try? await session.switchPage(id: Self.defaultPageId)
                     try? await Task.sleep(nanoseconds: 400_000_000)
@@ -140,10 +136,16 @@ extension AppModel {
                 _ = try await session.switchPage(id: Self.deckhandPageId)
                 self.currentPageId = Self.deckhandPageId
                 settings.deckhandPagePublished = true
-                let fed = deckhandWidgets.filter { ["CPU", "MEMORY", "STORAGE", "NETWORK"].contains(($0["type"] as? String) ?? "") }.count
-                self.say("CoreBar is showing the Deckhand page: \(deckhandWidgets.count) cards rendered by the CoreBar itself\(coords.map { " · weather for \($0.place)" } ?? "")\(fed > 0 ? " · \(fed) fed live by this Mac" : ""). KnobKey → Mac volume, DotKey → VivoCube widgets. ✓")
+                self.lastPagePublishedAt = Date()
+                self.pageProgress.done("show")
+                self.say("The bar shows the Deckhand page: \(w.count) cards\(coords.map { " · weather for \($0.place)" } ?? ""). ✓")
                 self.refreshPages()
-            } catch { self.say("Page publish failed: \(error.localizedDescription)") }
+            } catch {
+                let msg = FriendlyError.text(error)
+                let stepId = self.pageProgress.steps.first(where: { $0.state == .running })?.id ?? "pages"
+                self.pageProgress.fail(stepId, msg)
+                self.say("Publishing the page did not complete: \(msg)")
+            }
         }
     }
 
@@ -249,8 +251,11 @@ extension AppModel {
     func switchPage(id: String) {
         guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
         Task {
-            do { _ = try await session.switchPage(id: id); self.currentPageId = id; self.say("Switched the CoreBar to page \(id). ✓") }
-            catch { self.say("Switch failed: \(error.localizedDescription)") }
+            do {
+                _ = try await session.switchPage(id: id); self.currentPageId = id
+                let name = self.corebarPages.first { $0.id == id }?.name ?? id
+                self.say("The bar now shows the “\(name)” page.")
+            } catch { self.say("Could not switch pages: \(FriendlyError.text(error))") }
         }
     }
 
@@ -260,8 +265,8 @@ extension AppModel {
         guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
         Task {
             guard let png = await self.renderPageCover(settings: settings) else { return }
-            do { try await session.uploadPageAsset(png, name: "cover.png"); self.say("Cover refreshed on the CoreBar. ✓") }
-            catch { self.say("Cover refresh failed: \(error.localizedDescription)") }
+            do { try await session.uploadPageAsset(png, name: "cover.png"); self.lastCoverRefreshAt = Date(); self.say("Clock picture updated on the bar.") }
+            catch { self.say("Could not update the clock picture: \(FriendlyError.text(error))") }
         }
     }
 }

@@ -2,7 +2,7 @@ import Foundation
 
 /// A display widget (card) that can be shown on a VivoCube, alone or rotating.
 enum Theme: String, CaseIterable, Codable, Identifiable {
-    case weather, music, claude, cpu, network, battery, disk, worldclock, crypto, calendar, diskio, topcpu, uptime
+    case weather, music, claude, cpu, network, battery, disk, worldclock, crypto, calendar, diskio, topcpu, uptime, picture
 
     var id: String { rawValue }
 
@@ -21,6 +21,7 @@ enum Theme: String, CaseIterable, Codable, Identifiable {
         case .diskio: return "Disk I/O"
         case .topcpu: return "Top CPU"
         case .uptime: return "Uptime"
+        case .picture: return "Picture"
         }
     }
 
@@ -39,6 +40,7 @@ enum Theme: String, CaseIterable, Codable, Identifiable {
         case .diskio: return "internaldrive.fill"
         case .topcpu: return "speedometer"
         case .uptime: return "clock.arrow.circlepath"
+        case .picture: return "photo"
         }
     }
 }

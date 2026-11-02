@@ -23,7 +23,11 @@ final class AppModel: ObservableObject {
     @Published var showingSettings = false
     @Published var showingAbout = false
     @Published var showingAddIP = false
-    @Published var nav: NavItem = .coreBar
+    @Published var showingConnect = false
+    @Published var nav: NavItem = .coreBarPage
+    @Published var showActivity = UserDefaults.standard.bool(forKey: "showActivity") { didSet { UserDefaults.standard.set(showActivity, forKey: "showActivity") } }
+    @Published var scanStartedAt: Date?
+    @Published var pairingStartedAt: Date?
     @Published var selectedAddon: Theme = .weather
 
     // Upload options (VivoCube native resolution is ~240×240)
@@ -64,6 +68,18 @@ final class AppModel: ObservableObject {
     /// Names + rendered previews of the layers in the last VivoCube package.
     @Published var vivoLayerNames: [String] = []
     @Published var vivoLayerImages: [Int: NSImage] = [:]
+    // Device-reported state (the "twin"), refreshed by `refreshDeviceState()`.
+    @Published var vivoLayerShowing: Int?
+    @Published var vivoWidgetShowing: Int?
+    @Published var vivoScreenOn: Bool?
+    @Published var vivoWiFiState: Int?
+    @Published var deviceStateAt: Date?
+    // Inline progress for the two publish paths + their timestamps.
+    @Published var cubeProgress = StepProgress()
+    @Published var pageProgress = StepProgress()
+    @Published var lastCubeSentAt: Date?
+    @Published var lastPagePublishedAt: Date?
+    @Published var lastCoverRefreshAt: Date?
     @Published var showingVivoWiFi = false
     var vivoLayerIndex = 0
     @Published var currentPageId: String?
@@ -97,7 +113,7 @@ final class AppModel: ObservableObject {
         if selectedModuleSerial == nil || !mods.contains(where: { $0.serial == selectedModuleSerial }) {
             selectedModuleSerial = (mods.first(where: { $0.isVivoCube }) ?? mods.first)?.serial
         }
-        say("Loaded \(mods.count) saved module\(mods.count == 1 ? "" : "s") from cache. Refresh to rescan.")
+        say("\(mods.count) module\(mods.count == 1 ? "" : "s") from the last scan. Use Find modules to rescan.")
     }
 
     func say(_ s: String) {
@@ -130,13 +146,15 @@ final class AppModel: ObservableObject {
     func scan() {
         guard !isScanning else { return }
         isScanning = true
-        say("Scanning the local network for CoreBars…")
+        scanStartedAt = Date()
+        say("Looking for CoreBars on your network…")
         Task {
             let found = await Discovery.listen(timeout: 8)
             self.discovered = found
             self.isScanning = false
+            self.scanStartedAt = nil
             if found.isEmpty {
-                self.say("No CoreBars found. Make sure the CoreBar and this Mac are on the same Wi-Fi, then scan again.")
+                self.say("No CoreBars found. Make sure the bar and this Mac are on the same Wi-Fi, then look again.")
             } else {
                 self.say("Found \(found.count) CoreBar\(found.count == 1 ? "" : "s").")
             }
@@ -154,11 +172,11 @@ final class AppModel: ObservableObject {
         Task {
             if let bar = await Discovery.probe(ip: ip) {
                 if !self.discovered.contains(where: { $0.serialNo == bar.serialNo }) { self.discovered.append(bar) }
-                self.say("Found \(bar.name.isEmpty ? bar.serialNo : bar.name) at \(ip). Tap Pair in the sidebar.")
+                self.say("Found \(bar.name.isEmpty ? bar.serialNo : bar.name) at \(ip). Press Pair.")
             } else {
                 let bar = CoreBar(serialNo: "manual-\(ip)", version: "", ip: ip, name: ip, tcpPort: Int(Proto.controlPort))
                 if !self.discovered.contains(where: { $0.serialNo == bar.serialNo }) { self.discovered.append(bar) }
-                self.say("No discovery reply from \(ip) — added it anyway. Tap Pair to try.")
+                self.say("No answer from \(ip) — added it anyway. Press Pair to try.")
             }
         }
     }
@@ -168,6 +186,7 @@ final class AppModel: ObservableObject {
     func pair(_ bar: CoreBar) {
         guard !isWorking else { return }
         isWorking = true
+        pairingStartedAt = Date()
         pairingPrompt = "Tap Approve on “\(bar.name.isEmpty ? bar.serialNo : bar.name)” within 30 seconds…"
         say("Pairing with \(bar.name.isEmpty ? bar.serialNo : bar.name) — tap Approve on the CoreBar.")
         Task {
@@ -182,14 +201,15 @@ final class AppModel: ObservableObject {
                 self.paired = Store.shared.pairedCoreBars
                 self.selectedSerial = bar.serialNo
                 self.say("Paired with \(bar.name.isEmpty ? bar.serialNo : bar.name). Certificate pinned.")
-                self.pairingPrompt = nil
+                self.pairingPrompt = nil; self.pairingStartedAt = nil
                 self.isWorking = false
+                self.nav = .coreBarPage
                 self.refreshModules()
             } catch {
                 await client.close()
-                self.pairingPrompt = nil
+                self.pairingPrompt = nil; self.pairingStartedAt = nil
                 self.isWorking = false
-                self.say("Pairing failed: \(error.localizedDescription)")
+                self.say("Pairing did not complete: \(FriendlyError.text(error))")
             }
         }
     }
@@ -212,7 +232,7 @@ final class AppModel: ObservableObject {
             return
         }
         isWorking = true
-        say("Scanning the bus and registering modules on \(bar.name)… Press a key on the DotKey now so it is awake for the scan.")
+        say("Looking for modules on \(bar.name)… (press a DotKey key so it is awake)")
         Task {
             do {
                 // Scan + write the gateway config in one step, so modules are
@@ -234,18 +254,18 @@ final class AppModel: ObservableObject {
                     Store.shared.rememberModules(arr, corebar: bar.serialNo)
                 }
                 self.modules = mods
-                self.say("setup: \(diag)")
+                WireLog.shared.event("provision: \(diag)")
                 if self.selectedModuleSerial == nil || !mods.contains(where: { $0.serial == self.selectedModuleSerial }) {
                     self.selectedModuleSerial = (mods.first(where: { $0.isVivoCube }) ?? mods.first)?.serial
                 }
                 if mods.isEmpty {
-                    self.say("No modules found. Tap the CoreBar's screen to wake the modules, then Refresh.")
+                    self.say("No modules found. Tap the bar's screen to wake them, then Find modules again.")
                 } else {
                     let names = mods.map { "\($0.displayName)" }.joined(separator: ", ")
-                    self.say("Ready: \(mods.count) module\(mods.count == 1 ? "" : "s") (\(names)).")
+                    self.say("Found \(mods.count) module\(mods.count == 1 ? "" : "s"): \(names).")
                 }
             } catch {
-                self.say("Could not set up modules: \(error.localizedDescription)")
+                self.say("Could not find modules: \(FriendlyError.text(error))")
             }
             self.isWorking = false
         }
@@ -270,7 +290,8 @@ final class AppModel: ObservableObject {
               let serial = selectedModuleSerial else { return }
         Task {
             let code = await session.setScreen(serial: serial, on: on)
-            self.say("Screen \(on ? "on" : "off") → \(code.map(String.init) ?? "no reply")")
+            self.vivoScreenOn = code == 200 ? on : self.vivoScreenOn
+            self.say(code == 200 ? "Cube screen \(on ? "on" : "off")." : "The bar did not confirm the screen change.")
         }
     }
 
@@ -279,7 +300,7 @@ final class AppModel: ObservableObject {
               let serial = selectedModuleSerial else { return }
         Task {
             await session.reboot(serial: serial)
-            self.say("Reboot sent to \(serial).")
+            self.say("Restarting the cube — it is back in about 20 s.")
         }
     }
 

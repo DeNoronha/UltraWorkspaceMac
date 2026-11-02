@@ -43,91 +43,83 @@ The same guidance is shown in the app under **Settings → Connecting**.
 
 ---
 
-## 3. Pair your CoreBar
+## 3. Connect your CoreBar
 
-1. Open the app and press **Scan** (toolbar) or **Scan for CoreBars** in the sidebar. The scan listens for about 8 seconds.
-2. Your CoreBar appears under **CoreBars** (e.g. `ultrabar`). Click **Pair**.
-3. On the CoreBar's screen, tap **Approve** within 30 seconds.
-4. Done — the CoreBar is now paired. The pairing token is stored on your Mac (in a protected, user-only file in Application Support), and the device's certificate is pinned, so a later impostor on the network can't reuse your token.
+The first time, Deckhand shows **Connect your UltraBar**:
 
-> The token is deliberately **not** kept in the macOS Keychain. Because this app is ad-hoc signed, the Keychain would re-prompt for your login password on every launch; the file avoids that. A future notarized release can move it back to the Keychain.
+1. **Find the bar** — Deckhand looks on your network for about 8 seconds (a progress bar shows it). Your bar appears with a **Pair** button. macOS asks for *Local Network* access the first time; if you declined, use **Local Network permission…** to allow it. Can't see the bar (other subnet, VPN)? **Connect by address…** takes its IP address (shown on the bar under Settings → Network).
+2. **Approve on the bar** — press **Pair**; the bar shows an Approve button for 30 seconds (Deckhand shows the countdown). Tap it.
+3. Deckhand then finds the modules on its own and opens the **CoreBar page**.
 
-### Add by IP (when the scan can't see the CoreBar)
-
-If the CoreBar is on another subnet, behind a VPN, or broadcast discovery is blocked, use the sidebar's **Add by IP…**. Enter the CoreBar's IP address (look it up on the device under Wi-Fi); Deckhand sends the discovery probe directly to that address and then pairs as usual. This is also how you connect to the mock CoreBar used for testing.
+The pairing key is stored in a protected, user-only file in Application Support, and the bar's certificate is pinned, so an impostor on the network can't reuse your key. The paired bar is shown at the top of the sidebar; its menu has **Add another CoreBar…**, **Find modules** and **Forget this CoreBar…**.
 
 ---
 
-## 4. Modules — wake them before scanning
+## 4. Modules — wake them before looking
 
-**Tip: tap the CoreBar's screen to wake it, and make sure your modules are attached and awake, *before* you scan for modules.** Listing modules is a live scan of the magnetic (and wireless) bus, and a module that has gone to sleep — the **DotKey** is the usual culprit — can be missed. The app remembers modules it has seen before and merges them back in on the next scan, so a one-time sleep won't permanently drop a module, but a fresh scan with everything awake gives the most reliable result.
+**Tap the bar's screen and press a DotKey key before you press Find modules.** Finding modules is a live scan of the magnetic bus, and a module that has gone to sleep — usually the **DotKey** — can be missed. Deckhand remembers every module it has ever seen on your bar and keeps it in the bar's configuration, so a one-time sleep won't drop a module; a scan with everything awake just gives the most reliable result.
 
-To (re-)scan: open your CoreBar's **Overview** page and press **Refresh / set up**. The scan takes about 16 seconds and also writes the found modules into the CoreBar's configuration so they can be controlled. Each module shows a green dot when it's online.
+**Find modules** is in the bar's menu (top of the sidebar), under **Advanced** on the CoreBar page, and in the sidebar when no modules are known yet. The scan takes about 16 seconds and also registers the modules on the bar so they can be controlled. A module that did not answer is marked *asleep* in the sidebar.
 
 ---
 
 ## 5. Using the app
 
-Deckhand is one window with a sidebar on the left:
+One window, a sidebar on the left, grouped by what you want to change:
 
-- **CoreBars** — discovered and paired CoreBars, plus **Scan for CoreBars** and **Add by IP…**.
-- **Your CoreBar** (named after the device) — **Overview**, then one entry per module: **VivoCube**, **SenseCube**, **KnobKey**, **DotKey**.
-- **Configure** — **Widgets**, **People**, **Logs**.
-- **About Deckhand** at the bottom. The **Settings** gear and **About** are also in the toolbar.
+- **Screens** — **CoreBar page** (the strip on the bar) and **VivoCube** (the small round module).
+- **Controls** — **KnobKey**, **DotKey**: what the knob and keys do.
+- **Sensors** — **SenseCube**.
+- **Library** — **Widgets** (the cards Deckhand can draw) and **People**.
+- **Health** — **Status** and **Logs**.
 
-### CoreBar → Overview
-- **Live link** (status bar, bottom right) — Deckhand keeps one connection open to the selected CoreBar and answers what the device asks: Mac CPU/memory/storage/network for the CoreBar's own cards, volume for the KnobKey, and button presses from PC_CONTROL cards (open a website, play/pause Music, next VivoCube widget). “Live link · 12 answered” means it is working; “Reconnecting” means the CoreBar is unreachable.
-- **Cards on the Deckhand page** — tick which of the CoreBar's own cards the Deckhand page shows (clock with Deckhand cover, weather, world clock, SenseCube temperature/humidity, Mac CPU/memory/storage/network, and two button cards). Cards marked *needs Mac* only update while Deckhand runs; the others keep running when the Mac is off.
-- **Two weather options** (Overview → CoreBar pages): (1) *Clock + Deckhand weather cover* — Deckhand's own weather (Open-Meteo, free) drawn on the clock card and refreshed every hour while the Mac is on; (2) *Weather — CoreBar's own card* — fetched by the CoreBar itself from **AccuWeather, which is not free**: the developer portal gives a 14-day trial, after that it is a paid subscription (the old free tier was retired in 2025). Paste the key in **AccuWeather API key** and publish; remove it (and untick the card) before the trial ends if you don't want to pay.
-- **Modules on the Deckhand page** — KnobKey turns change the Mac's volume (button = mute); DotKey buttons 1 and 2 switch the VivoCube to widget 1/2 directly on the device, button 3 steps to the next widget, a long press returns to the standard page.
-- **CoreBar pages** — **List pages** asks the CoreBar which pages exist. **Publish Deckhand page…** (asks for confirmation) rewrites the pages to: the standard page (clock + weather) and a *Deckhand* page whose clock card shows Deckhand's picture (weather & time, refreshed with **Refresh cover only**). **Show** next to a page switches the big screen to it. There is no full-screen image on the CoreBar — pages are strips of the device's own cards.
-- **Widget rotation (CoreBar)** — the controls are visible, but publishing to the big screen persistently is not implemented yet; your selection is saved for when it is. Note that the CoreBar's pages are strips of its own cards (clock, weather, buttons…), not full-screen pictures: when this lands, Deckhand's image will appear as the clock card's picture, and full-screen stays a one-shot preview.
-- **Modules** — every module the CoreBar reports, with a green dot for online, and an **Open** link to its page. **Refresh / set up** re-scans (see section 4).
-- An activity log on the right shows what the app is doing.
+Every device page starts with a **status strip**: whether Deckhand is connected and answering the bar, what the device is showing right now (read back from the device, not assumed), when something was last sent, and — only when something is wrong — one sentence and one button that fixes it ("The cube is not on Wi-Fi — Set cube Wi-Fi…", "The cube's screen is off — Turn on", "The Deckhand page is gone from the bar — Publish page"). The **Activity** list (toolbar button) shows what Deckhand did; the strip shows what the device *is*.
 
-> ⚠️ **If you also use the official UltraWorkSpace app**: its *Deploy project* rewrites the whole CoreBar — pages, automations, module setup — and deletes every image file other apps uploaded to it, including Deckhand's. Likewise, once Deckhand writes pages it will replace what the official app deployed. Use one app per CoreBar, or expect to re-publish from Deckhand after each official deploy.
+### CoreBar page
+The bar's big screen shows a page: a row of the bar's own cards. About four fit; more scroll sideways. There is no full-screen picture — Deckhand's own picture (weather & date, free, refreshed hourly) is the **Clock** card's picture.
+
+- **Preview** — drawn from your card list; dimmed cards are the ones that scroll into view.
+- **Cards on the page** — drag to reorder, ✕ to remove, **Add a card** on the right. ⚡ marks cards fed live by this Mac (CPU, memory, storage, network, the two buttons): they update only while Deckhand runs; the others keep running when the Mac is off.
+- **Weather (bar's own)** is drawn by the bar from **AccuWeather, which is not free** (14-day trial, paid afterwards). Press **Key…** on that row to paste the key; it is sent to the bar with the next publish. Deckhand's own weather on the Clock card costs nothing.
+- **Publish page** (⌘↩) — draws the clock picture, uploads the button icons, writes the pages and shows the Deckhand page; the steps are shown under the button. Deckhand asks for confirmation only when it matters: the first time, or when the bar has pages made in the official app (those would be removed — the bar cannot send pages back). The knob and keys get their bindings with every publish (see Controls).
+- **Showing** (top right) — switch the bar between its Standard page and the Deckhand page.
+- **Pages on the bar** / **Advanced** — the page list, **Find modules**, **Re-read pages**, **Redraw preview**. The official app's Deploy removes Deckhand's pictures; publish again afterwards.
 
 ### VivoCube
-- A live preview of the current widget.
-- **Display** — **Screen On**, **Screen Off**, **Reboot**, **Recover display**.
-  - **Screen Off** is remembered by the CoreBar: it re-applies it to the cube after every reboot, reconnect or widget update until you press **Screen On** again. So don't use Screen Off while a rotation is running, or the cube stays dark.
-  - **Recover display** is for a cube that stays black: the CoreBar also remembers which layer/widget the cube should show, and if that no longer exists in the last package it keeps re-selecting nothing. The button reads back that state, turns the screen on and points the cube at the first widget again. Use it before re-publishing.
-- **Status** (sidebar) — one page that asks the hardware what it is doing: CoreBar reachable + token, live link and how many device questions were answered, pages on the CoreBar, VivoCube Wi-Fi network + connection state, screen on/off, which layer/widget it is showing (with the picture Deckhand sent for it), uptime, last upload result, rotation state, SenseCube readings, KnobKey volume link, and whether weather resolves. **Copy report** puts it on the clipboard as text — paste that instead of taking a photo.
-- **Refresh / set up once after updating** — module bindings (DotKey → VivoCube widgets, SenseCube cards) rely on a module id that older Deckhand versions did not write to the CoreBar; press **Refresh / set up** once, then publish the Deckhand page again.
-- **Network** (VivoCube page) — shows which Wi-Fi the cube is on. Fresh cubes sit on the CoreBar's own hotspot, which the CoreBar switches off when idle; widget uploads then fail with “hotspotIp is empty” until the CoreBar reboots. **Set VivoCube Wi-Fi…** joins the cube to your own 2.4 GHz network (the CoreBar must be on the same network); the password goes to the cube only and is not stored on the Mac. After that, uploads travel over your network.
-- **Cards on the Deckhand page** — the cards on the page are listed in screen order; **drag** them to reorder, use − to remove and + (under *Available*) to add; publish afterwards.
-- **Panel size test…** (diagnostic) — pushes a test pattern of a chosen size with a red frame at the edge. The VivoCube panel is 240 × 240 (verified): the 240 pattern fills it, larger ones are not shown. Useful only to check that uploads still work.
-- **Widget rotation** — tick the widgets you want on this cube and set the interval (15 s, 30 s, 1 min, 3 min). With one widget ticked the button reads **Publish to VivoCube**; with several it reads **Publish & rotate** and a **Stop** button appears while the rotation runs. How it works: all ticked widgets (up to 6) are sent to the cube **once** as separate layers; after about 10 seconds for the cube to apply them, Deckhand only tells it which layer to show at each interval — the cube isn't re-flashed every step. The contents (weather, music…) are refreshed every few minutes. The log line "Package accepted — waiting 10 s" is normal: the CoreBar acknowledges the upload immediately, the cube then downloads and applies it itself over Wi-Fi.
-- **Push a custom image** — **Choose image…** picks any picture; it's rendered to the cube's pixel format (opaque; transparency is flattened) and uploaded. If a module isn't registered yet, the app provisions it automatically and retries. If the upload is refused with "busy" or "not connected to the network", the cube's own Wi-Fi link is the problem, not the image: the cube fetches new images over Wi-Fi, not over the magnetic connector.
+Shows one card at a time.
+
+- **On the cube now** — the card the cube *reports* it is on, with the picture Deckhand sent for it, "Card 2 of 4" and ◀ ▶ to step through them from the Mac (the DotKey and the bar's button do the same on the device). A dark picture with "Screen off" means the screen is off; an orange Wi-Fi note means the cube is not connected and may still show an old picture.
+- **What the cube shows** — an ordered list of up to 6 cards: drag to reorder, ✕ to remove, **Add a card…** to add (the **Picture** card asks for an image file). The order here is the order on the cube.
+- **Switch card** — **Stay on one card**, **Switch every** 15 s / 30 s / 1 min / 3 min (a timer on this Mac; Deckhand must be open), or **Only with the DotKey or the bar's button**.
+- **Send to cube** (⌘↩) — draws the cards, uploads them as one package, waits about 10 seconds for the cube to apply it and shows card 1. The steps appear under the button; a failure is one sentence with the next thing to do. The cards' contents are redrawn every few minutes while timed switching runs.
+- **Maintenance** — **Screen** switch (off stays off until you turn it on), **Fix black screen** (screen on + card 1; use it when the cube shows black after a reboot), **Restart cube**, **Send test picture**, and **Wi-Fi**: which network the cube is on and whether it is connected. Fresh cubes sit on the bar's own hotspot, which the bar switches off when idle; uploads then cannot reach the cube. **Set cube Wi-Fi…** joins it to your own **2.4 GHz** network (a combined 2.4/5 GHz name may not work; the bar must be on the same network); the password goes to the cube only.
 
 ### SenseCube
-Shows the live **temperature**, **humidity** and **ambient light** read from the sensor, polled every 5 seconds while the page is open (there is also a **Refresh** button). Presence (mmWave radar), sound level and vibration are handled on the device only and cannot be read over the network protocol, so they are not shown.
+Live **temperature**, **humidity** and **light**, read every 5 seconds while the page is open. **Add cards…** puts the temperature/humidity cards on the CoreBar page. Presence, sound and vibration are only available on the bar itself.
 
 ### KnobKey and DotKey
-Information pages for now. The CoreBar does not send raw knob or key events to the Mac; it only sends pre-mapped requests (volume up/down, "run this on the PC", "how busy is the CPU?") once a control is bound to a "PC" target in the device profile, and the Mac has to answer each of them over a connection it keeps open. Hot-key combinations never go through the Mac app at all — the CoreBar types them itself as a USB keyboard over the PC-LINK cable. Writing that profile and keeping that connection open are on the roadmap, so **KnobKey → volume** and **DotKey → Mac actions** are not available yet.
+What each control does, as it is bound today: knob **turn → Mac volume**, **press → mute**; DotKey **key 1 / 2 → cube card 1 / 2** (switched on the bar itself), **key 3 → next cube card**, **hold key 3 → Standard page**. These bindings are part of the CoreBar page and are active while that page is on the bar; publish it once to activate them. Changing them is planned.
 
 ### Widgets
-Pick a widget on the left to see its description and settings. All 13 widgets ship today: **Weather & time**, **Music (album art)**, **Claude Code monitor**, **CPU & memory**, **Network**, **Battery & power**, **Storage**, **World clock**, **Crypto ticker**, **Calendar**, **Disk I/O**, **Top CPU**, **Uptime**.
+The cards Deckhand can draw for the cube, with a preview and settings: **Weather & time**, **Music (album art)**, **Claude Code monitor**, **CPU & memory**, **Network**, **Battery & power**, **Storage**, **World clock**, **Crypto ticker**, **Calendar**, **Disk I/O**, **Top CPU**, **Uptime** and **Picture** (your own image). **Add to the cube** puts the selected card in the cube's list.
 
-- **Weather & time** — location (**Same as this Mac** or **Manual** city / coordinates), units (°C / °F) and the 24-hour clock switch live here. See section 6.
-- **Music (album art)** — the Apple Music remote: play/pause, previous, next, volume − / +, with the current track shown above the buttons. Publish the Music widget to a VivoCube from that cube's page.
-
-Where a widget appears, and how fast it rotates, is set per device: sidebar → **VivoCube** (or **CoreBar**) → **Widget rotation**.
+- **Weather & time** — location (**Same as this Mac** or **Manual**), units and the 24-hour clock. See section 6.
+- **Music** — play/pause, previous, next and volume for Apple Music.
 
 ### People
-Save contacts; each gets one-tap **Teams chat / call**, **FaceTime**, **Mail**. Stored locally on your Mac.
+Save contacts; each gets one-click **Teams chat / call**, **FaceTime**, **Mail**. Stored locally on your Mac.
+
+### Status
+Asks the bar and its modules what they are doing (and again every 30 seconds while open): connection, pages on the bar, the cube's Wi-Fi, screen and current card, the last upload result, SenseCube readings, the KnobKey link, modules seen before but missing now, and whether weather resolves. Problems come first, each with its one button. **Copy report** puts everything — plus your card lists and the last log lines — on the clipboard as text: paste that instead of taking a photo of the device.
 
 ### Logs
-Every message between this Mac and the CoreBar, with the pairing token redacted. Useful when reporting a problem.
+Every message between this Mac and the bar, with the pairing key redacted.
 
 ### Settings (gear, toolbar)
-- **CoreBar** — name, serial and address of the selected CoreBar.
-- **Connecting** — the network and USB-port guidance from section 2.
-- **On the CoreBar itself** — things the protocol can't set from the Mac: **time & timezone** (set on the CoreBar, kept by NTP), **Wi-Fi**, **Bluetooth**.
-- **About** — a short note; widget settings are in **Widgets**, rotation on each device's page.
+Name, serial and address of the bar; the connection and USB-port guidance; what can only be set on the bar itself (time & time zone, Wi-Fi, Bluetooth).
 
 ### About
-**About Deckhand** (sidebar bottom or toolbar) shows the version, a link to the repository and contact, and the license (MIT).
+**About Deckhand** (sidebar bottom) shows the version, repository link and license (MIT).
 
 ---
 
@@ -146,10 +138,10 @@ This is independent of the CoreBar's own built-in AccuWeather widget, which need
 
 - **"No CoreBars found"** — CoreBar and Mac must be on the same Wi-Fi; grant **Local Network** permission (System Settings → Privacy & Security → Local Network → Deckhand); press Scan again. If broadcast is blocked, use **Add by IP…**.
 - **App won't open (unidentified developer)** — right-click → Open (see Install), once.
-- **A module is missing after a scan** — tap the CoreBar screen to wake everything, make sure the module is attached and powered, then press **Refresh / set up** (see section 4).
+- **A module is missing after a scan** — tap the CoreBar screen to wake everything, make sure the module is attached and powered, then press **Find modules** (see section 4).
 - **"Module not accepted" on an image push** — the app auto-provisions and retries; if it still fails, re-scan modules first.
 - **VivoCube upload says "busy" or "not connected to the network"** — the cube downloads new images over its own Wi-Fi link. Check the cube's Wi-Fi in the official app or on the CoreBar, then try again; wait at least 10 seconds between uploads.
-- **VivoCube stays black** — press **Recover display** on the VivoCube page (then re-publish if needed). Avoid **Screen Off** while a rotation runs. If it is still black, press **Reboot** on the VivoCube page and publish again.
+- **VivoCube stays black** — open the VivoCube page: the status strip names the cause (screen off, not on Wi-Fi, or pointing at a card that no longer exists) with a button that fixes it; **Maintenance → Fix black screen** does the same by hand (then re-publish if needed). Avoid **Screen Off** while a rotation runs. If it is still black, press **Reboot** on the VivoCube page and publish again.
 - **Pushed image looks off** — re-publish the widget; if a custom image still looks wrong, try a square source image (Deckhand renders 240 × 240; transparency is flattened).
 - **The Deckhand page shows no picture on the clock card** — press **Refresh cover only** (re-uploads `deckhand/cover.png`); if the official app deployed in between, its Deploy deleted Deckhand's images — publish the page again. There is no error message because the CoreBar does not acknowledge previews.
 - **My CoreBar images / pages disappeared** — most likely the official UltraWorkSpace app deployed in between; it erases other apps' files. Re-publish from Deckhand.

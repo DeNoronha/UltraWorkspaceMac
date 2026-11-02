@@ -69,3 +69,7 @@ Principle: the CoreBar renders and keeps its own cards alive; the Mac only confi
 - **Cover date** — the clock-card cover is a static picture, so it is refreshed once a day (00:02) and at launch instead of every minute; the live time comes from the CoreBar's own TIME card.
 - **Plugin packs** — vendor hotkey packs (`config.json` + icons; see docs/research/vendor-plugins-findings.md) are importable as HOT_KEY_GROUP cards; importer not built yet.
 - Open hardware checks: metric cards show live values; KnobKey volume; DotKey layer switching; PC_CONTROL cards push; WORLD_TIME offset format renders; iconScale 80 looks right.
+
+## Ideas from SmallTV-Max / GeekMagic ecosystem (see docs/research/smalltv-max.md)
+
+Shortlist, in the order we would do them: knob = card/page browser (S); notification overlay dismissed by a DotKey press (S); crypto/market ticker with sparkline + holdings (S); presence-aware dimming from Mac idle/lock (S); a localhost `POST /notify` / `POST /image` endpoint for scripts, Shortcuts and Home Assistant (M, loopback-only); declarative `.deckhandtheme` packages with data bindings and an import/export + gallery (M); layout templates with widget slots (M); flights/ADS-B radar card (M). Not copying: device-served form UI without preview, unauthenticated LAN API, animation everywhere.

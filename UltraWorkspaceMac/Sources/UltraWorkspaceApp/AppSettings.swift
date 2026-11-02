@@ -35,22 +35,29 @@ final class AppSettings: ObservableObject {
     @Published var vivoRotationOn: Bool = false { didSet { save() } }
     /// Layers in the last VivoCube package that the module accepted (for "next" stepping).
     @Published var vivoLayerCount: Int = 1 { didSet { save() } }
+    /// How the cube moves between its cards.
+    enum SwitchMode: String, Codable, CaseIterable { case stay, timed, button }
+    @Published var vivoSwitchMode: SwitchMode = .timed { didSet { save() } }
+    /// Image file for the "Picture" card (copied into Application Support).
+    @Published var vivoPicturePath: String = "" { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows about this many cards without scrolling (the clock card is double width).
     static let coreCardsThatFit = 4
-    static let allCoreCards: [(id: String, title: String, needsMac: Bool)] = [
-        ("TIME", "Clock + Deckhand weather cover (Open-Meteo, free — refreshed hourly while the Mac is on)", false),
-        ("WEATHER", "Weather — CoreBar's own card (AccuWeather: free 14-day trial, PAID afterwards)", false),
-        ("WORLD_TIME", "World clock (CoreBar's own card)", false),
-        ("SENSE_TEMP", "SenseCube temperature (CoreBar's own card)", false),
-        ("SENSE_HUM", "SenseCube humidity (CoreBar's own card)", false),
-        ("CPU", "Mac CPU (fed by Deckhand)", true),
-        ("MEMORY", "Mac memory (fed by Deckhand)", true),
-        ("STORAGE", "Mac storage (fed by Deckhand)", true),
-        ("NETWORK", "Mac network (fed by Deckhand)", true),
-        ("NEXT_LAYER", "Button: next VivoCube widget", true),
-        ("MUSIC", "Button: Music play/pause", true),
+    struct CoreCard: Identifiable { let id: String; let title: String; let needsMac: Bool; let icon: String; let note: String }
+    static let allCoreCards: [CoreCard] = [
+        CoreCard(id: "TIME", title: "Clock", needsMac: false, icon: "clock", note: "The bar's clock card with Deckhand's picture (weather & date, free, updated hourly while Deckhand runs)."),
+        CoreCard(id: "WEATHER", title: "Weather (bar's own)", needsMac: false, icon: "cloud.sun", note: "Drawn by the bar from AccuWeather — needs a key (14-day trial, paid afterwards)."),
+        CoreCard(id: "WORLD_TIME", title: "World clock", needsMac: false, icon: "globe", note: "The bar's own world-clock card, set to this Mac's time zone."),
+        CoreCard(id: "SENSE_TEMP", title: "Temperature", needsMac: false, icon: "thermometer.medium", note: "From the SenseCube."),
+        CoreCard(id: "SENSE_HUM", title: "Humidity", needsMac: false, icon: "humidity", note: "From the SenseCube."),
+        CoreCard(id: "CPU", title: "Mac CPU", needsMac: true, icon: "cpu", note: ""),
+        CoreCard(id: "MEMORY", title: "Mac memory", needsMac: true, icon: "memorychip", note: ""),
+        CoreCard(id: "STORAGE", title: "Mac storage", needsMac: true, icon: "internaldrive", note: ""),
+        CoreCard(id: "NETWORK", title: "Mac network", needsMac: true, icon: "network", note: ""),
+        CoreCard(id: "NEXT_LAYER", title: "Button: next cube card", needsMac: true, icon: "forward.end", note: "Tapping it on the bar tells Deckhand to show the cube's next card."),
+        CoreCard(id: "MUSIC", title: "Button: play / pause", needsMac: true, icon: "playpause", note: "Controls Music on this Mac."),
     ]
+    static func coreCard(_ id: String) -> CoreCard? { allCoreCards.first { $0.id == id } }
 
     private let url: URL
 
@@ -73,7 +80,20 @@ final class AppSettings: ObservableObject {
         var accuWeatherKey: String? = nil
         var vivoRotationOn: Bool? = nil
         var vivoLayerCount: Int? = nil
+        var vivoSwitchMode: SwitchMode? = nil
+        var vivoPicturePath: String? = nil
     }
+
+    // MARK: VivoCube cards (ordered, max 6)
+
+    var vivoCards: [Theme] { vivoThemes.compactMap { Theme(rawValue: $0) } }
+    var vivoSlotsLeft: Int { max(0, AppModel.maxVivoLayers - vivoThemes.count) }
+    func addVivoCard(_ t: Theme) {
+        guard !vivoThemes.contains(t.rawValue), vivoThemes.count < AppModel.maxVivoLayers else { return }
+        vivoThemes.append(t.rawValue)
+    }
+    func removeVivoCard(_ t: Theme) { vivoThemes.removeAll { $0 == t.rawValue } }
+    func moveVivoCards(from: IndexSet, to: Int) { var v = vivoThemes; v.move(fromOffsets: from, toOffset: to); vivoThemes = v }
 
     /// Move a ticked card left/right in the on-screen order.
     func moveCoreCard(_ id: String, by delta: Int) {
@@ -86,16 +106,13 @@ final class AppSettings: ObservableObject {
     // MARK: Per-device rotation helpers
 
     func themes(for t: RotationTarget) -> [String] { t == .vivocube ? vivoThemes : coreThemes }
-    func enabledList(for t: RotationTarget) -> [Theme] {
-        let raw = themes(for: t)
-        return Theme.allCases.filter { raw.contains($0.rawValue) }
-    }
+    /// Cards in the order the user arranged them (not enum order).
+    func enabledList(for t: RotationTarget) -> [Theme] { themes(for: t).compactMap { Theme(rawValue: $0) } }
     func isEnabled(_ th: Theme, for t: RotationTarget) -> Bool { themes(for: t).contains(th.rawValue) }
     func setEnabled(_ th: Theme, _ on: Bool, for t: RotationTarget) {
-        var set = Set(themes(for: t))
-        if on { set.insert(th.rawValue) } else { set.remove(th.rawValue) }
-        let ordered = Theme.allCases.map(\.rawValue).filter { set.contains($0) }
-        if t == .vivocube { vivoThemes = ordered } else { coreThemes = ordered }
+        var list = themes(for: t)
+        if on { if !list.contains(th.rawValue) { list.append(th.rawValue) } } else { list.removeAll { $0 == th.rawValue } }
+        if t == .vivocube { vivoThemes = list } else { coreThemes = list }
     }
     func seconds(for t: RotationTarget) -> Int { t == .vivocube ? vivoSeconds : coreSeconds }
 
@@ -122,6 +139,8 @@ final class AppSettings: ObservableObject {
             accuWeatherKey = p.accuWeatherKey ?? ""
             vivoRotationOn = p.vivoRotationOn ?? false
             vivoLayerCount = p.vivoLayerCount ?? 1
+            vivoSwitchMode = p.vivoSwitchMode ?? ((p.vivoRotationOn ?? false) ? .timed : .timed)
+            vivoPicturePath = p.vivoPicturePath ?? ""
         }
     }
 
@@ -134,7 +153,8 @@ final class AppSettings: ObservableObject {
                           enabledThemes: nil, rotateSeconds: nil,
                           vivoThemes: vivoThemes, vivoSeconds: vivoSeconds,
                           coreThemes: coreThemes, coreSeconds: coreSeconds,
-                          coreCards: coreCards, deckhandPagePublished: deckhandPagePublished, accuWeatherKey: accuWeatherKey, vivoRotationOn: vivoRotationOn, vivoLayerCount: vivoLayerCount)
+                          coreCards: coreCards, deckhandPagePublished: deckhandPagePublished, accuWeatherKey: accuWeatherKey, vivoRotationOn: vivoRotationOn, vivoLayerCount: vivoLayerCount,
+                          vivoSwitchMode: vivoSwitchMode, vivoPicturePath: vivoPicturePath)
         if let data = try? JSONEncoder().encode(p) { try? data.write(to: url, options: .atomic) }
     }
 
