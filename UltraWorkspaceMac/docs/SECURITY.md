@@ -43,3 +43,7 @@ Local data: the pairing token is a `0600` file under `~/Library/Application Supp
 ## Mock CoreBar
 
 The mock in `mock-corebar/` is a test double and is **more permissive than the device**: it accepts any `AUTH` token, auto-approves pairing, answers both discovery probes, and does not enforce the device's per-route upload limits (100 MB `.tgz`, 50 MB `.zip`) — it only has a generic 64 MB multer cap and otherwise rejects nothing. It also writes every uploaded body unmodified to `mock-corebar/captures/` (git-ignored), so anything the vendor app deploys against it ends up on disk in clear. Do not expose it beyond localhost.
+
+## Capturing the device's traffic yourself
+
+`scripts/capture-ultrabar.sh` (run with `sudo`) writes rotating pcap files to `~/Documents/DNC-captures/`. Default mode captures packets between this Mac and the CoreBar (`--host <ip>`); `--shared` captures on `bridge100` when the CoreBar is joined to the Mac's Internet Sharing hotspot, which is the only way to see the device's cloud/DNS traffic from a Mac (Wi-Fi is switched, so a Mac otherwise only sees its own packets). TLS payloads stay opaque; hosts, SNI, DNS, timing and sizes are visible. Open the files with Wireshark (`brew install --cask wireshark`). Deckhand's own control-channel traffic is already logged decrypted in `wire.log`.
