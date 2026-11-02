@@ -55,6 +55,15 @@ final class AppModel: ObservableObject {
     var lastPublishedVivoLayers = 1
     var coverRefreshTask: Task<Void, Never>?
     @Published var vivoWiFi: [String: CoreBarSession.ModuleWiFi?] = [:]
+    // Diagnostics ("Status" page)
+    @Published var doctorItems: [DoctorItem] = []
+    @Published var doctorRunning = false
+    @Published var doctorRanAt: Date?
+    @Published var lastPushAt: Date?
+    @Published var lastVolumePushAt: Date?
+    /// Names + rendered previews of the layers in the last VivoCube package.
+    @Published var vivoLayerNames: [String] = []
+    @Published var vivoLayerImages: [Int: NSImage] = [:]
     @Published var showingVivoWiFi = false
     var vivoLayerIndex = 0
     @Published var currentPageId: String?

@@ -7,4 +7,5 @@ enum NavItem: Hashable {
     case addons
     case people
     case logs
+    case status          // device status / doctor
 }

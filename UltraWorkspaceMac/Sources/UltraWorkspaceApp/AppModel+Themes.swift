@@ -83,10 +83,14 @@ extension AppModel {
     /// Render `themes` into layers 1…n (widget 100+n) and upload a single package.
     private func uploadPackage(_ themes: [Theme], settings: AppSettings, session: CoreBarSession, serial: String) async -> Bool {
         var layers: [DeployPackager.Layer] = []
+        var names: [String] = []
+        var previews: [Int: NSImage] = [:]
         for (i, t) in themes.enumerated() {
             guard let rgba = await renderTheme(t, settings: settings) else {
                 say("\(t.title): could not render — skipped."); continue
             }
+            names.append(t.title)
+            if let png = Self.pngData(fromRGBA: rgba, width: 240, height: 240), let img = NSImage(data: png) { previews[i + 1] = img }
             let bin = DeviceImage.encode(width: 240, height: 240, rgba: rgba)
             layers.append(.init(layerId: i + 1, widgetId: Self.widgetId(forLayer: i + 1), defaultBin: bin, pressedBin: bin))
         }
@@ -96,6 +100,8 @@ extension AppModel {
             _ = try await session.upload(serial: serial, tgz: tgz)
             lastPublishedVivoLayers = layers.count
             settings.vivoLayerCount = layers.count
+            vivoLayerNames = names
+            vivoLayerImages = previews
             vivoLayerIndex = 0
             return true
         } catch {

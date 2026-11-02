@@ -104,6 +104,7 @@ private struct SidebarView: View {
             Section("Configure") {
                 Label("Widgets", systemImage: "puzzlepiece.extension").tag(NavItem.addons)
                 Label("People", systemImage: "person.2").tag(NavItem.people)
+                Label("Status", systemImage: "stethoscope").tag(NavItem.status)
                 Label("Logs", systemImage: "doc.text.magnifyingglass").tag(NavItem.logs)
             }
 
@@ -182,6 +183,7 @@ private struct DetailRouter: View {
         case .addons: AddonsView()
         case .people: PeopleView()
         case .logs: LogsView()
+        case .status: StatusView()
         case .coreBar:
             if model.selectedCoreBar != nil { CoreBarView() } else { Unavailable() }
         case .module(let serial):

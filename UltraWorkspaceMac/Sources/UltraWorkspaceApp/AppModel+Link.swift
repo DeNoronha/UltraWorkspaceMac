@@ -40,6 +40,8 @@ extension AppModel {
 
     private func handlePush(type: String, payloadJSON: Data?) async -> Data? {
         pushCount += 1
+        lastPushAt = Date()
+        if type == "GET_VOLUME" || type == "SET_VOLUME" { lastVolumePushAt = Date() }
         let payload = CoreBarLink.value(payloadJSON)
         let out: Any?
         switch type {

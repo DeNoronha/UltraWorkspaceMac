@@ -411,6 +411,18 @@ public struct CoreBarSession: Sendable {
         if text.contains("hotspotIp") {
             throw UltraBarError.uploadRejected("the CoreBar's link to the module is not up yet (its module hotspot has no IP address). Wait a minute, or detach and re-attach the VivoCube, then publish again")
         }
+        // Any other module-side rejection ("reply error:<n>", busy, no network…):
+        // the cube is usually still applying the previous package or re-joining
+        // Wi-Fi. Back off and retry a few times before giving up.
+        attempt = 0
+        while !accepted, attempt < 3 {
+            attempt += 1
+            WireLog.shared.event("upload: module rejected (\(text.prefix(60))) — retry \(attempt)/3 in 10 s")
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            (accepted, text) = try await postUpload(serial: serial, tgz: tgz)
+            if accepted { return true }
+        }
+        lastUploadReply = text
         if text.contains("module not found") {
             WireLog.shared.event("upload: module not registered — provisioning then retrying")
             _ = try? await provision(scanSeconds: 14)
@@ -581,6 +593,17 @@ public struct CoreBarSession: Sendable {
         guard ok else { throw UltraBarError.uploadRejected(text) }
     }
 
+    /// Last `/upload` reply text (for diagnostics). Session structs are values, so
+    /// this lives in a shared box.
+    public var lastUploadReply: String { get { UploadDiag.shared.last } nonmutating set { UploadDiag.shared.last = newValue } }
+    public final class UploadDiag: @unchecked Sendable {
+        public static let shared = UploadDiag()
+        private let lock = NSLock()
+        private var _last = ""; private var _at: Date?
+        public var last: String { get { lock.withLock { _last } } set { lock.withLock { _last = newValue; _at = Date() } } }
+        public var at: Date? { lock.withLock { _at } }
+    }
+
     private func postUpload(serial: String, tgz: Data) async throws -> (accepted: Bool, text: String) {
         let boundary = "ubw-\(UUID().uuidString)"
         guard let url = URL(string: "http://\(ip):\(Proto.uploadPort)/upload?serialNo=\(serial.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? serial)") else {
@@ -603,6 +626,7 @@ public struct CoreBarSession: Sendable {
         WireLog.shared.http("← \((resp as? HTTPURLResponse)?.statusCode ?? 0) \(text.prefix(200))")
         let httpOK = (resp as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
         let accepted = httpOK && text.contains("\"state\":200") && text.contains("\"msg\":\"ok\"")
+        UploadDiag.shared.last = accepted ? "accepted (\(Date().formatted(date: .omitted, time: .standard)))" : "\(text.prefix(120)) (\(Date().formatted(date: .omitted, time: .standard)))"
         return (accepted, text.isEmpty ? "HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0)" : text)
     }
 
