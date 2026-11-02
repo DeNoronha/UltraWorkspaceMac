@@ -113,6 +113,28 @@ public final class Store: @unchecked Sendable {
         return dir.appendingPathComponent("\(safe).json")
     }
 
+    /// Append-only list of module endpoints ever discovered on a CoreBar (by module serial).
+    public func rememberModules(_ endpoints: [[String: Any]], corebar serial: String) {
+        var known = knownModules(corebar: serial)
+        for e in endpoints {
+            guard let ms = (e["serialNumber"] as? String) ?? (e["serialNo"] as? String), !ms.isEmpty else { continue }
+            known[ms] = e
+        }
+        if let data = try? JSONSerialization.data(withJSONObject: Array(known.values)) {
+            try? data.write(to: knownURL(serial), options: .atomic)
+        }
+    }
+    public func knownModules(corebar serial: String) -> [String: [String: Any]] {
+        guard let data = try? Data(contentsOf: knownURL(serial)),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [:] }
+        var out: [String: [String: Any]] = [:]
+        for e in arr { if let ms = (e["serialNumber"] as? String) ?? (e["serialNo"] as? String) { out[ms] = e } }
+        return out
+    }
+    private func knownURL(_ serial: String) -> URL {
+        endpointsURL(serial).deletingLastPathComponent().appendingPathComponent("\(serial.filter { $0.isLetter || $0.isNumber }).known.json")
+    }
+
     public func saveEndpoints(_ data: Data, serial: String) {
         try? data.write(to: endpointsURL(serial), options: .atomic)
     }

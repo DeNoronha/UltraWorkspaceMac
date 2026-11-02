@@ -212,16 +212,27 @@ final class AppModel: ObservableObject {
             return
         }
         isWorking = true
-        say("Scanning the bus and registering modules on \(bar.name)…")
+        say("Scanning the bus and registering modules on \(bar.name)… Press a key on the DotKey now so it is awake for the scan.")
         Task {
             do {
                 // Scan + write the gateway config in one step, so modules are
                 // registered (controllable) right after a refresh. Merge with the
                 // modules we wrote last time so a module that is asleep during this
                 // scan (often the DotKey) isn't dropped from the config.
-                let prior = Store.shared.loadEndpoints(serial: bar.serialNo)
+                // Prior = last-written cache ∪ every module ever seen on this CoreBar,
+                // so a sleeping DotKey can never fall out of the config again.
+                var priorList: [[String: Any]] = []
+                if let d = Store.shared.loadEndpoints(serial: bar.serialNo),
+                   let arr = try? JSONSerialization.jsonObject(with: d) as? [[String: Any]] { priorList = arr }
+                let known = Store.shared.knownModules(corebar: bar.serialNo)
+                let have = Set(priorList.compactMap { ($0["serialNumber"] as? String) ?? ($0["serialNo"] as? String) })
+                priorList += known.values.filter { !have.contains((($0["serialNumber"] as? String) ?? ($0["serialNo"] as? String) ?? "")) }
+                let prior = try? JSONSerialization.data(withJSONObject: priorList)
                 let (mods, endpointsJSON, diag) = try await session.provision(priorEndpoints: prior)
                 Store.shared.saveEndpoints(endpointsJSON, serial: bar.serialNo)
+                if let arr = try? JSONSerialization.jsonObject(with: endpointsJSON) as? [[String: Any]] {
+                    Store.shared.rememberModules(arr, corebar: bar.serialNo)
+                }
                 self.modules = mods
                 self.say("setup: \(diag)")
                 if self.selectedModuleSerial == nil || !mods.contains(where: { $0.serial == self.selectedModuleSerial }) {
