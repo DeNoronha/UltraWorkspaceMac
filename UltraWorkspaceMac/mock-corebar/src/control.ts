@@ -323,6 +323,18 @@ function handleFrame(socket: tls.TLSSocket, req: RequestFrame): void {
       return;
     }
 
+    case Act.INTEGRATED_CONFIG_SET: {
+      const d = (data ?? {}) as { packageName?: string; config?: { apiKey?: string } };
+      if (d.packageName === 'com.ultrabar.weather') {
+        if (!d.config?.apiKey) { sendFrame(socket, reply(Act.INTEGRATED_CONFIG_SET, id, null, -1, 'com.ultrabar.weather not parameter error config')); return; }
+        state.record('evt', 'tls', `weather API key stored (${d.config.apiKey.length} chars)`);
+        sendFrame(socket, reply(Act.INTEGRATED_CONFIG_SET, id, 'success'));
+      } else {
+        sendFrame(socket, reply(Act.INTEGRATED_CONFIG_SET, id, null, -1, 'not support config'));
+      }
+      return;
+    }
+
     case Act.SCENE_DEPENDS_PROFILE: {
       // The only "read" of pages: ids + names. A fresh device has one page, "default".
       const list = (state.profiles.length ? state.profiles : [{ id: 'default', name: 'Standard Mode' }]) as { id?: string; name?: string }[];

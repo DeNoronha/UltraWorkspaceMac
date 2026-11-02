@@ -72,6 +72,14 @@ extension AppModel {
                 let weatherParam: [String: String] = ["lat": coords?.lat ?? "", "lon": coords?.lon ?? ""]
                 if coords == nil { self.say("No location available — the CoreBar's weather card will use the device's network location.") }
                 try await self.uploadButtonIcons(session: session)
+                // The CoreBar's own weather card needs an AccuWeather key (the firmware ships a placeholder).
+                let key = settings.accuWeatherKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !key.isEmpty {
+                    do { _ = try await session.setWeatherAPIKey(key, metric: settings.units == .metric); self.say("AccuWeather key stored on the CoreBar for its weather card.") }
+                    catch { self.say("Weather key not accepted: \(error.localizedDescription)") }
+                } else if settings.coreCards.contains("WEATHER") {
+                    self.say("Note: the CoreBar's weather card shows “--” until you enter an AccuWeather API key (free at developer.accuweather.com).")
+                }
                 let cards = Set(settings.coreCards)
                 let senseSerial = self.modules.first(where: { $0.type == "SENSE_CUBE" })?.serial
                 let standard: [String: Any] = [

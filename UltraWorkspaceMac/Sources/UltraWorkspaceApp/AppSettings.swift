@@ -29,6 +29,8 @@ final class AppSettings: ObservableObject {
     @Published var coreCards: [String] = AppSettings.defaultCoreCards { didSet { save() } }
     /// Whether the Deckhand page has been published (enables the daily cover refresh).
     @Published var deckhandPagePublished: Bool = false { didSet { save() } }
+    /// AccuWeather API key for the CoreBar's OWN weather card (stored on the device via 1010).
+    @Published var accuWeatherKey: String = "" { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows about this many cards without scrolling (the clock card is double width).
     static let coreCardsThatFit = 4
@@ -64,6 +66,7 @@ final class AppSettings: ObservableObject {
         var coreSeconds: Int? = nil
         var coreCards: [String]? = nil
         var deckhandPagePublished: Bool? = nil
+        var accuWeatherKey: String? = nil
     }
 
     // MARK: Per-device rotation helpers
@@ -102,6 +105,7 @@ final class AppSettings: ObservableObject {
             coreSeconds = p.coreSeconds ?? 30
             coreCards = p.coreCards ?? AppSettings.defaultCoreCards
             deckhandPagePublished = p.deckhandPagePublished ?? false
+            accuWeatherKey = p.accuWeatherKey ?? ""
         }
     }
 
@@ -114,7 +118,7 @@ final class AppSettings: ObservableObject {
                           enabledThemes: nil, rotateSeconds: nil,
                           vivoThemes: vivoThemes, vivoSeconds: vivoSeconds,
                           coreThemes: coreThemes, coreSeconds: coreSeconds,
-                          coreCards: coreCards, deckhandPagePublished: deckhandPagePublished)
+                          coreCards: coreCards, deckhandPagePublished: deckhandPagePublished, accuWeatherKey: accuWeatherKey)
         if let data = try? JSONEncoder().encode(p) { try? data.write(to: url, options: .atomic) }
     }
 

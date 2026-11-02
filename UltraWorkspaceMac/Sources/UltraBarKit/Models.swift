@@ -22,6 +22,7 @@ public enum Proto {
     public static let actGetProfileWidget = 1002  // GET_PROFILE_WIDGET — placeable widget tree
     public static let actTriggerProfileChange = 1103 // TRIGGER_PROFILE_CHANGE — data = profile id (switch page)
     public static let actBatchSaveProfile = 1108  // BATCH_SAVE_PROFILE — data = [ProfileDTO] (REPLACES all pages)
+    public static let actIntegratedConfigSet = 1010 // INTEGRATED_CONFIG_SET — {packageName, config}; "com.ultrabar.weather" = the built-in weather card's AccuWeather key
     public static let actSceneDependsProfile = 30710 // SCENE_DEPENDS_PROFILE — [{label:name, value:id, last}] (the only way to list page ids)
     public static let actPreviewScreensaver = 30742 // PREVIEW_SCREENSAVER — {url, mediaType} one-shot full-screen
     public static let actPushMessage = 1000000    // PUSH_MESSAGE — device→client {type:PushType, payload} (SET_VOLUME, PC_CONTROL, CPU/MEMORY/STORAGE/NETWORK requests, …)

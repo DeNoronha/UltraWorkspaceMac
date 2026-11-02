@@ -286,6 +286,13 @@ private struct CoreBarPagesView: View {
                     }
                 }.toggleStyle(.checkbox)
             }
+            HStack(spacing: 8) {
+                Text("AccuWeather API key").font(.caption)
+                TextField("needed by the CoreBar's own weather card", text: $settings.accuWeatherKey).textFieldStyle(.roundedBorder).frame(maxWidth: 320)
+                Link("Get one (free)", destination: URL(string: "https://developer.accuweather.com")!).font(.caption)
+            }
+            Text("The CoreBar fetches its weather itself (AccuWeather) and ships without a key, so its card shows “--” until a key is stored on the device. Deckhand's own weather widget (Open-Meteo) does not need this.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Text("Modules on this page: KnobKey → Mac volume (button = mute), DotKey buttons 1/2 → VivoCube widgets 1/2 on the device, button 3 → next widget, long-press → standard page.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
 

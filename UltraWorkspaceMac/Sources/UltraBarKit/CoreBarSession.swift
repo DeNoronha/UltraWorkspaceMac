@@ -476,6 +476,29 @@ public struct CoreBarSession: Sendable {
         return text
     }
 
+    /// Configure the CoreBar's built-in WEATHER card. The firmware ships with a
+    /// placeholder AccuWeather key ("YOUR_REAL_API_KEY"), so the card shows "--"
+    /// until a real key is set via INTEGRATED_CONFIG_SET (1010) for the virtual
+    /// package "com.ultrabar.weather" (`{apiKey, metric}`; language follows the
+    /// device). The key is stored on the device.
+    @discardableResult
+    public func setWeatherAPIKey(_ apiKey: String, metric: Bool) async throws -> String {
+        let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw UltraBarError.protocolError("empty AccuWeather API key") }
+        let client = try await authedClient()
+        defer { Task { await client.close() } }
+        let payload: [String: Any] = ["packageName": "com.ultrabar.weather", "config": ["apiKey": trimmed, "metric": metric]]
+        let json = try JSONSerialization.data(withJSONObject: payload)
+        guard let line = try await client.request(act: Proto.actIntegratedConfigSet, dataJSON: json, timeout: 10) else {
+            throw UltraBarError.protocolError("no reply to INTEGRATED_CONFIG_SET (1010)")
+        }
+        let text = String(data: line, encoding: .utf8) ?? "<non-utf8>"
+        if let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any], code(reply) != 200 {
+            throw UltraBarError.protocolError("weather config rejected: \(text.prefix(160))")
+        }
+        return text
+    }
+
     /// Upload one image into the CoreBar's `deckhand/` asset folder (never without a subDir:
     /// an empty subDir with the device's default isFull=true wipes every app's files).
     public func uploadPageAsset(_ image: Data, name: String) async throws {

@@ -28,6 +28,7 @@ export const Act = {
   REQ_AUTH_TOKEN: 101, // data = {id, clientType:"pc", name} → data.token after Approve
   GET_APP_LIST: 1000,
   GET_PROFILE_WIDGET: 1002,
+  INTEGRATED_CONFIG_SET: 1010, // {packageName, config} — com.ultrabar.weather = AccuWeather key
   TRIGGER_PROFILE_CHANGE: 1103, // data = profile id string
   BATCH_SAVE_PROFILE: 1108, // data = [ProfileDTO] (full-replace)
   SCENE_ACTION_V2: 1205,
