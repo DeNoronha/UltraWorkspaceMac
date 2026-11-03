@@ -131,16 +131,20 @@ struct VivoCubeView: View {
 
     private var switching: some View {
         Panel("Switch card", footer: settings.vivoSwitchMode == .timed ? "Timed switching runs on this Mac — Deckhand must be open." : nil) {
+            // Plain radio group; the interval is a separate control (a picker inside a radio label is not supported on AppKit).
             Picker("", selection: $settings.vivoSwitchMode) {
                 Text("Stay on one card").tag(AppSettings.SwitchMode.stay)
-                HStack(spacing: 6) {
-                    Text("Switch every")
-                    Picker("", selection: $settings.vivoSeconds) { Text("15 s").tag(15); Text("30 s").tag(30); Text("1 min").tag(60); Text("3 min").tag(180) }
-                        .labelsHidden().frame(width: 80).disabled(settings.vivoSwitchMode != .timed)
-                }.tag(AppSettings.SwitchMode.timed)
+                Text("Switch automatically").tag(AppSettings.SwitchMode.timed)
                 Text("Only with the DotKey or the bar's button").tag(AppSettings.SwitchMode.button)
             }
             .pickerStyle(.radioGroup).labelsHidden()
+            HStack(spacing: 8) {
+                Text("Every").foregroundStyle(settings.vivoSwitchMode == .timed ? .primary : .secondary)
+                Picker("", selection: Binding(get: { [15, 30, 60, 180].contains(settings.vivoSeconds) ? settings.vivoSeconds : 30 }, set: { settings.vivoSeconds = $0 })) {
+                    Text("15 s").tag(15); Text("30 s").tag(30); Text("1 min").tag(60); Text("3 min").tag(180)
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 260).disabled(settings.vivoSwitchMode != .timed)
+            }.padding(.leading, 22)
             .onChange(of: settings.vivoSwitchMode) { mode in
                 if mode != .timed, model.themeRunning { model.stopThemeRotation(settings: settings) }
                 else if mode == .timed, !model.themeRunning, !model.vivoLayerNames.isEmpty { model.sendToCube(settings: settings) }
