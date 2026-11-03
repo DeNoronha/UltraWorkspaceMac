@@ -107,6 +107,10 @@ extension AppModel {
                         if let senseSerial { w.append(["id": "deckhand.sense.hum", "type": "SENSE_CUBE_HUM", "name": "Humidity", "param": ["uid": senseSerial]]) }
                     case "SENSE_LUX":
                         if let senseSerial { w.append(["id": "deckhand.sense.lux", "type": "SENSE_CUBE_ALS", "name": "Light", "param": ["uid": senseSerial]]) }
+                    case "SENSE_PRESENCE":
+                        if let senseSerial { w.append(["id": "deckhand.sense.radar", "type": "SENSE_CUBE_RADAR", "name": "Presence", "param": ["uid": senseSerial]]) }
+                    case "SENSE_SOUND":
+                        if let senseSerial { w.append(["id": "deckhand.sense.audio", "type": "SENSE_CUBE_AUDIO", "name": "Sound level", "param": ["uid": senseSerial]]) }
                     case "CPU": w.append(["id": "deckhand.cpu", "type": "CPU", "name": "Mac CPU", "param": ["data": ""]])
                     case "MEMORY": w.append(["id": "deckhand.mem", "type": "MEMORY", "name": "Mac memory", "param": ["data": ""]])
                     case "STORAGE": w.append(["id": "deckhand.storage", "type": "STORAGE", "name": "Mac storage", "param": ["data": ""]])

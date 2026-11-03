@@ -64,6 +64,8 @@ final class AppSettings: ObservableObject {
         CoreCard(id: "SENSE_TEMP", title: "Temperature", needsMac: false, icon: "thermometer.medium", note: "From the SenseCube."),
         CoreCard(id: "SENSE_HUM", title: "Humidity", needsMac: false, icon: "humidity", note: "From the SenseCube."),
         CoreCard(id: "SENSE_LUX", title: "Light", needsMac: false, icon: "sun.max", note: "From the SenseCube (illuminance in lux)."),
+        CoreCard(id: "SENSE_PRESENCE", title: "Presence", needsMac: false, icon: "person.wave.2", note: "From the SenseCube's radar — only the bar can show it; the Mac cannot read it."),
+        CoreCard(id: "SENSE_SOUND", title: "Sound level", needsMac: false, icon: "waveform", note: "From the SenseCube's microphone (dB) — only the bar can show it; the Mac cannot read it."),
         CoreCard(id: "CPU", title: "Mac CPU", needsMac: true, icon: "cpu", note: ""),
         CoreCard(id: "MEMORY", title: "Mac memory", needsMac: true, icon: "memorychip", note: ""),
         CoreCard(id: "STORAGE", title: "Mac storage", needsMac: true, icon: "internaldrive", note: ""),

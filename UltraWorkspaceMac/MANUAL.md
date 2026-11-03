@@ -95,7 +95,7 @@ Shows one card at a time.
 - **Maintenance** — **Cube screen** switch (off stays off until you turn it on), **Fix black screen** (screen on + card 1; use it when the cube shows black after a reboot), **Restart cube**, **Send test picture**, and **Wi-Fi**: which network the cube is on and whether it is connected. Fresh cubes sit on the bar's own hotspot, which the bar switches off when idle; uploads then cannot reach the cube. **Set cube Wi-Fi…** joins it to your own **2.4 GHz** network (a combined 2.4/5 GHz name may not work; the bar must be on the same network); the password goes to the cube only.
 
 ### SenseCube
-Live **temperature**, **humidity** and **light**, read every 5 seconds while the page is open. **Add all three** puts the Temperature, Humidity and Light cards on the CoreBar page (the bar draws them itself). Presence, sound and vibration are only available on the bar itself.
+Live **temperature**, **humidity** and **light**, read every 5 seconds while the page is open. **Add all five** puts the Temperature, Humidity, Light, Presence and Sound level cards on the CoreBar page (the bar draws them itself). Presence (radar) and sound level are push-only: the bar can show them, Deckhand cannot read them. Vibration is only an event on the bar.
 
 ### KnobKey and DotKey
 What each control does, as it is bound today: knob **turn → Mac volume**, **press → mute**; DotKey **key 1 / 2 → cube card 1 / 2** (switched on the bar itself), **key 3 → next cube card**, **hold key 3 → Standard page**. These bindings are part of the CoreBar page and are active while that page is on the bar; publish it once to activate them. Changing them is planned.

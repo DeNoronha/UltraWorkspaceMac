@@ -43,14 +43,14 @@ struct SenseCubeView: View {
                     }
                     if let u = reader.updated { Text("Read \(u, style: .time) · every 5 s while this page is open").font(.caption).foregroundStyle(.secondary) }
                     else if reader.reading == nil, !reader.busy { Text("No reply yet — tap the bar's screen to wake the sensor.").font(.caption).foregroundStyle(.orange) }
-                    Panel("On the bar", footer: "Presence, sound and vibration are only available on the bar itself.") {
-                        let ids = ["SENSE_TEMP", "SENSE_HUM", "SENSE_LUX"]
+                    Panel("On the bar", footer: "Presence and sound level are push-only: the bar can show them as cards, this Mac cannot read them. Vibration (shock) is only an event on the bar.") {
+                        let ids = ["SENSE_TEMP", "SENSE_HUM", "SENSE_LUX", "SENSE_PRESENCE", "SENSE_SOUND"]
                         let onPage = ids.filter { settings.coreCards.contains($0) }
                         HStack {
-                            Text(onPage.isEmpty ? "Show these on the bar: add the Temperature, Humidity or Light card to the CoreBar page."
+                            Text(onPage.isEmpty ? "Show these on the bar: Temperature, Humidity and Light, plus Presence and Sound level (bar only)."
                                  : "\(onPage.compactMap { AppSettings.coreCard($0)?.title }.joined(separator: ", ")) on the CoreBar page.")
                             Spacer()
-                            Button(onPage.count == ids.count ? "CoreBar page" : "Add all three") {
+                            Button(onPage.count == ids.count ? "CoreBar page" : "Add all five") {
                                 for id in ids where !settings.coreCards.contains(id) { settings.coreCards.append(id) }
                                 model.nav = .coreBarPage
                             }
