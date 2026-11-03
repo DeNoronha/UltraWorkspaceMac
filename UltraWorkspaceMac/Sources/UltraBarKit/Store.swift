@@ -18,6 +18,8 @@ public final class Store: @unchecked Sendable {
         /// The bar's own hotspot as last reported by a module (property 7). Differs per unit.
         public var hotspotSSID: String?
         public var hotspotPassword: String?
+        /// Every Wi-Fi the cube has been joined to from this Mac (ssid → password), so switching back is one click.
+        public var savedNetworks: [String: String]?
         public var id: String { serialNo }
     }
 
@@ -66,6 +68,18 @@ public final class Store: @unchecked Sendable {
             state.coreBars[idx].hotspotPassword = password
             persist()
         }
+    }
+    public func rememberNetwork(serial: String, ssid: String, password: String) {
+        queue.sync {
+            guard let idx = state.coreBars.firstIndex(where: { $0.serialNo == serial }), !ssid.isEmpty else { return }
+            var n = state.coreBars[idx].savedNetworks ?? [:]
+            n[ssid] = password
+            state.coreBars[idx].savedNetworks = n
+            persist()
+        }
+    }
+    public func savedNetworks(serial: String) -> [(ssid: String, password: String)] {
+        queue.sync { (state.coreBars.first { $0.serialNo == serial }?.savedNetworks ?? [:]).sorted { $0.key < $1.key }.map { ($0.key, $0.value) } }
     }
     public func hotspot(serial: String) -> (ssid: String, password: String)? {
         queue.sync {

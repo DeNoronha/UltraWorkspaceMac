@@ -196,23 +196,34 @@ struct VivoWiFiSheet: View {
     @Environment(\.dismiss) private var dismiss
     let serial: String
     @StateObject private var draft = Draft()
-    private final class Draft: ObservableObject { @Published var ssid = ""; @Published var password = "" }
+    private final class Draft: ObservableObject { @Published var ssid = ""; @Published var password = ""; @Published var show = false }
+    private var saved: [(ssid: String, password: String)] { model.selectedCoreBar.map { Store.shared.savedNetworks(serial: $0.serialNo) } ?? [] }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Join the cube to a Wi-Fi network").font(.title3).bold()
             Text("2.4 GHz networks only — the cube has no 5 GHz radio, and a combined 2.4/5 GHz name may not work. The bar must be on the same network. The password is sent to the cube and kept only in Deckhand's settings so the cube can be switched back later; it is redacted from Deckhand's log.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if !saved.isEmpty {
+                Text("Networks the cube has used — click to fill in:").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    ForEach(saved, id: \.ssid) { n in
+                        Button {
+                            draft.ssid = n.ssid; draft.password = n.password
+                        } label: { Label(n.ssid.hasPrefix("AndroidAP") ? "CoreBar hotspot (\(n.ssid))" : n.ssid, systemImage: n.ssid.hasPrefix("AndroidAP") ? "dot.radiowaves.left.and.right" : "wifi") }
+                        .controlSize(.small)
+                    }
+                }
+            } else {
+                Text("The bar's own hotspot (name “AndroidAP_…” and password) is printed on the bar; Deckhand remembers every network once the cube has reported it.").font(.caption).foregroundStyle(.secondary)
+            }
             Form {
                 TextField("Wi-Fi name", text: $draft.ssid)
-                SecureField("Password", text: $draft.password)
+                if draft.show { TextField("Password", text: $draft.password) } else { SecureField("Password", text: $draft.password) }
+                Toggle("Show password", isOn: $draft.show)
+                if !draft.password.isEmpty { Text("\(draft.password.count) characters").font(.caption).foregroundStyle(.secondary) }
             }.formStyle(.grouped)
             HStack {
-                if let h = model.knownHotspot {
-                    Button("Back to the CoreBar hotspot (\(h.ssid))") { draft.ssid = h.ssid; draft.password = h.password }.buttonStyle(.link).font(.caption)
-                } else {
-                    Text("The bar's own hotspot (name “AndroidAP_…” and password) is printed on the bar; Deckhand remembers it once the cube has reported it.").font(.caption).foregroundStyle(.secondary)
-                }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Send to cube") { model.setVivoWiFi(serial: serial, ssid: draft.ssid, password: draft.password); dismiss() }
@@ -221,6 +232,6 @@ struct VivoWiFiSheet: View {
             }
         }
         .padding(20).frame(width: 460)
-        .onAppear { if let w = model.vivoWiFi[serial] ?? nil, !w.isCoreBarHotspot { draft.ssid = w.ssid } }
+        .onAppear { if let w = model.vivoWiFi[serial] ?? nil { draft.ssid = w.ssid; draft.password = w.password } }
     }
 }
