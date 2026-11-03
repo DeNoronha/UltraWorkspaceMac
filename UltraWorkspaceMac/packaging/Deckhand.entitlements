@@ -5,6 +5,12 @@
     <!-- Hardened-runtime entitlements for Deckhand (not sandboxed).
          The app talks to the CoreBar on the LAN, reads Calendar/Location via
          TCC prompts (usage strings in Info.plist), and loads no plug-ins, so no
-         relaxations (JIT, unsigned memory, library validation) are needed. -->
+         relaxations (JIT, unsigned memory, library validation) are needed.
+         Hardened runtime does require these two resource-access entitlements,
+         otherwise EventKit / CoreLocation deny silently without a prompt. -->
+    <key>com.apple.security.personal-information.calendars</key>
+    <true/>
+    <key>com.apple.security.personal-information.location</key>
+    <true/>
 </dict>
 </plist>

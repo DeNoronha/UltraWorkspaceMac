@@ -124,6 +124,7 @@ struct VivoCubeView: View {
     private func add(_ t: Theme) {
         if t == .picture, settings.vivoPicturePath.isEmpty { WidgetsView.choosePicture(settings) }
         settings.addVivoCard(t)
+        model.requestCardPermissions(t)
     }
 
     // MARK: Switch mode

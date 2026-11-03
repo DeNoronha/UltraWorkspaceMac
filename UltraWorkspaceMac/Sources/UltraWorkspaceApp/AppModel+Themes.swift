@@ -72,6 +72,20 @@ extension AppModel {
         }
     }
 
+    /// Ask for macOS permissions a card needs the moment it is added, so the
+    /// prompt appears while the user is looking (not later from a timer).
+    func requestCardPermissions(_ t: Theme) {
+        guard t == .calendar else { return }
+        Task {
+            if CalendarSource.authStatus() == .notDetermined {
+                let ok = await CalendarSource.requestAccess()
+                self.say(ok ? "Calendar access granted — the card shows your next events." : "Calendar access was not granted. Allow it in System Settings → Privacy & Security → Calendars.")
+            } else if CalendarSource.authStatus() == .denied {
+                self.say("Calendar access is off for Deckhand. Allow it in System Settings → Privacy & Security → Calendars.")
+            }
+        }
+    }
+
     /// Kept for the launch-time resume path.
     func startThemeRotation(settings: AppSettings) { sendToCube(settings: settings) }
 

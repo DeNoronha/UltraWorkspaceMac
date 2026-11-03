@@ -57,6 +57,9 @@ extension AppModel {
                 return ("The cube is not on Wi-Fi, so \(tail)",
                         DoctorAction(title: "Set cube Wi-Fi…") { [weak self] in self?.nav = .vivoCube; self?.showingVivoWiFi = true })
             }
+            if let w = vivoWiFi[vivo.serial] ?? nil, !w.isCoreBarHotspot, CoreBarSession.UploadDiag.shared.last.contains("error:4") {
+                return ("The bar refuses uploads while the cube is on “\(w.ssid)” (error 4) — it only delivers over its own hotspot.", hotspotAction(serial: vivo.serial))
+            }
             if vivoScreenOn == false {
                 return ("The cube's screen is off.",
                         DoctorAction(title: "Turn on") { [weak self] in self?.setCubeScreen(on: true, serial: vivo.serial) })

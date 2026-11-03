@@ -42,7 +42,7 @@ struct WidgetsView: View {
                                         Label("On the cube", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                                         Button("Remove") { settings.removeVivoCard(model.selectedAddon) }
                                     } else {
-                                        Button { if model.selectedAddon == .picture, settings.vivoPicturePath.isEmpty { Self.choosePicture(settings) }; settings.addVivoCard(model.selectedAddon) } label: { Label("Add to the cube", systemImage: "plus") }
+                                        Button { if model.selectedAddon == .picture, settings.vivoPicturePath.isEmpty { Self.choosePicture(settings) }; settings.addVivoCard(model.selectedAddon); model.requestCardPermissions(model.selectedAddon) } label: { Label("Add to the cube", systemImage: "plus") }
                                             .buttonStyle(.borderedProminent).disabled(settings.vivoSlotsLeft == 0)
                                         if settings.vivoSlotsLeft == 0 { Text("The cube is full (\(AppModel.maxVivoLayers) cards).").font(.caption).foregroundStyle(.secondary) }
                                     }
