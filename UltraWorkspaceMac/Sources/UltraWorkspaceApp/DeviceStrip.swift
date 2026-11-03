@@ -19,7 +19,7 @@ struct DeviceStrip: View {
                 Spacer()
                 showing.font(.caption).foregroundStyle(.secondary)
             }
-            if let f = model.deviceFault(settings: settings) {
+            if let f = model.deviceFault(settings: settings, cube: kind == .cube) {
                 HStack(spacing: 10) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                     // No fixedSize here: inside an HStack next to a button it gets measured at zero width,

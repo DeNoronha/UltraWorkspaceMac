@@ -43,12 +43,14 @@ extension AppModel {
     }
 
     /// The one thing that is wrong right now, with the one button that fixes it.
-    func deviceFault(settings: AppSettings) -> (message: String, action: DoctorAction)? {
+    /// One fault + one fix for a device page. `cube` = the VivoCube page (cube Wi-Fi/screen/card faults);
+    /// otherwise the CoreBar page (link and page faults only — cube problems belong on the cube page).
+    func deviceFault(settings: AppSettings, cube: Bool) -> (message: String, action: DoctorAction)? {
         if linkState != "Live link" {
             return ("Not connected to the bar — its Mac cards and the KnobKey volume won't update.",
                     DoctorAction(title: "Reconnect") { [weak self] in self?.startLink() })
         }
-        if let vivo = firstVivoCube {
+        if cube, let vivo = firstVivoCube {
             if cubeOffline {
                 let tail = lastCubeSentAt == nil ? "new cards cannot reach it." : "it still shows its previous cards — the ones you sent never arrived."
                 if let w = vivoWiFi[vivo.serial] ?? nil, !w.isCoreBarHotspot {
@@ -69,7 +71,7 @@ extension AppModel {
                         DoctorAction(title: "Fix") { [weak self] in self?.recoverVivoDisplay(serial: vivo.serial) })
             }
         }
-        if settings.deckhandPagePublished, !corebarPages.isEmpty, !corebarPages.contains(where: { $0.id == Self.deckhandPageId }) {
+        if !cube, settings.deckhandPagePublished, !corebarPages.isEmpty, !corebarPages.contains(where: { $0.id == Self.deckhandPageId }) {
             return ("The Deckhand page is gone from the bar (did the official app deploy?).",
                     DoctorAction(title: "Publish page") { [weak self] in self?.publishDeckhandPage(settings: settings) })
         }
