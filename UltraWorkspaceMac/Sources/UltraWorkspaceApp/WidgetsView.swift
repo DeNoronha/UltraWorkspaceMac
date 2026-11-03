@@ -136,20 +136,12 @@ struct WidgetsView: View {
         switch t {
         case .weather: return "Current weather via Open-Meteo — free, no key. No clock on purpose: the cube gets a new picture every 5 minutes at most."
         case .music: return "What Music is playing, with album art."
-        case .cpu: return "CPU and memory use of this Mac."
-        case .network: return "Download and upload speed of this Mac."
         case .claude: return "Claude Code: tokens today, your plan, % of your own daily budget, active sessions, and which sessions wait for your input."
-        case .battery: return "Battery charge and power state (a desktop Mac shows “On AC power”)."
-        case .disk: return "How full the startup disk is."
-        case .worldclock: return "The time in three cities of your choice."
         case .crypto, .crypto2, .crypto3, .crypto4, .crypto5: return "Up to five coins, each as its own card: price now, today's low and high, change since midnight and a chart of today (CoinGecko, no key)."
         case .calendar: return "Your next events from the calendars you pick, each in its calendar's colour."
-        case .clock: return "A clock face — analog or digital, 12 or 24 hours."
         case .date: return "Today's date: weekday, day, month and year, long or short."
-        case .diskio: return "Live disk read/write throughput."
-        case .topcpu: return "The apps using the most CPU right now."
-        case .uptime: return "How long this Mac has been running, with load averages."
         case .picture: return "A picture of your own, scaled to the cube's 240 × 240 panel."
+        default: return "" // live-feed cards are not in the library (Theme.isLiveFeed)
         }
     }
 
@@ -173,25 +165,6 @@ struct WidgetsView: View {
             }
         case .music:
             Panel("Music") { MusicControls() }
-        case .worldclock:
-            Panel("World clock") {
-                ForEach(0..<3, id: \.self) { i in
-                    HStack {
-                        Text("City \(i + 1)").frame(width: 60, alignment: .leading)
-                        TimeZonePicker(selection: Binding(get: { i < settings.worldClockZones.count ? settings.worldClockZones[i] : "" },
-                                                          set: { v in var z = settings.worldClockZones; while z.count < 3 { z.append("") }; z[i] = v; settings.worldClockZones = z }))
-                    }
-                }
-                Toggle("24-hour clock", isOn: $settings.clock24h).toggleStyle(.switch)
-            }
-        case .clock:
-            Panel("Clock") {
-                Picker("Style", selection: $settings.clockStyle) { Text("Analog").tag(AppSettings.ClockStyle.analog); Text("Digital").tag(AppSettings.ClockStyle.digital) }
-                    .pickerStyle(.segmented).frame(width: 200)
-                Toggle("24-hour clock", isOn: $settings.clock24h).toggleStyle(.switch)
-                Toggle("Show seconds", isOn: $settings.clockSeconds).toggleStyle(.switch)
-                Text("The cube's picture is redrawn only when Deckhand sends it again (every few minutes), so seconds are a snapshot, not a running hand.").font(.caption).foregroundStyle(.secondary)
-            }
         case .date:
             Panel("Date") {
                 Picker("Style", selection: $settings.dateStyle) { Text("Long").tag(AppSettings.DateStyle.long); Text("Short").tag(AppSettings.DateStyle.short); Text("Numeric").tag(AppSettings.DateStyle.numeric) }
@@ -268,28 +241,6 @@ struct MusicControls: View {
     }
 }
 
-
-/// Searchable time-zone picker (600+ identifiers): a text filter plus a menu of matches.
-struct TimeZonePicker: View {
-    @Binding var selection: String
-    @StateObject private var ui = UI()
-    private final class UI: ObservableObject { @Published var filter = "" }
-    private var matches: [String] {
-        let all = TimeZone.knownTimeZoneIdentifiers
-        let f = ui.filter.trimmingCharacters(in: .whitespaces).lowercased()
-        if f.isEmpty { return all }
-        return all.filter { $0.lowercased().replacingOccurrences(of: "_", with: " ").contains(f) }
-    }
-    var body: some View {
-        HStack {
-            TextField("Search city", text: $ui.filter).frame(width: 130)
-            Picker("", selection: $selection) {
-                if !selection.isEmpty, !matches.contains(selection) { Text(selection).tag(selection) }
-                ForEach(matches.prefix(200), id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) }
-            }.labelsHidden().frame(width: 230)
-        }
-    }
-}
 
 /// Toggle list of the Mac's calendars with their colours; nothing ticked = all calendars.
 struct CalendarPicker: View {

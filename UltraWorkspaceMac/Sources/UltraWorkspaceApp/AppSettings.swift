@@ -35,11 +35,6 @@ final class AppSettings: ObservableObject {
     @Published var vivoPicturePath: String = "" { didSet { save() } }
 
     // MARK: Card preferences (2026-11-03)
-    /// World clock: three time-zone identifiers, top to bottom.
-    @Published var worldClockZones: [String] = ["Europe/Amsterdam", "America/New_York", "Asia/Tokyo"] { didSet { save() } }
-    enum ClockStyle: String, Codable, CaseIterable { case analog, digital }
-    @Published var clockStyle: ClockStyle = .analog { didSet { save() } }
-    @Published var clockSeconds: Bool = false { didSet { save() } }
     enum DateStyle: String, Codable, CaseIterable { case long, short, numeric }
     @Published var dateStyle: DateStyle = .long { didSet { save() } }
     @Published var dateShowWeekday: Bool = true { didSet { save() } }
@@ -102,8 +97,9 @@ final class AppSettings: ObservableObject {
         var vivoLayerCount: Int? = nil
         var vivoSwitchMode: SwitchMode? = nil
         var vivoPicturePath: String? = nil
+        // Retired cube cards (world clock / clock, 2026-11-03); kept so old settings.json still decodes.
         var worldClockZones: [String]? = nil
-        var clockStyle: ClockStyle? = nil
+        var clockStyle: String? = nil
         var clockSeconds: Bool? = nil
         var dateStyle: DateStyle? = nil
         var dateShowWeekday: Bool? = nil
@@ -178,9 +174,6 @@ final class AppSettings: ObservableObject {
             vivoLayerCount = p.vivoLayerCount ?? 1
             vivoSwitchMode = p.vivoSwitchMode ?? ((p.vivoRotationOn ?? false) ? .timed : .timed)
             vivoPicturePath = p.vivoPicturePath ?? ""
-            worldClockZones = p.worldClockZones ?? worldClockZones
-            clockStyle = p.clockStyle ?? .analog
-            clockSeconds = p.clockSeconds ?? false
             dateStyle = p.dateStyle ?? .long
             dateShowWeekday = p.dateShowWeekday ?? true
             dateShowYear = p.dateShowYear ?? true
@@ -202,7 +195,6 @@ final class AppSettings: ObservableObject {
                           vivoThemes: vivoThemes, vivoSeconds: vivoSeconds,
                           coreCards: coreCards, deckhandPagePublished: deckhandPagePublished, accuWeatherKey: accuWeatherKey, vivoRotationOn: vivoRotationOn, vivoLayerCount: vivoLayerCount,
                           vivoSwitchMode: vivoSwitchMode, vivoPicturePath: vivoPicturePath,
-                          worldClockZones: worldClockZones, clockStyle: clockStyle, clockSeconds: clockSeconds,
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
                           claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, keepBarAwake: keepBarAwake)

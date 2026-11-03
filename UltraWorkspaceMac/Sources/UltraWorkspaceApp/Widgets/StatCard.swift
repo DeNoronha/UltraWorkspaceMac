@@ -3,28 +3,10 @@ import AppKit
 import CoreGraphics
 import UltraBarKit
 
-/// Renders compact metric cards (CPU/memory, network, Claude) into RGBA8888,
-/// in a consistent style with the weather card. Square-first (VivoCube 240).
+/// Renders the Claude Code metric card into RGBA8888, in a consistent style
+/// with the weather card. Square-first (VivoCube 240).
 @MainActor
 enum StatCard {
-    static func system(_ s: SystemStats.Sample, size: Int) -> [UInt8]? {
-        draw(size: size, accent: (c(0.16, 0.44, 0.90), c(0.08, 0.12, 0.24)),
-             title: "System", icon: "cpu") { g, W, H in
-            bigValue(g, "\(Int(s.cpuPercent.rounded()))%", sub: "CPU", W: W, yFrac: 0.47)
-            bar(g, label: "CPU", frac: s.cpuPercent / 100, color: .systemBlue, W: W, y: H*0.30)
-            bar(g, label: "MEM", frac: s.memPercent / 100, color: .systemGreen, W: W, y: H*0.17)
-            smallRight(g, String(format: "%.1f/%.0f GB", s.memUsedGB, s.memTotalGB), W: W, y: H*0.065)
-        }
-    }
-
-    static func network(_ s: NetworkStats.Sample, size: Int) -> [UInt8]? {
-        draw(size: size, accent: (c(0.20, 0.40, 0.34), c(0.07, 0.14, 0.12)),
-             title: "Network", icon: "network") { g, W, H in
-            row(g, icon: "arrow.down", color: .systemTeal, value: ByteFormat.perSec(s.downBytesPerSec), W: W, y: H*0.52)
-            row(g, icon: "arrow.up", color: .systemOrange, value: ByteFormat.perSec(s.upBytesPerSec), W: W, y: H*0.24)
-        }
-    }
-
     static func claude(_ s: ClaudeUsage.Snapshot, plan: String, dailyBudget: Int, size: Int) -> [UInt8]? {
         draw(size: size, accent: (c(0.42, 0.26, 0.60), c(0.14, 0.09, 0.22)),
              title: "Claude Code", icon: "sparkles") { g, W, H in
@@ -77,24 +59,8 @@ enum StatCard {
         return Array(UnsafeBufferPointer(start: data.bindMemory(to: UInt8.self, capacity: count), count: count))
     }
 
-    /// Big value with a caption underneath. Text draws from the TOP of its rect, so the
-    /// rect must be at least the font's line height (≈1.25×) or descenders spill into the
-    /// caption's rect — that was the "9%" touching "CPU" overlap. `yFrac` = caption's centre.
-    private static func bigValue(_ g: GC, _ value: String, sub: String, W: CGFloat, yFrac: CGFloat) {
-        let big = W*0.26, small = W*0.075
-        let subTop = W*yFrac + small*0.65
-        drawText(sub, small, .regular, NSColor.white.withAlphaComponent(0.75),
-                 CGRect(x: 0, y: subTop - small*1.3, width: W, height: small*1.3), align: .center)
-        drawText(value, big, .bold, .white, CGRect(x: 0, y: subTop, width: W, height: big*1.25), align: .center)
-    }
-
     private static func center(_ g: GC, _ text: String, size: CGFloat, color: NSColor, W: CGFloat, y: CGFloat) {
         drawText(text, size, .medium, color, CGRect(x: 0, y: y, width: W, height: size*1.4), align: .center)
-    }
-
-    private static func smallRight(_ g: GC, _ text: String, W: CGFloat, y: CGFloat) {
-        drawText(text, W*0.065, .regular, NSColor.white.withAlphaComponent(0.7),
-                 CGRect(x: W*0.07, y: y, width: W*0.86, height: W*0.08), align: .center)
     }
 
     private static func bar(_ g: GC, label: String, frac: Double, color: NSColor, W: CGFloat, y: CGFloat) {
@@ -108,11 +74,6 @@ enum StatCard {
             let fill = CGPath(roundedRect: CGRect(x: x, y: y, width: w*f, height: h), cornerWidth: h/2, cornerHeight: h/2, transform: nil)
             g.ctx.addPath(fill); g.ctx.setFillColor(color.cgColor); g.ctx.fillPath()
         }
-    }
-
-    private static func row(_ g: GC, icon: String, color: NSColor, value: String, W: CGFloat, y: CGFloat) {
-        drawSymbol(icon, color: color, rect: CGRect(x: W*0.10, y: y, width: W*0.16, height: W*0.16))
-        drawText(value, W*0.15, .bold, .white, CGRect(x: W*0.28, y: y - W*0.01, width: W*0.64, height: W*0.18))
     }
 
     // primitives

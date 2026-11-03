@@ -23,18 +23,10 @@ enum WeatherPreview {
                 save(rgba, 1424, 280, out.appendingPathComponent("bar-\(name).png"))
             }
         }
-        // Stat cards with real live data.
-        let sys = SystemStats(); _ = sys.sample(); usleep(900_000)
-        if let rgba = StatCard.system(sys.sample(), size: 240) { save(rgba, 240, 240, out.appendingPathComponent("cube-cpu.png")) }
-        let net = NetworkStats(); _ = net.sample(); usleep(900_000)
-        if let rgba = StatCard.network(net.sample(), size: 240) { save(rgba, 240, 240, out.appendingPathComponent("cube-network.png")) }
         if let rgba = StatCard.claude(ClaudeUsage.snapshot(), plan: "Max 5×", dailyBudget: 20_000_000, size: 240) { save(rgba, 240, 240, out.appendingPathComponent("cube-claude.png")) }
         // New cards (2026-11-03).
-        if let rgba = ClockCard.render(size: 240, style: .analog, clock24h: true, seconds: true) { save(rgba, 240, 240, out.appendingPathComponent("cube-clock-analog.png")) }
-        if let rgba = ClockCard.render(size: 240, style: .digital, clock24h: false, seconds: true) { save(rgba, 240, 240, out.appendingPathComponent("cube-clock-digital.png")) }
         if let rgba = DateCard.render(size: 240, style: .long, showWeekday: true, showYear: true) { save(rgba, 240, 240, out.appendingPathComponent("cube-date-long.png")) }
         if let rgba = DateCard.render(size: 240, style: .numeric, showWeekday: true, showYear: true) { save(rgba, 240, 240, out.appendingPathComponent("cube-date-numeric.png")) }
-        if let rgba = WorldClockCard.render(size: 240, zones: ["Europe/Amsterdam", "America/New_York", "Asia/Tokyo"], clock24h: true) { save(rgba, 240, 240, out.appendingPathComponent("cube-worldclock.png")) }
         // Fetch off the main actor (the main thread blocks on the semaphore), render on it afterwards.
         final class Box: @unchecked Sendable { var day: CryptoStats.CoinDay? }
         let box = Box(); let sem = DispatchSemaphore(value: 0)

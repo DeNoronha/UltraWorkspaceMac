@@ -263,31 +263,19 @@ extension AppModel {
             refreshNowPlaying()
             let art = AppleMusic.currentArtwork()
             return NowPlayingCard.render(size: 240, art: art, title: nowPlaying.title, artist: nowPlaying.artist)
-        case .cpu:
-            _ = sysStats.sample()
-            try? await Task.sleep(nanoseconds: 900_000_000)
-            return StatCard.system(sysStats.sample(), size: 240)
-        case .network:
-            _ = netStats.sample()
-            try? await Task.sleep(nanoseconds: 900_000_000)
-            return StatCard.network(netStats.sample(), size: 240)
+        case .cpu, .network, .battery, .disk, .worldclock, .clock, .diskio, .topcpu, .uptime:
+            // `isLiveFeed`: not offered for the cube since 2026-11-03 (the bar draws its own live
+            // cards); only reachable through a stale settings.json, which `vivoCards` filters out.
+            return nil
         case .claude:
             let snap = await Task.detached { ClaudeUsage.snapshot() }.value
             return StatCard.claude(snap, plan: settings.claudePlan.title, dailyBudget: settings.claudeDailyBudget, size: 240)
-        case .battery:
-            return BatteryCard.render(BatteryStats.sample(), size: 240)
-        case .disk:
-            return DiskCard.render(size: 240)
-        case .worldclock:
-            return WorldClockCard.render(size: 240, zones: settings.worldClockZones, clock24h: settings.clock24h)
         case .crypto, .crypto2, .crypto3, .crypto4, .crypto5:
             let slot = theme.cryptoSlot ?? 0
             let coins = settings.cryptoCoinsConfigured
             let id = slot < coins.count ? coins[slot] : ""
             let day = id.isEmpty ? nil : await CryptoStats.today(id: id, currency: settings.cryptoCurrency)
             return CryptoCoinCard.render(day, coinId: id, currency: settings.cryptoCurrency, size: 240)
-        case .clock:
-            return ClockCard.render(size: 240, style: settings.clockStyle, clock24h: settings.clock24h, seconds: settings.clockSeconds)
         case .date:
             return DateCard.render(size: 240, style: settings.dateStyle, showWeekday: settings.dateShowWeekday, showYear: settings.dateShowYear)
         case .calendar:
@@ -295,15 +283,6 @@ extension AppModel {
             if auth == .notDetermined { _ = await CalendarSource.requestAccess(); auth = CalendarSource.authStatus() }
             let events = auth == .authorized ? await CalendarSource.upcoming(calendarIDs: settings.calendarIDs) : []
             return CalendarCard.render(events, auth: auth, size: 240, clock24h: settings.clock24h)
-        case .diskio:
-            _ = diskStats.sample()
-            try? await Task.sleep(nanoseconds: 900_000_000)
-            return DiskActivityCard.render(diskStats.sample(), size: 240)
-        case .topcpu:
-            let procs = await Task.detached { TopProcStats.top(3) }.value
-            return TopProcCard.render(procs, size: 240)
-        case .uptime:
-            return UptimeCard.render(size: 240)
         case .picture:
             return Self.pictureRGBA(path: settings.vivoPicturePath, size: 240)
         }

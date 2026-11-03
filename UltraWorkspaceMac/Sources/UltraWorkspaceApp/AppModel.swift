@@ -86,9 +86,6 @@ final class AppModel: ObservableObject {
     @Published var showingVivoWiFi = false
     var vivoLayerIndex = 0
     @Published var currentPageId: String?
-    let sysStats = SystemStats()
-    let netStats = NetworkStats()
-    let diskStats = DiskActivityStats()
     var themeTask: Task<Void, Never>?
 
     struct LogEntry: Identifiable {

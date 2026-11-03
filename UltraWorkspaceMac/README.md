@@ -138,7 +138,7 @@ Teams / FaceTime / Mail actions on the People page open deep links in the respec
   - `OpenMeteo`, `SystemStats`, `NetworkStats`, `ClaudeUsage` — data sources for the widgets.
   - `WireLog` — captures all Mac↔CoreBar protocol traffic for diagnostics (token, Wi-Fi password and API key redacted; 5 MB cap).
 - `Sources/UltraWorkspaceApp` — the SwiftUI app: `AppModel` and its extensions (`+Music`, `+Themes`, `+Weather`), `ContentView` (sidebar + all pages), `Nav`, `SettingsView`, `AboutView`, `LogsView`, `WeatherPreview`. `Theme` is the widget registry (the 13 widgets, titles, icons).
-  - `Widgets/` — the per-widget renderers (`*Card`) and their data sources (`*Stats` / `*Source`): weather, now-playing, stat cards, battery, disk, disk I/O, top CPU, uptime, world clock, calendar, crypto.
+  - `Widgets/` — the per-widget renderers (`*Card`) and their data sources (`*Stats` / `*Source`): weather, now-playing, Claude Code, calendar, crypto, date, picture; `CardKit` holds the shared bitmap/gradient/text scaffold.
   - `Integrations/` — `AppleMusic` (Music.app transport + now-playing), `MacLocation` (CoreLocation), `People` (contacts + deep links).
 - `Sources/kitcheck` — a command-line test tool built from the same `UltraBarKit`:
   - `swift build --product kitcheck` then `.build/debug/kitcheck` — known-answer checks for the encoders (CRC32, RGB565 headers, tar/gzip).
