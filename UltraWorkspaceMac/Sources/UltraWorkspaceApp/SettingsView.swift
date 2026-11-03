@@ -7,7 +7,7 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Header("Settings", "Weather location, units and clock.")
+            Header("Settings", "This bar, connection help and what is set on the bar itself.")
             Divider()
 
             Form {

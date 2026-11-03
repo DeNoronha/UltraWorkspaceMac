@@ -16,6 +16,11 @@ struct DeviceStrip: View {
                 if let age = model.lastPushAt.map({ Int(Date().timeIntervalSince($0)) }), model.linkState == "Live link" {
                     Text("last request \(age) s ago").font(.caption).foregroundStyle(.tertiary)
                 }
+                if kind == .cube, let w = model.selectedModuleSerial.flatMap({ model.vivoWiFi[$0] ?? nil }) {
+                    Label(w.isCoreBarHotspot ? "CoreBar hotspot" : w.ssid, systemImage: model.cubeOffline ? "wifi.exclamationmark" : "wifi")
+                        .font(.caption).foregroundStyle(model.cubeOffline ? Color.orange : Color.secondary)
+                        .help(model.cubeOffline ? "The cube is \(model.cubeWiFiLabel) — see Maintenance → Wi-Fi." : "The cube is connected and can receive cards.")
+                }
                 Spacer()
                 showing.font(.caption).foregroundStyle(.secondary)
             }
@@ -50,7 +55,7 @@ struct DeviceStrip: View {
             return Text("Cube: not read yet")
         case .bar:
             let name = model.currentPageId.flatMap { id in model.corebarPages.first { $0.id == id }?.name ?? id }
-            let base = name.map { "Bar shows the \($0) page (set by Deckhand)" } ?? (settings.deckhandPagePublished ? "Bar: page unknown until Deckhand switches it" : "Deckhand page not published yet")
+            let base = name.map { "Bar shows the \($0) page" } ?? (settings.deckhandPagePublished ? "Bar: page unknown until Deckhand switches it" : "Bar: Deckhand page not published yet")
             return Text(base) + (model.lastPagePublishedAt.map { Text(" · published \($0.formatted(date: .omitted, time: .shortened))") } ?? Text(""))
         }
     }

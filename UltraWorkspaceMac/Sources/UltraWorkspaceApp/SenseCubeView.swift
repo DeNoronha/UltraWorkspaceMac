@@ -44,12 +44,14 @@ struct SenseCubeView: View {
                     if let u = reader.updated { Text("Read \(u, style: .time) · every 5 s while this page is open").font(.caption).foregroundStyle(.secondary) }
                     else if reader.reading == nil, !reader.busy { Text("No reply yet — tap the bar's screen to wake the sensor.").font(.caption).foregroundStyle(.orange) }
                     Panel("On the bar", footer: "Presence, sound and vibration are only available on the bar itself.") {
-                        let onPage = settings.coreCards.contains("SENSE_TEMP") || settings.coreCards.contains("SENSE_HUM")
+                        let ids = ["SENSE_TEMP", "SENSE_HUM", "SENSE_LUX"]
+                        let onPage = ids.filter { settings.coreCards.contains($0) }
                         HStack {
-                            Text(onPage ? "Temperature / humidity cards are on the CoreBar page." : "Show these on the bar: add the Temperature or Humidity card to the CoreBar page.")
+                            Text(onPage.isEmpty ? "Show these on the bar: add the Temperature, Humidity or Light card to the CoreBar page."
+                                 : "\(onPage.compactMap { AppSettings.coreCard($0)?.title }.joined(separator: ", ")) on the CoreBar page.")
                             Spacer()
-                            Button(onPage ? "CoreBar page" : "Add cards…") {
-                                if !onPage { if !settings.coreCards.contains("SENSE_TEMP") { settings.coreCards.append("SENSE_TEMP") }; if !settings.coreCards.contains("SENSE_HUM") { settings.coreCards.append("SENSE_HUM") } }
+                            Button(onPage.count == ids.count ? "CoreBar page" : "Add all three") {
+                                for id in ids where !settings.coreCards.contains(id) { settings.coreCards.append(id) }
                                 model.nav = .coreBarPage
                             }
                         }

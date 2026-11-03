@@ -12,22 +12,22 @@ struct CoreBarPageView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Header("CoreBar", "A row of the bar's own cards. About \(AppSettings.coreCardsThatFit) fit; more scroll sideways.") {
+            Header("CoreBar", "A row of the bar's own cards; about \(AppSettings.coreCardsThatFit) fit, more scroll sideways.") {
                 Button { publish() } label: { Label("Publish page", systemImage: "arrow.up.circle.fill").frame(minWidth: 120) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
                     .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(model.isWorking || settings.coreCards.isEmpty)
+                    .disabled(model.isWorking || model.pageProgress.isRunning || settings.coreCards.isEmpty)
                     .help("Send these cards to the bar (⌘↩)")
             }
             DeviceStrip(kind: .bar)
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    ProgressRow(progress: model.pageProgress, lastAt: model.lastPagePublishedAt, idle: "Published", never: settings.deckhandPagePublished ? "Published before this session." : "Not sent yet.")
                     preview
                     onPage
-                    ProgressRow(progress: model.pageProgress, lastAt: model.lastPagePublishedAt, idle: "Published", never: settings.deckhandPagePublished ? "Published before this session." : "Not sent yet.")
                     Panel("Pages on the bar") { pagesOnBar }
-                    Panel("Advanced") { advanced }
+                    Panel("Maintenance") { advanced }
                 }.padding(20)
             }
         }
@@ -52,7 +52,7 @@ struct CoreBarPageView: View {
 
     private var preview: some View {
         let cards = settings.coreCards.compactMap(AppSettings.coreCard)
-        return Panel("Preview") {
+        return Panel("Preview", footer: "Drawn from the list below — not read back from the bar.") {
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black)
                 HStack(spacing: 6) {
@@ -61,7 +61,7 @@ struct CoreBarPageView: View {
                             .frame(width: c.id == "TIME" ? 164 : 82, height: 82)
                             .opacity(i >= AppSettings.coreCardsThatFit ? 0.35 : 1)
                     }
-                    if cards.isEmpty { Text("No cards — add some on the right.").foregroundStyle(.secondary).padding(.leading, 12) }
+                    if cards.isEmpty { Text("No cards yet — use Add a card… below.").foregroundStyle(.secondary).padding(.leading, 12) }
                 }.padding(8)
             }
             .frame(height: 98).clipped()
@@ -89,8 +89,8 @@ struct CoreBarPageView: View {
 
     private var onPage: some View {
         let cards = settings.coreCards.compactMap(AppSettings.coreCard)
-        return Panel("Cards on the page", footer: "Drag to reorder. ⌁ = live from this Mac, only while Deckhand runs.") {
-            if cards.isEmpty { Text("Nothing on the page yet — add a card.").foregroundStyle(.secondary) }
+        return Panel("Cards on the bar", footer: "Drag to reorder. \(cards.count) card\(cards.count == 1 ? "" : "s") · about \(AppSettings.coreCardsThatFit) fit without scrolling. ⌁ = live from this Mac, only while Deckhand runs.") {
+            if cards.isEmpty { Text("Nothing on the bar yet — add a card.").foregroundStyle(.secondary) }
             List {
                 ForEach(Array(cards.enumerated()), id: \.element.id) { i, c in
                     VStack(alignment: .leading, spacing: 6) {
@@ -175,7 +175,7 @@ struct CoreBarPageView: View {
                 Button { model.refreshPages() } label: { Label("Re-read pages", systemImage: "arrow.clockwise") }
                 Button { reloadCover() } label: { Label("Redraw preview", systemImage: "photo") }
             }
-            Text("The knob and keys get their bindings with every page publish: knob turn → Mac volume, press → mute; DotKey 1/2 → cube card 1/2, 3 → next card, hold 3 → Standard page.")
+            Text("Knob and key bindings are published with the page — see Controls.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }

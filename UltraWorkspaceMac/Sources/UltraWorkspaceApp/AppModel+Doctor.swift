@@ -64,7 +64,7 @@ extension AppModel {
             }
             if let l = vivoLayerShowing, !vivoLayerNames.isEmpty, (l < 1 || l > vivoLayerNames.count) {
                 return ("The cube is pointing at a card that is not in the last package (black screen).",
-                        DoctorAction(title: "Fix") { [weak self] in self?.recoverVivoDisplay(serial: vivo.serial) })
+                        DoctorAction(title: "Fix black screen") { [weak self] in self?.recoverVivoDisplay(serial: vivo.serial) })
             }
         }
         if !cube, settings.deckhandPagePublished, !corebarPages.isEmpty, !corebarPages.contains(where: { $0.id == Self.deckhandPageId }) {

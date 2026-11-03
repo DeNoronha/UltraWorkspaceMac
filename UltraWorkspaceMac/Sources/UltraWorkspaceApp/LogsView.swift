@@ -24,18 +24,13 @@ struct LogsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text("Wire log").font(.title2).bold()
-                    Text("Every message between this Mac and the CoreBar (token redacted)")
-                        .font(.caption).foregroundStyle(.secondary)
+            Header("Logs", "Every message between this Mac and the bar; secrets redacted.") {
+                HStack {
+                    Button { reveal() } label: { Label("Reveal in Finder", systemImage: "folder") }
+                    Button { copyAll() } label: { Label("Copy", systemImage: "doc.on.doc") }
+                    Button(role: .destructive) { WireLog.shared.clear(); watcher.lines = [] } label: { Label("Clear", systemImage: "trash") }
                 }
-                Spacer()
-                Button { reveal() } label: { Label("Reveal in Finder", systemImage: "folder") }
-                Button { copyAll() } label: { Label("Copy", systemImage: "doc.on.doc") }
-                Button(role: .destructive) { WireLog.shared.clear(); watcher.lines = [] } label: { Label("Clear", systemImage: "trash") }
             }
-            .padding()
             Divider()
 
             ScrollViewReader { proxy in

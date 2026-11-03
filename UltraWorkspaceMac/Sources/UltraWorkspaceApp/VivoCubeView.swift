@@ -12,24 +12,23 @@ struct VivoCubeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Header("VivoCube", "Shows one card at a time.") { wifiPill }
+            Header("VivoCube", "One card at a time, up to \(AppModel.maxVivoLayers).") {
+                Button { model.sendToCube(settings: settings) } label: { Label("Send to cube", systemImage: "arrow.up.circle.fill").frame(minWidth: 120) }
+                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(settings.vivoCards.isEmpty || model.cubeProgress.isRunning || model.isWorking)
+                    .help("Draw the cards, upload them as one package and show card 1 (⌘↩)")
+            }
             DeviceStrip(kind: .cube)
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    ProgressRow(progress: model.cubeProgress, lastAt: model.lastCubeSentAt, idle: "Sent")
                     HStack(alignment: .top, spacing: 18) {
                         twin
                         cards
                     }
                     switching
-                    HStack(alignment: .top, spacing: 14) {
-                        Button { model.sendToCube(settings: settings) } label: { Label("Send to cube", systemImage: "arrow.up.circle.fill").frame(minWidth: 120) }
-                            .buttonStyle(.borderedProminent).controlSize(.large)
-                            .keyboardShortcut(.return, modifiers: .command)
-                            .disabled(settings.vivoCards.isEmpty || model.cubeProgress.isRunning || model.isWorking)
-                            .help("Draw the cards, upload them as one package and show card 1 (⌘↩)")
-                        ProgressRow(progress: model.cubeProgress, lastAt: model.lastCubeSentAt, idle: "Sent").padding(.top, 6)
-                    }
                     Panel("Maintenance") { maintenance }
                 }.padding(20)
             }
@@ -84,7 +83,7 @@ struct VivoCubeView: View {
     // MARK: Ordered card list
 
     private var cards: some View {
-        Panel("What the cube shows", footer: "Drag to change the order. \(settings.cubePackageCards.count) of \(AppModel.maxVivoLayers) slots used.") {
+        Panel("Cards on the cube", footer: "Drag to reorder. \(settings.cubePackageCards.count) of \(AppModel.maxVivoLayers) slots used.") {
             if settings.vivoCards.isEmpty {
                 Text("Nothing on the cube yet — add a card.").foregroundStyle(.secondary)
             }
@@ -135,7 +134,7 @@ struct VivoCubeView: View {
     // MARK: Switch mode
 
     private var switching: some View {
-        Panel("Switch card", footer: settings.vivoSwitchMode == .timed ? "Timed switching runs on this Mac — Deckhand must be open." : nil) {
+        Panel("Switching", footer: settings.vivoSwitchMode == .timed ? "Timed switching runs on this Mac — Deckhand must be open." : nil) {
             // Plain radio group; the interval is a separate control (a picker inside a radio label is not supported on AppKit).
             Picker("", selection: $settings.vivoSwitchMode) {
                 Text("Stay on one card").tag(AppSettings.SwitchMode.stay)
@@ -159,14 +158,6 @@ struct VivoCubeView: View {
     }
 
     // MARK: Maintenance
-
-    private var wifiPill: some View {
-        let w = model.vivoWiFi[module.serial] ?? nil
-        let ok = !model.cubeOffline
-        return Label(w.map { $0.isCoreBarHotspot ? "CoreBar hotspot" : $0.ssid } ?? "Wi-Fi", systemImage: ok ? "wifi" : "wifi.exclamationmark")
-            .font(.caption).foregroundStyle(ok ? Color.secondary : Color.orange)
-            .help(ok ? "The cube is connected and can receive cards." : "The cube is not connected — see Maintenance → Wi-Fi.")
-    }
 
     private var maintenance: some View {
         Group {

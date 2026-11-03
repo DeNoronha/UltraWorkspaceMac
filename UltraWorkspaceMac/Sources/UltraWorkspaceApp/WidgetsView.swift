@@ -70,7 +70,7 @@ struct WidgetsView: View {
                                         Button("Remove") { settings.removeVivoCard(model.selectedAddon) }
                                     } else {
                                         Button { if model.selectedAddon == .picture, settings.vivoPicturePath.isEmpty { Self.choosePicture(settings) }; settings.addVivoCard(model.selectedAddon); model.requestCardPermissions(model.selectedAddon) } label: { Label("Add to the cube", systemImage: "plus") }
-                                            .buttonStyle(.borderedProminent).disabled(settings.vivoSlotsLeft == 0)
+                                            .buttonStyle(.bordered).disabled(settings.vivoSlotsLeft == 0)
                                         if settings.vivoSlotsLeft == 0 { Text("The cube is full (\(AppModel.maxVivoLayers) cards).").font(.caption).foregroundStyle(.secondary) }
                                     }
                                     Button { reload() } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.borderless).accessibilityLabel("Redraw preview")
@@ -124,7 +124,7 @@ struct WidgetsView: View {
                     Button("Remove") { settings.coreCards.removeAll { $0 == c.id } }
                 } else {
                     Button { settings.coreCards.append(c.id) } label: { Label("Add to the CoreBar page", systemImage: "plus") }
-                        .buttonStyle(.borderedProminent).disabled(needsSense)
+                        .buttonStyle(.bordered).disabled(needsSense)
                     if needsSense { Text("No SenseCube found.").font(.caption).foregroundStyle(.secondary) }
                 }
                 Button("Open CoreBar page") { model.nav = .coreBarPage }

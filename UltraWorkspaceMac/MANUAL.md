@@ -59,7 +59,7 @@ The pairing key is stored in a protected, user-only file in Application Support,
 
 **Tap the bar's screen and press a DotKey key before you press Find modules.** Finding modules is a live scan of the magnetic bus, and a module that has gone to sleep — usually the **DotKey** — can be missed. Deckhand remembers every module it has ever seen on your bar and keeps it in the bar's configuration, so a one-time sleep won't drop a module; a scan with everything awake just gives the most reliable result.
 
-**Find modules** is in the bar's menu (top of the sidebar), under **Advanced** on the CoreBar page, and in the sidebar when no modules are known yet. The scan takes about 16 seconds and also registers the modules on the bar so they can be controlled. A module that did not answer is marked *asleep* in the sidebar.
+**Find modules** is in the bar's menu (top of the sidebar), under **Maintenance** on the CoreBar page, and in the sidebar when no modules are known yet. The scan takes about 16 seconds and also registers the modules on the bar so they can be controlled. A module that did not answer is marked *asleep* in the sidebar.
 
 ---
 
@@ -79,29 +79,29 @@ Every device page starts with a **status strip**: whether Deckhand is connected 
 The bar's big screen shows a page: a row of the bar's own cards. About four fit; more scroll sideways. There is no full-screen picture — Deckhand's own picture (weather & date, free, refreshed hourly) is the **Clock** card's picture.
 
 - **Preview** — drawn from your card list; dimmed cards are the ones that scroll into view.
-- **Cards on the page** — drag to reorder, ✕ to remove, **Add a card** on the right. ⚡ marks cards fed live by this Mac (CPU, memory, storage, network, the two buttons): they update only while Deckhand runs; the others keep running when the Mac is off.
+- **Cards on the bar** — drag to reorder, ✕ to remove, **Add a card…** below the list. ⌁ marks cards fed live by this Mac (CPU, memory, storage, network, the two buttons): they update only while Deckhand runs; the others keep running when the Mac is off.
 - **Weather (bar's own)** is drawn by the bar from **AccuWeather, which is not free** (14-day trial, paid afterwards). Press **Key…** on that row to paste the key; it is sent to the bar with the next publish. Deckhand's own weather on the Clock card costs nothing.
 - **Publish page** (⌘↩) — draws the clock picture, uploads the button icons, writes the pages and shows the Deckhand page; the steps are shown under the button. Deckhand asks for confirmation only when it matters: the first time, or when the bar has pages made in the official app (those would be removed — the bar cannot send pages back). The knob and keys get their bindings with every publish (see Controls).
 - **Start page** — publishing marks the Deckhand page as the bar's start page, so the bar boots into it; Deckhand also selects it again every time it (re)connects to the bar. Use **Show** in *Pages on the bar* to switch to Standard Mode for a moment.
-- **Pages on the bar** / **Advanced** — the page list, **Find modules**, **Re-read pages**, **Redraw preview**. The official app's Deploy removes Deckhand's pictures; publish again afterwards.
+- **Pages on the bar** / **Maintenance** — the page list, **Find modules**, **Re-read pages**, **Redraw preview**. The official app's Deploy removes Deckhand's pictures; publish again afterwards.
 
 ### VivoCube
 Shows one card at a time.
 
 - **On the cube now** — the card the cube *reports* it is on, with the picture Deckhand sent for it, "Card 2 of 4" and ◀ ▶ to step through them from the Mac (the DotKey and the bar's button do the same on the device). A dark picture with "Screen off" means the screen is off; an orange Wi-Fi note means the cube is not connected and may still show an old picture.
-- **What the cube shows** — an ordered list of up to 6 cards: drag to reorder, ✕ to remove, **Add a card…** to add (the **Picture** card asks for an image file). The order here is the order on the cube.
-- **Switch card** — **Stay on one card**, **Switch every** 15 s / 30 s / 1 min / 3 min (a timer on this Mac; Deckhand must be open), or **Only with the DotKey or the bar's button**.
+- **Cards on the cube** — an ordered list of up to 6 cards: drag to reorder, ✕ to remove, **Add a card…** to add (the **Picture** card asks for an image file). The order here is the order on the cube.
+- **Switching** — **Stay on one card**, **Switch every** 15 s / 30 s / 1 min / 3 min (a timer on this Mac; Deckhand must be open), or **Only with the DotKey or the bar's button**.
 - **Send to cube** (⌘↩) — draws the cards, uploads them as one package, waits about 10 seconds for the cube to apply it and shows card 1. The steps appear under the button; a failure is one sentence with the next thing to do. The cards' contents are redrawn every few minutes while timed switching runs.
-- **Maintenance** — **Screen** switch (off stays off until you turn it on), **Fix black screen** (screen on + card 1; use it when the cube shows black after a reboot), **Restart cube**, **Send test picture**, and **Wi-Fi**: which network the cube is on and whether it is connected. Fresh cubes sit on the bar's own hotspot, which the bar switches off when idle; uploads then cannot reach the cube. **Set cube Wi-Fi…** joins it to your own **2.4 GHz** network (a combined 2.4/5 GHz name may not work; the bar must be on the same network); the password goes to the cube only.
+- **Maintenance** — **Cube screen** switch (off stays off until you turn it on), **Fix black screen** (screen on + card 1; use it when the cube shows black after a reboot), **Restart cube**, **Send test picture**, and **Wi-Fi**: which network the cube is on and whether it is connected. Fresh cubes sit on the bar's own hotspot, which the bar switches off when idle; uploads then cannot reach the cube. **Set cube Wi-Fi…** joins it to your own **2.4 GHz** network (a combined 2.4/5 GHz name may not work; the bar must be on the same network); the password goes to the cube only.
 
 ### SenseCube
-Live **temperature**, **humidity** and **light**, read every 5 seconds while the page is open. **Add cards…** puts the temperature/humidity cards on the CoreBar page. Presence, sound and vibration are only available on the bar itself.
+Live **temperature**, **humidity** and **light**, read every 5 seconds while the page is open. **Add all three** puts the Temperature, Humidity and Light cards on the CoreBar page (the bar draws them itself). Presence, sound and vibration are only available on the bar itself.
 
 ### KnobKey and DotKey
 What each control does, as it is bound today: knob **turn → Mac volume**, **press → mute**; DotKey **key 1 / 2 → cube card 1 / 2** (switched on the bar itself), **key 3 → next cube card**, **hold key 3 → Standard page**. These bindings are part of the CoreBar page and are active while that page is on the bar; publish it once to activate them. Changing them is planned.
 
 ### Widgets
-Two sections: **For the VivoCube** (pictures Deckhand draws — only cards that stay valid for 5 minutes, because the cube gets a new picture every 5 minutes at most; live readings and clocks are deliberately not offered there) and **For the CoreBar** (cards the bar draws itself and updates live; add them to the Deckhand page from here or from the CoreBar page). The cube cards Deckhand can draw, with a preview and settings: **Weather & time**, **Music (album art)**, **Claude Code monitor**, **CPU & memory**, **Network**, **Battery & power**, **Storage**, **World clock**, **Crypto ticker**, **Calendar**, **Disk I/O**, **Top CPU**, **Uptime** and **Picture** (your own image). **Add to the cube** puts the selected card in the cube's list.
+Two sections: **For the VivoCube** (pictures Deckhand draws — only cards that stay valid for 5 minutes, because the cube gets a new picture every 5 minutes at most; live readings and clocks are deliberately not offered there) and **For the CoreBar** (cards the bar draws itself and updates live; add them to the Deckhand page from here or from the CoreBar page). The cube cards Deckhand can draw, with a preview and settings: **Weather**, **Music (album art)**, **Claude Code monitor**, **Crypto**, **Calendar**, **Date** and **Picture** (your own image). **Add to the cube** puts the selected card in the cube's list.
 
 - **Weather** — location (**Same as this Mac** or **Manual**) and units; current conditions only, no clock. See section 6.
 - **Music** — play/pause, previous, next and volume for Apple Music.
@@ -147,9 +147,9 @@ This is independent of the CoreBar's own built-in AccuWeather widget, which need
 - **"Module not accepted" on an image push** — the app auto-provisions and retries; if it still fails, re-scan modules first.
 - **VivoCube upload is refused ("error 4")** — the cube itself says it is not on Wi-Fi, usually because it is stuck at "still connecting" (the strip and Maintenance → Wi-Fi show this). Deckhand now re-sends the cube's own Wi-Fi settings before every upload when it sees that state, which completes the join; you can also press **Set cube Wi-Fi…** and send the same network again. Wait until the status reads "connected", then send the cards again.
 - **VivoCube upload says "busy" or "hotspot has no IP"** — the bar's hotspot is down, so it has no path to the cube. Wake the bar (press a key) or check its hotspot, then try again; wait at least 10 seconds between uploads.
-- **VivoCube stays black** — open the VivoCube page: the status strip names the cause (screen off, not on Wi-Fi, or pointing at a card that no longer exists) with a button that fixes it; **Maintenance → Fix black screen** does the same by hand (then re-publish if needed). Avoid **Screen Off** while a rotation runs. If it is still black, press **Reboot** on the VivoCube page and publish again.
+- **VivoCube stays black** — open the VivoCube page: the status strip names the cause (screen off, not on Wi-Fi, or pointing at a card that no longer exists) with a button that fixes it; **Maintenance → Fix black screen** does the same by hand (then re-publish if needed). Avoid **Screen Off** while a rotation runs. If it is still black, press **Restart cube** under Maintenance on the VivoCube page and publish again.
 - **Pushed image looks off** — re-publish the widget; if a custom image still looks wrong, try a square source image (Deckhand renders 240 × 240; transparency is flattened).
-- **The Deckhand page shows no picture on the clock card** — press **Refresh cover only** (re-uploads `deckhand/cover.png`); if the official app deployed in between, its Deploy deleted Deckhand's images — publish the page again. There is no error message because the CoreBar does not acknowledge previews.
+- **The Deckhand page shows no picture on the clock card** — press **Update picture** on the Clock card (re-uploads `deckhand/cover.png`); if the official app deployed in between, its Deploy deleted Deckhand's images — publish the page again. There is no error message because the CoreBar does not acknowledge previews.
 - **My CoreBar images / pages disappeared** — most likely the official UltraWorkSpace app deployed in between; it erases other apps' files. Re-publish from Deckhand.
 - **CoreBar clock wrong** — set time/timezone on the CoreBar itself (it uses NTP); the Mac app can't push time.
 - **Weather shows the wrong place** — allow Location access, or set a manual city in **Widgets → Weather**.

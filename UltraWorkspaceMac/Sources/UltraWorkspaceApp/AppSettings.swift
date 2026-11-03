@@ -75,6 +75,7 @@ final class AppSettings: ObservableObject {
         CoreCard(id: "WORLD_TIME", title: "World clock", needsMac: false, icon: "globe", note: "The bar's own world-clock card, set to this Mac's time zone."),
         CoreCard(id: "SENSE_TEMP", title: "Temperature", needsMac: false, icon: "thermometer.medium", note: "From the SenseCube."),
         CoreCard(id: "SENSE_HUM", title: "Humidity", needsMac: false, icon: "humidity", note: "From the SenseCube."),
+        CoreCard(id: "SENSE_LUX", title: "Light", needsMac: false, icon: "sun.max", note: "From the SenseCube (illuminance in lux)."),
         CoreCard(id: "CPU", title: "Mac CPU", needsMac: true, icon: "cpu", note: ""),
         CoreCard(id: "MEMORY", title: "Mac memory", needsMac: true, icon: "memorychip", note: ""),
         CoreCard(id: "STORAGE", title: "Mac storage", needsMac: true, icon: "internaldrive", note: ""),
