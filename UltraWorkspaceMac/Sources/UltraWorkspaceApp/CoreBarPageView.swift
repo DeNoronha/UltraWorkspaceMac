@@ -117,8 +117,10 @@ struct CoreBarPageView: View {
                                     .disabled(!settings.deckhandPagePublished).help("Re-draws today's weather & date on the clock card")
                             }
                             Spacer()
-                            Button { settings.coreCards.removeAll { $0 == c.id } } label: { Image(systemName: "xmark.circle") }
-                                .buttonStyle(.borderless).accessibilityLabel("Remove \(c.title)")
+                            Button { settings.coreCards.removeAll { $0 == c.id } } label: {
+                                Image(systemName: "xmark.circle").frame(width: 32, height: 24).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.borderless).help("Remove \(c.title)").accessibilityLabel("Remove \(c.title)")
                         }
                         if c.id == "WEATHER", ui.keyOpen {
                             VStack(alignment: .leading, spacing: 4) {
@@ -130,6 +132,8 @@ struct CoreBarPageView: View {
                             }.padding(.leading, 26)
                         }
                     }
+                    // Row lines: with a wide list the ✕ sits far from the name, the line ties them together (2026-11-03).
+                    .listRowSeparator(.visible).listRowSeparatorTint(Color.primary.opacity(0.12))
                     .accessibilityActions {
                         Button("Move left") { settings.moveCoreCard(c.id, by: -1) }
                         Button("Move right") { settings.moveCoreCard(c.id, by: 1) }

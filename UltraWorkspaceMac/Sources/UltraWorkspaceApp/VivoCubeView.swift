@@ -103,9 +103,12 @@ struct VivoCubeView: View {
                         if i + 1 == showingLayer, !model.vivoLayerNames.isEmpty, i < model.vivoLayerNames.count {
                             Text("now").font(.caption2).padding(.horizontal, 6).padding(.vertical, 1).background(Color.green.opacity(0.2)).clipShape(Capsule())
                         }
-                        Button { settings.removeVivoCard(t) } label: { Image(systemName: "xmark.circle") }
-                            .buttonStyle(.borderless).accessibilityLabel("Remove \(t.title)")
+                        Button { settings.removeVivoCard(t) } label: {
+                            Image(systemName: "xmark.circle").frame(width: 32, height: 24).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless).help("Remove \(t.title)").accessibilityLabel("Remove \(t.title)")
                     }
+                    .listRowSeparator(.visible).listRowSeparatorTint(Color.primary.opacity(0.12))
                     .accessibilityActions {
                         Button("Move up") { if i > 0 { settings.moveVivoCards(from: IndexSet(integer: i), to: i - 1) } }
                         Button("Move down") { if i < settings.vivoCards.count - 1 { settings.moveVivoCards(from: IndexSet(integer: i), to: i + 2) } }
