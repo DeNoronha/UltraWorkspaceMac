@@ -9,7 +9,13 @@ struct AppsView: View {
     var body: some View {
         VStack(spacing: 0) {
             Header("Apps", "Apps run on the bar itself; Deckhand installs, updates and removes them.") {
-                Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(!model.link.isConnected)
+                HStack {
+                    Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(!model.link.isConnected)
+                    let updates = pendingUpdates
+                    Button { model.updateAll(updates) } label: { Label(updates.isEmpty ? "Update all" : "Update all (\(updates.count))", systemImage: "arrow.down.circle") }
+                        .buttonStyle(.borderedProminent).disabled(updates.isEmpty || model.appBusy != nil)
+                        .help(updates.isEmpty ? "Everything is up to date." : "Updates one app after another: " + updates.map(\.name).joined(separator: ", "))
+                }
             }
             Divider()
             ScrollView {
@@ -31,6 +37,15 @@ struct AppsView: View {
             }
         }
         .onAppear { if model.storeApps.isEmpty { model.refreshAppStore() } }
+    }
+
+    /// Installed apps for which the marketplace has a higher versionCode.
+    private var pendingUpdates: [(package: String, name: String)] {
+        model.barApps.compactMap { a in
+            guard let s = model.storeApps.first(where: { $0.package == a.packageName }) else { return nil }
+            let code = model.appStatus[a.packageName]?.versionCode ?? 0
+            return (code > 0 && s.versionCode > code) ? (a.packageName, a.appName) : nil
+        }
     }
 
     private func installedRow(_ a: CoreBarSession.AppInfo) -> some View {
