@@ -29,7 +29,6 @@ struct ContentView: View {
         .toolbar {
             ToolbarItem { Button { model.showActivity.toggle() } label: { Label("Activity", systemImage: "sidebar.trailing") }
                 .help("Show or hide the activity list") }
-            ToolbarItem { Button { model.showingSettings = true } label: { Label("Settings", systemImage: "gearshape") } }
         }
         .sheet(isPresented: $model.showingSettings) { SettingsView().environmentObject(model).environmentObject(settings) }
         .sheet(isPresented: $model.showingAbout) { AboutView() }

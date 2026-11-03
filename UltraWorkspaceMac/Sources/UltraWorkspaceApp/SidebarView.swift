@@ -39,18 +39,14 @@ struct SidebarView: View {
                 Label("Status", systemImage: "stethoscope").tag(NavItem.status)
                 Label("Logs", systemImage: "doc.text.magnifyingglass").tag(NavItem.logs)
             }
+            Section("Deckhand") {
+                Button { model.showingSettings = true } label: { Label("Settings…", systemImage: "gearshape") }.buttonStyle(.plain)
+                Button { model.showingAbout = true } label: { Label("About Deckhand", systemImage: "info.circle") }.buttonStyle(.plain)
+            }
         }
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 320)
         .safeAreaInset(edge: .top, spacing: 0) { deviceChooser }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            Button { model.showingAbout = true } label: {
-                Label("About Deckhand", systemImage: "info.circle")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14).padding(.vertical, 10).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain).foregroundStyle(.secondary).background(.bar)
-        }
         .alert("Forget this CoreBar?", isPresented: $ui.confirmForget) {
             Button("Forget", role: .destructive) { if let b = model.selectedCoreBar { model.unpair(b) } }
             Button("Cancel", role: .cancel) {}
