@@ -390,6 +390,29 @@ public struct CoreBarSession: Sendable {
         _ = await writeProperty(serial: serial, propertyId: Proto.Property.reboot, value: true, timeout: 0.3)
     }
 
+    /// One `/upload` POST, no retries: the raw (accepted, reply text) pair.
+    public func uploadOnce(serial: String, tgz: Data) async -> (accepted: Bool, text: String) {
+        (try? await postUpload(serial: serial, tgz: tgz)) ?? (false, "no HTTP reply")
+    }
+
+    /// VivoCube Wi-Fi state (property 6). Values and names are the vendor client's
+    /// (`readWifiState` strings); CONFIRMED on hardware 2026-11-03: a package was
+    /// applied ("updating config" on the cube) only with state 1, never with 3.
+    public enum CubeWiFiState: Int, Sendable {
+        case notConfigured = 0, connected = 1, notConnected = 2, connecting = 3
+        public static func isConnected(_ raw: Int?) -> Bool { raw == CubeWiFiState.connected.rawValue }
+        /// Short English label for the UI ("connected", "still connecting", …).
+        public static func label(_ raw: Int?) -> String {
+            switch raw.flatMap(CubeWiFiState.init(rawValue:)) {
+            case .connected: return "connected"
+            case .connecting: return "still connecting"
+            case .notConnected: return "not connected"
+            case .notConfigured: return "not configured"
+            case nil: return raw.map { "unknown state \($0)" } ?? "not read yet"
+            }
+        }
+    }
+
     /// Upload a layer package (tgz) to a module over HTTP. If the module isn't
     /// registered yet ("module not found"), provision the CoreBar once and retry.
     public func upload(serial: String, tgz: Data) async throws -> Bool {

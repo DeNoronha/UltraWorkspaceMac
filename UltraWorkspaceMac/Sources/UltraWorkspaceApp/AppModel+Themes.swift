@@ -40,7 +40,7 @@ extension AppModel {
             if Task.isCancelled { return }
             if let st = await session.readProperty(serial: serial, propertyId: Proto.Property.wifi) { self.vivoWiFiState = Int(st) }
             if self.cubeOffline {
-                self.cubeProgress.fail("apply", "The bar accepted the package, but the cube is not on Wi-Fi, so it cannot download it. The cube keeps showing its previous cards. Fix the cube's Wi-Fi (the CoreBar hotspot always works), then send again.")
+                self.cubeProgress.fail("apply", "The bar accepted the package, but the cube's Wi-Fi is \(self.cubeWiFiLabel), so it cannot download it. The cube keeps showing its previous cards. Set the cube's Wi-Fi (Maintenance) and send again.")
                 self.say("The cube is not on Wi-Fi — it still shows its previous cards.")
                 self.themeRunning = false; settings.vivoRotationOn = false
                 return
@@ -111,6 +111,25 @@ extension AppModel {
     }
 
     /// Render `themes` into layers 1…n (widget 100+n) and upload a single package.
+    /// True when the cube reports "connected". If it reports "connecting", re-send its
+    /// current Wi-Fi settings once and wait up to 30 s for the join to complete.
+    func ensureCubeOnWiFi(session: CoreBarSession, serial: String) async -> Bool {
+        if let st = await session.readProperty(serial: serial, propertyId: Proto.Property.wifi) { vivoWiFiState = Int(st) }
+        if !cubeOffline { return true }
+        guard vivoWiFiState == CoreBarSession.CubeWiFiState.connecting.rawValue,
+              let w = await session.readModuleWiFi(serial: serial), !w.ssid.isEmpty else { return false }
+        cubeProgress.run("upload", note: "cube still joining “\(w.ssid)” — nudging it")
+        say("The cube is still joining “\(w.ssid)” — sending its Wi-Fi settings again to complete the join…")
+        _ = await session.writeModuleWiFi(serial: serial, w)
+        for _ in 0..<10 {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if Task.isCancelled { return false }
+            if let st = await session.readProperty(serial: serial, propertyId: Proto.Property.wifi) { vivoWiFiState = Int(st) }
+            if !cubeOffline { return true }
+        }
+        return false
+    }
+
     private func uploadPackage(_ themes: [Theme], settings: AppSettings, session: CoreBarSession, serial: String) async -> Bool {
         var layers: [DeployPackager.Layer] = []
         var names: [String] = []
@@ -128,6 +147,14 @@ extension AppModel {
         cubeProgress.done("render")
         let tgz = DeployPackager.buildTgz(layers: layers, defaultLayer: 1)
         cubeProgress.run("upload", note: "\(max(1, tgz.count / 1024)) KB")
+        // The cube downloads the package itself over Wi-Fi, and the bar only forwards
+        // the command while the cube reports "connected" (property 6 = 1). A cube
+        // stuck at "connecting" (3) rejects every upload with error 4; re-sending its
+        // own Wi-Fi settings completes the join (hardware, 2026-11-03).
+        if await !ensureCubeOnWiFi(session: session, serial: serial) {
+            cubeProgress.fail("upload", "The cube's Wi-Fi is \(cubeWiFiLabel), so it cannot download cards. Set its Wi-Fi under Maintenance, wait for “connected”, then send again.")
+            return false
+        }
         do {
             _ = try await session.upload(serial: serial, tgz: tgz)
             lastPublishedVivoLayers = layers.count

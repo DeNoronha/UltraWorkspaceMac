@@ -53,15 +53,10 @@ extension AppModel {
         if cube, let vivo = firstVivoCube {
             if cubeOffline {
                 let tail = lastCubeSentAt == nil ? "new cards cannot be downloaded." : "the cards you sent never arrived; it still shows the previous ones."
-                let link = "The cube is attached and answers the bar (screen, card switching work), but "
-                if let w = vivoWiFi[vivo.serial] ?? nil, !w.isCoreBarHotspot {
-                    return (link + "it is not joined to Wi-Fi “\(w.ssid)”, which it needs only to download cards — so \(tail)", hotspotAction(serial: vivo.serial))
-                }
-                return (link + "it is not on Wi-Fi, which it needs only to download cards — so \(tail)",
+                let link = "The cube is attached and answers the bar (screen, card switching work), but its Wi-Fi is "
+                let net = (vivoWiFi[vivo.serial] ?? nil).map { " on “\($0.ssid)”" } ?? ""
+                return (link + "\(cubeWiFiLabel)\(net), and it needs Wi-Fi only to download cards — so \(tail) Sending the same Wi-Fi again usually completes the join.",
                         DoctorAction(title: "Set cube Wi-Fi…") { [weak self] in self?.nav = .vivoCube; self?.showingVivoWiFi = true })
-            }
-            if let w = vivoWiFi[vivo.serial] ?? nil, !w.isCoreBarHotspot, CoreBarSession.UploadDiag.shared.last.contains("error:4") {
-                return ("The bar refuses uploads while the cube is on “\(w.ssid)” (error 4) — it only delivers over its own hotspot.", hotspotAction(serial: vivo.serial))
             }
             if vivoScreenOn == false {
                 return ("The cube's screen is off.",
@@ -155,9 +150,9 @@ extension AppModel {
                 let w = vivoWiFi[vivo.serial] ?? nil
                 let st = vivoWiFiState
                 let net = w.map { $0.isCoreBarHotspot ? "the CoreBar's hotspot (\($0.ssid))" : "“\($0.ssid)”" } ?? "an unknown network"
-                if st == 3 { add("VivoCube", "Wi-Fi", .ok, "Connected to \(net).") }
+                if CoreBarSession.CubeWiFiState.isConnected(st) { add("VivoCube", "Wi-Fi", .ok, "Connected to \(net).") }
                 else if w == nil && st == nil { add("VivoCube", "Wi-Fi", .fail, "The cube did not answer. Is it attached?", DoctorAction(title: "Find modules") { [weak self] in self?.refreshModules() }) }
-                else { add("VivoCube", "Wi-Fi", .fail, "Set to \(net) but not connected\(st.map { " (state \($0))" } ?? ""). New cards cannot reach the cube until it is.", (w?.isCoreBarHotspot ?? true) ? DoctorAction(title: "Set cube Wi-Fi…") { [weak self] in self?.nav = .vivoCube; self?.showingVivoWiFi = true } : hotspotAction(serial: vivo.serial)) }
+                else { add("VivoCube", "Wi-Fi", .fail, "Set to \(net) but \(cubeWiFiLabel). New cards cannot reach the cube until it is connected; sending the same Wi-Fi again usually completes the join.", DoctorAction(title: "Set cube Wi-Fi…") { [weak self] in self?.nav = .vivoCube; self?.showingVivoWiFi = true }) }
                 switch vivoScreenOn {
                 case .some(true): add("VivoCube", "Screen", .ok, "On")
                 case .some(false): add("VivoCube", "Screen", .fail, "Off — it stays off until you turn it on.", DoctorAction(title: "Turn on") { [weak self] in self?.setCubeScreen(on: true, serial: vivo.serial) })

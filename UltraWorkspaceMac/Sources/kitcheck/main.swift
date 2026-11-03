@@ -84,6 +84,41 @@ if let i = CommandLine.arguments.firstIndex(of: "readprop"), CommandLine.argumen
     exit(0)
 }
 
+// `kitcheck writeprop <ip> <serial> <moduleSerial> <propertyId> <int|true|false>` — MODULE_PROPERTY_WRITE, prints the reply code.
+if let i = CommandLine.arguments.firstIndex(of: "writeprop"), CommandLine.arguments.count > i + 5 {
+    let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2], mod = CommandLine.arguments[i + 3]
+    let prop = Int(CommandLine.arguments[i + 4]) ?? 0, raw = CommandLine.arguments[i + 5]
+    let value: Any = raw == "true" ? true : raw == "false" ? false : (Int(raw).map { $0 as Any } ?? raw)
+    guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token"); exit(2) }
+    let s = CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
+    let code = await s.writeProperty(serial: mod, propertyId: prop, value: value, timeout: 8)
+    print("write property \(prop) = \(raw): code \(code.map(String.init) ?? "nil")")
+    exit(code == 200 ? 0 : 1)
+}
+
+// `kitcheck upload1 <ip> <serial> <moduleSerial> <file.tgz>` — ONE /upload POST, raw reply, no retries.
+if let i = CommandLine.arguments.firstIndex(of: "upload1"), CommandLine.arguments.count > i + 4 {
+    let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2], mod = CommandLine.arguments[i + 3]
+    guard let tgz = FileManager.default.contents(atPath: CommandLine.arguments[i + 4]) else { print("cannot read tgz"); exit(2) }
+    guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token"); exit(2) }
+    let s = CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
+    let t0 = Date()
+    let r = await s.uploadOnce(serial: mod, tgz: tgz)
+    print("upload \(tgz.count) B → \(r.accepted ? "accepted" : "rejected") after \(String(format: "%.1f", Date().timeIntervalSince(t0))) s: \(r.text)")
+    exit(r.accepted ? 0 : 1)
+}
+
+// `kitcheck raw <ip> <serial> <act> <json-file>` — send one request with the file's JSON as `data`, print the reply.
+if let i = CommandLine.arguments.firstIndex(of: "raw"), CommandLine.arguments.count > i + 4 {
+    let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2], act = Int(CommandLine.arguments[i + 3]) ?? 0
+    guard let d = FileManager.default.contents(atPath: CommandLine.arguments[i + 4]),
+          let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { print("cannot read JSON object"); exit(2) }
+    guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token"); exit(2) }
+    let s = CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
+    do { print(try await s.rawRequest(act: act, data: obj, timeout: 15)) } catch { print("request failed: \(error)"); exit(1) }
+    exit(0)
+}
+
 if CommandLine.arguments.contains("discover") {
     print("scanning UDP \(Proto.discoveryPort) for 8s…")
     let bars = await Discovery.listen(timeout: 8)
@@ -97,6 +132,10 @@ var failures = 0
     print("\(cond ? "ok  " : "FAIL") \(name)")
     if !cond { failures += 1 }
 }
+
+// Cube Wi-Fi state mapping (vendor strings; hardware-confirmed 2026-11-03: packages apply only at 1)
+check(CoreBarSession.CubeWiFiState.isConnected(1) && !CoreBarSession.CubeWiFiState.isConnected(3), "cube wifi: 1 = connected, 3 = connecting")
+check(CoreBarSession.CubeWiFiState.label(3) == "still connecting" && CoreBarSession.CubeWiFiState.label(nil) == "not read yet", "cube wifi labels")
 
 // CRC32 known vector
 check(DeployPackager.crc32(Array("123456789".utf8)) == 0xCBF4_3926, "crc32('123456789') == 0xCBF43926")

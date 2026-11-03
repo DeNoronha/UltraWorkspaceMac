@@ -50,7 +50,7 @@ enum FriendlyError {
     static func text(_ raw: String) -> String {
         let l = raw.lowercased()
         if l.contains("hotspotip") { return "The cube is not on Wi-Fi, so the upload could not reach it. Set the cube's Wi-Fi (Maintenance) or detach and re-attach the cube." }
-        if l.contains("reply error:4") { return "The bar refused to forward the package (error 4): the cube is on a home Wi-Fi instead of the CoreBar's hotspot. Use the CoreBar hotspot, or see the Manual's troubleshooting." }
+        if l.contains("reply error:4") || l.contains("reply error:2") { return "The cube says it is not on Wi-Fi (it is usually stuck “connecting”). Send its Wi-Fi settings again under Maintenance, wait until it shows “connected”, then send the cards again." }
         if l.contains("reply error") || l.contains("state\":-") || l.contains("state\": -") { return "The cube refused the upload (it may be busy or off Wi-Fi). Deckhand retried; try again in a minute or check the cube's Wi-Fi." }
         if l.contains("timed out") || l.contains("timeout") { return "The bar did not answer in time. Is it on the same Wi-Fi?" }
         if l.contains("token") || l.contains("auth") { return "The bar no longer accepts this Mac — pair again." }

@@ -16,7 +16,7 @@ extension AppModel {
             await self.refreshDeviceState()
             // Remember credentials only when the cube is actually connected with them — a typo read back
             // from the cube must not become a one-click button.
-            if let w, !w.password.isEmpty, self.vivoWiFiState == 3 {
+            if let w, !w.password.isEmpty, !self.cubeOffline {
                 if w.isCoreBarHotspot { Store.shared.setHotspot(serial: bar.serialNo, ssid: w.ssid, password: w.password) }
                 Store.shared.rememberNetwork(serial: bar.serialNo, ssid: w.ssid, password: w.password)
             }
@@ -39,8 +39,8 @@ extension AppModel {
                 try? await Task.sleep(nanoseconds: 20_000_000_000)
                 self.refreshVivoWiFi(serial: serial)
                 try? await Task.sleep(nanoseconds: 4_000_000_000)
-                if self.vivoWiFiState == 3 { self.say("The cube is on “\(w.ssid)”.") }
-                else { self.say("The cube did not join “\(w.ssid)” — wrong password (\(w.password.count) characters sent), or a 5 GHz-only network.") }
+                if !self.cubeOffline { self.say("The cube is on “\(w.ssid)”.") }
+                else { self.say("The cube is \(self.cubeWiFiLabel) on “\(w.ssid)” — wrong password (\(w.password.count) characters sent), a 5 GHz-only network, or it needs another minute.") }
             } else {
                 self.say("The cube did not accept the Wi-Fi settings. Is it attached and awake?")
             }

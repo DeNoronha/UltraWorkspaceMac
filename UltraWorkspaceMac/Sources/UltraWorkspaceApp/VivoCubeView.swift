@@ -75,7 +75,7 @@ struct VivoCubeView: View {
                 Spacer()
                 Button { model.stepCube(1) } label: { Image(systemName: "chevron.right") }.accessibilityLabel("Next card")
             }.disabled(model.vivoLayerNames.count < 2)
-            if let st = model.vivoWiFiState, st != 3 {
+            if model.cubeOffline {
                 Label(model.cubePackageStale ? "Attached, but not on Wi-Fi — the cards you sent never arrived; the cube shows what it had before." : "Attached, but not on Wi-Fi — new cards cannot be downloaded.", systemImage: "wifi.slash").font(.caption).foregroundStyle(.orange)
             }
         }.frame(width: 250)
@@ -162,7 +162,7 @@ struct VivoCubeView: View {
 
     private var wifiPill: some View {
         let w = model.vivoWiFi[module.serial] ?? nil
-        let ok = model.vivoWiFiState == 3
+        let ok = !model.cubeOffline
         return Label(w.map { $0.isCoreBarHotspot ? "CoreBar hotspot" : $0.ssid } ?? "Wi-Fi", systemImage: ok ? "wifi" : "wifi.exclamationmark")
             .font(.caption).foregroundStyle(ok ? Color.secondary : Color.orange)
             .help(ok ? "The cube is connected and can receive cards." : "The cube is not connected — see Maintenance → Wi-Fi.")
@@ -187,13 +187,13 @@ struct VivoCubeView: View {
             Divider()
             HStack(spacing: 10) {
                 let w = model.vivoWiFi[module.serial] ?? nil
-                Image(systemName: model.vivoWiFiState == 3 ? "wifi" : "wifi.exclamationmark").foregroundStyle(model.vivoWiFiState == 3 ? Color.green : Color.orange)
-                Text(w.map { ($0.isCoreBarHotspot ? "On the CoreBar's own hotspot (\($0.ssid))" : "On Wi-Fi “\($0.ssid)”") + (model.vivoWiFiState == 3 ? " · connected" : " · not connected") } ?? "Wi-Fi: not read yet")
+                Image(systemName: model.cubeOffline ? "wifi.exclamationmark" : "wifi").foregroundStyle(model.cubeOffline ? Color.orange : Color.green)
+                Text(w.map { ($0.isCoreBarHotspot ? "On the CoreBar's own hotspot (\($0.ssid))" : "On Wi-Fi “\($0.ssid)”") + " · " + model.cubeWiFiLabel } ?? "Wi-Fi: not read yet")
                 Button { model.refreshVivoWiFi(serial: module.serial) } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.borderless).accessibilityLabel("Read Wi-Fi again")
                 Spacer()
                 Button { model.showingVivoWiFi = true } label: { Label("Set cube Wi-Fi…", systemImage: "wifi.router") }.disabled(model.isWorking)
             }
-            Text("The cube fetches its cards over Wi-Fi. The CoreBar's hotspot falls asleep; a 2.4 GHz network of your own is more reliable.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("The cube fetches its cards over Wi-Fi (2.4 GHz). If it stays “still connecting”, send the same Wi-Fi settings once more — that completes the join.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

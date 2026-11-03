@@ -79,7 +79,8 @@ final class AppModel: ObservableObject {
         selectedCoreBar.flatMap { Store.shared.hotspot(serial: $0.serialNo) }
     }
     /// Wi-Fi state read from the cube says it is not joined: uploads are acknowledged by the bar but never downloaded.
-    var cubeOffline: Bool { vivoWiFiState.map { $0 != 3 } ?? false }
+    var cubeOffline: Bool { vivoWiFiState.map { !CoreBarSession.CubeWiFiState.isConnected($0) } ?? false }
+    var cubeWiFiLabel: String { CoreBarSession.CubeWiFiState.label(vivoWiFiState) }
     /// Something was sent this session while the cube was offline → the glass still shows the previous package.
     var cubePackageStale: Bool { cubeOffline && lastCubeSentAt != nil }
     @Published var deviceStateAt: Date?
