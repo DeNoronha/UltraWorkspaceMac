@@ -1,14 +1,14 @@
 import SwiftUI
 import UltraBarKit
 
-/// Apps: install or update from the vendor marketplace, remove apps from the bar.
+/// Apps: what is installed on the bar (update / remove / web UI) and what the marketplace still offers.
 /// The bar does the downloading itself (APP_MANAGER 30600); Deckhand only asks and watches.
 struct AppsView: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
         VStack(spacing: 0) {
-            Header("Apps", "Install from the marketplace, or remove apps from the bar.") {
+            Header("Apps", "Apps run on the bar itself; Deckhand installs, updates and removes them.") {
                 Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(!model.link.isConnected)
             }
             Divider()
@@ -17,15 +17,15 @@ struct AppsView: View {
                     if let e = model.appStoreError {
                         Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                     }
-                    Panel("Marketplace", footer: "The bar downloads and installs the app itself (it needs internet access), one at a time. Installed apps get an “Open <app>” card in Widgets.") {
-                        if model.storeApps.isEmpty {
-                            Text(model.link.isConnected ? "Press Refresh to load the catalogue." : "Connect to the bar first.").foregroundStyle(.secondary)
-                        }
-                        ForEach(model.storeApps) { a in storeRow(a); Divider() }
+                    Panel("Installed", footer: "Everything the bar reports as installed. Apps the bar offers as a page card appear under Widgets → Apps on the bar; add them to the page from there or from the CoreBar page.") {
+                        if model.barApps.isEmpty { Text(model.link.isConnected ? "Press Refresh." : "Connect to the bar first.").foregroundStyle(.secondary) }
+                        ForEach(model.barApps, id: \.packageName) { a in installedRow(a); Divider() }
                     }
-                    Panel("On the bar", footer: "Everything the bar lists as installed, including apps that are not in the marketplace. Removing one also drops its card from the page at the next publish.") {
-                        if model.barApps.isEmpty { Text("No apps read from the bar yet.").foregroundStyle(.secondary) }
-                        ForEach(model.barApps, id: \.packageName) { a in barRow(a); Divider() }
+                    Panel("Marketplace", footer: "The vendor's catalogue. The bar downloads and installs the app itself (it needs internet), one at a time, in about ten seconds.") {
+                        let available = model.storeApps.filter { s in !model.barApps.contains { $0.packageName == s.package } && !(model.appStatus[s.package]?.installed ?? false) }
+                        if model.storeApps.isEmpty { Text(model.link.isConnected ? "Press Refresh to load the catalogue." : "Connect to the bar first.").foregroundStyle(.secondary) }
+                        else if available.isEmpty { Text("Everything in the marketplace is installed.").foregroundStyle(.secondary) }
+                        ForEach(available) { a in storeRow(a); Divider() }
                     }
                 }.padding(20)
             }
@@ -33,59 +33,60 @@ struct AppsView: View {
         .onAppear { if model.storeApps.isEmpty { model.refreshAppStore() } }
     }
 
-    private func storeRow(_ a: BarAppStore.StoreApp) -> some View {
-        let st = model.appStatus[a.package]
-        let busy = model.appBusy == a.package
-        let update = (st?.installed ?? false) && (st?.versionCode ?? 0) < a.versionCode
-        return HStack(spacing: 12) {
-            AsyncImage(url: a.iconURL) { img in img.resizable() } placeholder: { Image(systemName: "app").foregroundStyle(.secondary) }
-                .frame(width: 32, height: 32).clipShape(RoundedRectangle(cornerRadius: 7))
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(a.name).fontWeight(.medium)
-                    Text(a.versionName).font(.caption).foregroundStyle(.secondary)
-                    if let st, st.installed {
-                        Text(update ? "installed \(st.versionName) · update available" : "installed").font(.caption2)
-                            .padding(.horizontal, 6).padding(.vertical, 1).background((update ? Color.orange : Color.green).opacity(0.2)).clipShape(Capsule())
-                    }
-                }
-                if !a.summary.isEmpty { Text(a.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
-                Text(a.package).font(.caption2).foregroundStyle(.tertiary)
-            }
-            Spacer()
-            if busy { ProgressView().controlSize(.small) }
-            if let st, st.installed {
-                if update { Button("Update") { model.installApp(a.package, name: a.name) }.disabled(model.appBusy != nil) }
-                Button("Remove", role: .destructive) { model.uninstallApp(a.package, name: a.name) }.disabled(model.appBusy != nil)
-            } else {
-                Button("Install") { model.installApp(a.package, name: a.name) }.disabled(model.appBusy != nil || !model.link.isConnected)
-            }
-        }.padding(.vertical, 4)
-    }
-
-    private func barRow(_ a: CoreBarSession.AppInfo) -> some View {
-        let inStore = model.storeApps.contains { $0.package == a.packageName }
+    private func installedRow(_ a: CoreBarSession.AppInfo) -> some View {
+        let store = model.storeApps.first { $0.package == a.packageName }
+        let installedCode = model.appStatus[a.packageName]?.versionCode ?? 0
+        let update = store.map { $0.versionCode > installedCode && installedCode > 0 } ?? false
+        let busy = model.appBusy == a.packageName
         let webUI: URL? = {
             guard let port = a.port, let tok = a.sessionToken, let bar = model.selectedCoreBar else { return nil }
             let ip = model.discovered.first(where: { $0.serialNo == bar.serialNo })?.ip ?? bar.lastIp
             return URL(string: "http://\(ip):\(port)/?sessionToken=\(tok)")
         }()
         return HStack(spacing: 12) {
-            AsyncImage(url: a.iconUrl.flatMap(URL.init)) { img in img.resizable() } placeholder: { Image(systemName: a.isScreensaver ? "sparkles.tv" : "app.badge").foregroundStyle(.secondary) }
-                .frame(width: 32, height: 32).clipShape(RoundedRectangle(cornerRadius: 7))
+            icon(url: a.iconUrl.flatMap(URL.init), fallback: a.isScreensaver ? "sparkles.tv" : "app.badge")
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(a.appName).fontWeight(.medium)
                     if !a.versionName.isEmpty { Text(a.versionName).font(.caption).foregroundStyle(.secondary) }
-                    if a.isScreensaver { Text("screensaver").font(.caption2).foregroundStyle(.secondary) }
-                    else if !a.allowProfile { Text("no card").font(.caption2).foregroundStyle(.secondary).help("The bar does not offer this app as a page card.") }
+                    if update, let store { tag("update \(store.versionName)", .orange) }
+                    if a.isScreensaver { tag("screensaver", .secondary) }
                 }
-                Text(a.packageName + (inStore ? "" : " · not in the marketplace")).font(.caption2).foregroundStyle(.tertiary)
+                Text(a.packageName + (store == nil ? " · not in the marketplace" : "")).font(.caption2).foregroundStyle(.tertiary)
             }
             Spacer()
-            if model.appBusy == a.packageName { ProgressView().controlSize(.small) }
-            if let webUI { Link(destination: webUI) { Label("Web UI", systemImage: "safari") }.help("Opens the app's own web page on the bar (with its session token) in your browser.") }
-            Button("Remove", role: .destructive) { model.uninstallApp(a.packageName, name: a.appName) }.disabled(model.appBusy != nil)
+            if busy { ProgressView().controlSize(.small) }
+            if let webUI { Link(destination: webUI) { Label("Web UI", systemImage: "safari") }.buttonStyle(.bordered).help("Opens the app's own web page on the bar in your browser.") }
+            if update, let store {
+                Button { model.installApp(a.packageName, name: a.appName) } label: { Label("Update", systemImage: "arrow.down.circle") }
+                    .buttonStyle(.borderedProminent).disabled(model.appBusy != nil).help("Update to \(store.versionName)")
+            }
+            Button { model.uninstallApp(a.packageName, name: a.appName) } label: { Label("Remove", systemImage: "trash") }
+                .buttonStyle(.bordered).tint(.red).disabled(model.appBusy != nil)
         }.padding(.vertical, 4)
+    }
+
+    private func storeRow(_ a: BarAppStore.StoreApp) -> some View {
+        let busy = model.appBusy == a.package
+        return HStack(spacing: 12) {
+            icon(url: a.iconURL, fallback: "app")
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) { Text(a.name).fontWeight(.medium); Text(a.versionName).font(.caption).foregroundStyle(.secondary) }
+                if !a.summary.isEmpty { Text(a.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                Text(a.package).font(.caption2).foregroundStyle(.tertiary)
+            }
+            Spacer()
+            if busy { ProgressView().controlSize(.small) }
+            Button { model.installApp(a.package, name: a.name) } label: { Label("Install", systemImage: "arrow.down.circle") }
+                .buttonStyle(.borderedProminent).disabled(model.appBusy != nil || !model.link.isConnected)
+        }.padding(.vertical, 4)
+    }
+
+    private func icon(url: URL?, fallback: String) -> some View {
+        AsyncImage(url: url) { img in img.resizable() } placeholder: { Image(systemName: fallback).foregroundStyle(.secondary) }
+            .frame(width: 32, height: 32).clipShape(RoundedRectangle(cornerRadius: 7))
+    }
+    private func tag(_ s: String, _ c: Color) -> some View {
+        Text(s).font(.caption2).padding(.horizontal, 6).padding(.vertical, 1).background(c.opacity(0.2)).clipShape(Capsule())
     }
 }

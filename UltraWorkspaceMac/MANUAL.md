@@ -113,7 +113,7 @@ Two sections: **For the VivoCube** (pictures Deckhand draws — only cards that 
 
 ### Apps
 
-Sidebar → Library → **Apps**. Two lists. **Marketplace** is the vendor's catalogue for the bar (Sonos, Home Assistant, White Noise, Calculator, Alarm clock, UltraBar Files, UltraNotes, UltraBar Radio, UltraAgent, MAMate …): **Install** asks the bar to fetch and install the app itself (the bar needs internet; one install at a time, about ten seconds), **Update** appears when the catalogue has a newer version than the bar reports, **Remove** uninstalls. **On the bar** lists everything the bar reports as installed, including apps that are not in the marketplace, each with **Remove**. An installed app gets an “Open <app>” card under Widgets → Apps on the bar. Home Assistant is installed but never listed by the bar (it is wired in as an integration, not an app).
+Sidebar → Library → **Apps**. Two lists. **Installed** is everything the bar reports as installed (also screensavers and apps that are not in the marketplace): version, an orange **update** tag when the marketplace has a newer version, **Update** (blue), **Remove** (red outline), and **Web UI** for apps that serve their own web page on the bar (Home Assistant, UltraNotes, UltraBar Radio). **Marketplace** lists only what is not installed yet, with **Install**: the bar fetches and installs the app itself (it needs internet; one at a time, about ten seconds). Apps the bar offers as a page card then appear under Widgets → Apps on the bar; adding them to the page is done there or on the CoreBar page, not here.
 
 ### People
 Save contacts; each gets one-click **Teams chat / call**, **FaceTime**, **Mail**. Stored locally on your Mac.
