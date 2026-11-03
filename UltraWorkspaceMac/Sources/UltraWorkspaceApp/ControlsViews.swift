@@ -70,9 +70,10 @@ struct DotKeyView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     HStack(alignment: .top, spacing: 24) {
-                        VStack(spacing: 8) {
-                            HStack(spacing: 8) { Circle().fill(.quaternary).frame(width: 30, height: 30).overlay(Text("1").font(.caption)); Circle().fill(.quaternary).frame(width: 30, height: 30).overlay(Text("2").font(.caption)) }
-                            Capsule().fill(.quaternary).frame(width: 68, height: 26).overlay(Text("3").font(.caption))
+                        // As on the desk: two round keys stacked on the left, one tall key on the right.
+                        HStack(spacing: 8) {
+                            VStack(spacing: 8) { Circle().fill(.quaternary).frame(width: 30, height: 30).overlay(Text("1").font(.caption)); Circle().fill(.quaternary).frame(width: 30, height: 30).overlay(Text("2").font(.caption)) }
+                            Capsule().fill(.quaternary).frame(width: 26, height: 68).overlay(Text("3").font(.caption))
                         }.frame(width: 110).padding(.top, 10)
                         Panel("What it does") {
                             BindingRow(icon: "1.circle", control: "Key 1", action: "Cube: \(card(1))", note: "switches on the bar itself")
