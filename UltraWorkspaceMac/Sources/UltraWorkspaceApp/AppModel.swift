@@ -46,6 +46,7 @@ final class AppModel: ObservableObject {
     @Published var appStatus: [String: CoreBarSession.AppStatus] = [:]
     @Published var appBusy: String?
     @Published var appStoreError: String?
+    @Published var screensaver: CoreBarSession.ScreensaverConfig?
     // Persistent link ("Mac agent") that answers the CoreBar's push queries. Wording lives in `LinkBadge`.
     @Published var link: CoreBarLink.State = .stopped
     @Published var pushCount = 0

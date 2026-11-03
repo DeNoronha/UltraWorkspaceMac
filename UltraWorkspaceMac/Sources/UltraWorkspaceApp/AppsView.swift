@@ -25,8 +25,9 @@ struct AppsView: View {
                     }
                     Panel("Installed", footer: "Everything the bar reports as installed. Apps the bar offers as a page card appear under Widgets → Apps on the bar; add them to the page from there or from the CoreBar page.") {
                         if model.barApps.isEmpty { Text(model.link.isConnected ? "Press Refresh." : "Connect to the bar first.").foregroundStyle(.secondary) }
-                        ForEach(model.barApps, id: \.packageName) { a in installedRow(a); Divider() }
+                        ForEach(model.barApps.filter { !$0.isScreensaver }, id: \.packageName) { a in installedRow(a); Divider() }
                     }
+                    screensavers
                     Panel("Marketplace", footer: "The vendor's catalogue. The bar downloads and installs the app itself (it needs internet), one at a time, in about ten seconds.") {
                         let available = model.storeApps.filter { s in !model.barApps.contains { $0.packageName == s.package } && !(model.appStatus[s.package]?.installed ?? false) }
                         if model.storeApps.isEmpty { Text(model.link.isConnected ? "Press Refresh to load the catalogue." : "Connect to the bar first.").foregroundStyle(.secondary) }
@@ -37,6 +38,47 @@ struct AppsView: View {
             }
         }
         .onAppear { if model.storeApps.isEmpty { model.refreshAppStore() } }
+    }
+
+    private var screensavers: some View {
+        let c = model.screensaver
+        return Panel("Screensavers", footer: "The bar starts the chosen screensaver app after the idle time. Screensaver apps are installed from the bar itself (Settings → Screensaver on the bar); Deckhand can only pick, time and remove them.") {
+            HStack(spacing: 14) {
+                Toggle("Screensaver", isOn: Binding(get: { c?.featureEnabled ?? false }, set: { model.setScreensaver(enabled: $0) }))
+                    .toggleStyle(.switch).disabled(c == nil || model.screensaverApps.isEmpty)
+                Text("after").foregroundStyle(.secondary)
+                Picker("", selection: Binding(get: { c?.lockTime ?? "TIME_5MIN" }, set: { model.setScreensaver(lockTime: $0) })) {
+                    ForEach(CoreBarSession.ScreensaverConfig.lockTimes, id: \.self) { Text(AppModel.lockTimeLabel($0)).tag($0) }
+                }.labelsHidden().frame(width: 110).disabled(c == nil)
+                if c == nil { Text("not read yet").font(.caption).foregroundStyle(.secondary) }
+            }
+            if model.screensaverApps.isEmpty { Text("No screensaver app on the bar.").foregroundStyle(.secondary) }
+            ForEach(model.screensaverApps, id: \.packageName) { a in
+                let active = model.isActiveScreensaver(a)
+                HStack(spacing: 12) {
+                    Button { model.setScreensaver(app: a) } label: { Image(systemName: active ? "largecircle.fill.circle" : "circle") }
+                        .buttonStyle(.borderless).accessibilityLabel(active ? "\(a.appName) is the active screensaver" : "Use \(a.appName)")
+                    icon(url: a.iconUrl.flatMap(URL.init), fallback: "sparkles.tv")
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(a.appName).fontWeight(.medium)
+                            if !a.versionName.isEmpty { Text(a.versionName).font(.caption).foregroundStyle(.secondary) }
+                            if active { tag("active", .green) }
+                        }
+                        Text(a.packageName).font(.caption2).foregroundStyle(.tertiary)
+                    }
+                    Spacer()
+                    if model.appBusy == a.packageName { ProgressView().controlSize(.small) }
+                    if a.systemApp { Text("part of the firmware").font(.caption).foregroundStyle(.secondary) }
+                    else {
+                        Button { model.uninstallApp(a.packageName, name: a.appName) } label: { Label("Remove", systemImage: "trash") }
+                            .buttonStyle(.bordered).tint(.red).disabled(model.appBusy != nil || active)
+                            .help(active ? "Pick another screensaver first." : "")
+                    }
+                }.padding(.vertical, 4)
+                Divider()
+            }
+        }
     }
 
     /// Installed apps for which the marketplace has a higher versionCode.

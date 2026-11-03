@@ -11,6 +11,7 @@ extension AppModel {
                 self.storeApps = apps
                 self.appStoreError = nil
                 if let list = try? await session.listApps() { self.barApps = list }
+                if let c = try? await session.readScreensaver() { self.screensaver = c }
                 for a in apps { if let st = try? await session.appStatus(package: a.package) { self.appStatus[a.package] = st } }
             } catch {
                 self.appStoreError = "The marketplace did not answer: \(error.localizedDescription)"
