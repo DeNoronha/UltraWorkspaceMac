@@ -24,9 +24,10 @@ public extension CoreBarSession {
 
     /// Asks the bar to install (`appType` 100 = the CoreBar app store). Returns the first reply line
     /// (usually a 30601 progress push `STATUS: DOWNLOADING`); poll `appStatus` for the outcome.
+    /// `appType`: 100 = the CoreBar app store, 101 = the screensaver catalogue (both confirmed 2026-11-03).
     @discardableResult
-    func installApp(package: String) async throws -> String {
-        try await rawRequest(act: 30600, data: ["type": 1, "appType": 100, "packageName": package], timeout: 15)
+    func installApp(package: String, appType: Int = 100) async throws -> String {
+        try await rawRequest(act: 30600, data: ["type": 1, "appType": appType, "packageName": package], timeout: 15)
     }
 
     func uninstallApp(package: String) async throws -> Bool {

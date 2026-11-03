@@ -43,6 +43,7 @@ final class AppModel: ObservableObject {
     @Published var barApps: [CoreBarSession.AppInfo] = []
     /// Apps page: the vendor marketplace catalogue, per-package install status, the package being worked on.
     @Published var storeApps: [BarAppStore.StoreApp] = []
+    @Published var storeScreensavers: [BarAppStore.StoreApp] = []
     @Published var appStatus: [String: CoreBarSession.AppStatus] = [:]
     @Published var appBusy: String?
     @Published var appStoreError: String?

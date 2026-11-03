@@ -9,10 +9,12 @@ enum BarAppStore {
         let summary: String, changeLog: String, iconURL: URL?
     }
 
-    static let catalogueURL = URL(string: "https://gatewayssl.dev.aiks360.com/api/v1/base-service/pub/apps/100/fetchListV2")!
+    /// 100 = apps, 101 = screensavers (what the bar's own Settings → Screensaver lists).
+    static let appsType = 100, screensaversType = 101
+    static func catalogueURL(_ appType: Int) -> URL { URL(string: "https://gatewayssl.dev.aiks360.com/api/v1/base-service/pub/apps/\(appType)/fetchListV2")! }
 
-    static func fetch() async throws -> [StoreApp] {
-        var req = URLRequest(url: catalogueURL)
+    static func fetch(appType: Int = appsType) async throws -> [StoreApp] {
+        var req = URLRequest(url: catalogueURL(appType))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = Data(#"{"pi":1,"ps":200}"#.utf8)

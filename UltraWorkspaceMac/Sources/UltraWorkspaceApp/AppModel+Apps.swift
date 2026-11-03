@@ -9,10 +9,11 @@ extension AppModel {
             do {
                 let apps = try await BarAppStore.fetch()
                 self.storeApps = apps
+                if let ss = try? await BarAppStore.fetch(appType: BarAppStore.screensaversType) { self.storeScreensavers = ss }
                 self.appStoreError = nil
                 if let list = try? await session.listApps() { self.barApps = list }
                 if let c = try? await session.readScreensaver() { self.screensaver = c }
-                for a in apps { if let st = try? await session.appStatus(package: a.package) { self.appStatus[a.package] = st } }
+                for a in apps + self.storeScreensavers { if let st = try? await session.appStatus(package: a.package) { self.appStatus[a.package] = st } }
             } catch {
                 self.appStoreError = "The marketplace did not answer: \(error.localizedDescription)"
             }
@@ -44,9 +45,10 @@ extension AppModel {
         appBusy = package
         defer { appBusy = nil }
         do {
-            _ = try await session.installApp(package: package)
+            let isScreensaver = storeScreensavers.contains { $0.package == package } && !storeApps.contains { $0.package == package }
+            _ = try await session.installApp(package: package, appType: isScreensaver ? BarAppStore.screensaversType : BarAppStore.appsType)
             say("Bar: installing \(name)…")
-            let want = storeApps.first { $0.package == package }?.versionCode ?? 0
+            let want = (storeApps + storeScreensavers).first { $0.package == package }?.versionCode ?? 0
             for _ in 0..<20 {
                 try await Task.sleep(nanoseconds: 3_000_000_000)
                 if let st = try? await session.appStatus(package: package) {

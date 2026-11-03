@@ -42,7 +42,7 @@ struct AppsView: View {
 
     private var screensavers: some View {
         let c = model.screensaver
-        return Panel("Screensavers", footer: "The bar starts the chosen screensaver app after the idle time. Screensaver apps are installed from the bar itself (Settings → Screensaver on the bar); Deckhand can only pick, time and remove them.") {
+        return Panel("Screensavers", footer: "The bar starts the chosen screensaver app after the idle time. Install more from the vendor's screensaver catalogue above; pick the active one with the radio button.") {
             HStack(spacing: 14) {
                 Toggle("Screensaver", isOn: Binding(get: { c?.featureEnabled ?? false }, set: { model.setScreensaver(enabled: $0) }))
                     .toggleStyle(.switch).disabled(c == nil || model.screensaverApps.isEmpty)
@@ -53,6 +53,12 @@ struct AppsView: View {
                 if c == nil { Text("not read yet").font(.caption).foregroundStyle(.secondary) }
             }
             if model.screensaverApps.isEmpty { Text("No screensaver app on the bar.").foregroundStyle(.secondary) }
+            let available = model.storeScreensavers.filter { s in !model.barApps.contains { $0.packageName == s.package } }
+            if !available.isEmpty {
+                Text("Available").font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
+                ForEach(available) { a in storeRow(a); Divider() }
+                Text("Installed").font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
+            }
             ForEach(model.screensaverApps, id: \.packageName) { a in
                 let active = model.isActiveScreensaver(a)
                 HStack(spacing: 12) {
@@ -84,14 +90,14 @@ struct AppsView: View {
     /// Installed apps for which the marketplace has a higher versionCode.
     private var pendingUpdates: [(package: String, name: String)] {
         model.barApps.compactMap { a in
-            guard let s = model.storeApps.first(where: { $0.package == a.packageName }) else { return nil }
+            guard let s = (model.storeApps + model.storeScreensavers).first(where: { $0.package == a.packageName }) else { return nil }
             let code = model.appStatus[a.packageName]?.versionCode ?? 0
             return (code > 0 && s.versionCode > code) ? (a.packageName, a.appName) : nil
         }
     }
 
     private func installedRow(_ a: CoreBarSession.AppInfo) -> some View {
-        let store = model.storeApps.first { $0.package == a.packageName }
+        let store = (model.storeApps + model.storeScreensavers).first { $0.package == a.packageName }
         let installedCode = model.appStatus[a.packageName]?.versionCode ?? 0
         let update = store.map { $0.versionCode > installedCode && installedCode > 0 } ?? false
         let busy = model.appBusy == a.packageName
