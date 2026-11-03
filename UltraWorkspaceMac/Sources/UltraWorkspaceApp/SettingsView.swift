@@ -16,6 +16,8 @@ struct SettingsView: View {
                         LabeledContent("Name", value: bar.name)
                         LabeledContent("Serial") { Text(bar.serialNo).textSelection(.enabled) }
                         LabeledContent("Address", value: model.ipForSelected() ?? bar.lastIp)
+                        Toggle("Keep the bar's screen on (experimental)", isOn: $settings.keepBarAwake)
+                        Text("The bar switches its screen off after a few minutes; Deckhand cannot change that timeout (no such setting in the protocol). With this on, Deckhand re-selects the current page every 4 minutes, which is the only known way to wake the screen. Tell me whether it works.").font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text("No CoreBar selected.").foregroundStyle(.secondary)
                     }

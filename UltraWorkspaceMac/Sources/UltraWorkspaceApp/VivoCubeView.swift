@@ -76,7 +76,7 @@ struct VivoCubeView: View {
                 Button { model.stepCube(1) } label: { Image(systemName: "chevron.right") }.accessibilityLabel("Next card")
             }.disabled(model.vivoLayerNames.count < 2)
             if let st = model.vivoWiFiState, st != 3 {
-                Label(model.cubePackageStale ? "Not on Wi-Fi — the cards you sent never arrived; the cube shows what it had before." : "Not on Wi-Fi — new cards cannot reach it.", systemImage: "wifi.slash").font(.caption).foregroundStyle(.orange)
+                Label(model.cubePackageStale ? "Attached, but not on Wi-Fi — the cards you sent never arrived; the cube shows what it had before." : "Attached, but not on Wi-Fi — new cards cannot be downloaded.", systemImage: "wifi.slash").font(.caption).foregroundStyle(.orange)
             }
         }.frame(width: 250)
     }
@@ -171,9 +171,11 @@ struct VivoCubeView: View {
     private var maintenance: some View {
         Group {
             HStack {
-                Toggle("Screen", isOn: Binding(get: { model.vivoScreenOn ?? true }, set: { model.setCubeScreen(on: $0, serial: module.serial) }))
-                    .toggleStyle(.switch)
-                Text("Off stays off until you turn it on again.").font(.caption).foregroundStyle(.secondary)
+                Text("Cube screen").frame(width: 100, alignment: .leading)
+                Picker("", selection: Binding(get: { model.vivoScreenOn ?? true }, set: { model.setCubeScreen(on: $0, serial: module.serial) })) {
+                    Text("On").tag(true); Text("Off").tag(false)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 120)
+                Text(model.vivoScreenOn == nil ? "not read yet" : (model.vivoScreenOn == true ? "The display is on." : "The display is off and stays off until you switch it on here.")).font(.caption).foregroundStyle(.secondary)
             }
             HStack(spacing: 10) {
                 Button { model.recoverVivoDisplay(serial: module.serial) } label: { Label("Fix black screen", systemImage: "bandage") }
@@ -210,13 +212,14 @@ struct VivoWiFiSheet: View {
             Text("2.4 GHz networks only — the cube has no 5 GHz radio, and a combined 2.4/5 GHz name may not work. The bar must be on the same network. The password is sent to the cube and kept only in Deckhand's settings so the cube can be switched back later; it is redacted from Deckhand's log.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if !saved.isEmpty {
-                Text("Networks the cube has used — click to fill in:").font(.caption).foregroundStyle(.secondary)
+                Text("Networks the cube has successfully joined — click to fill in (right-click to forget):").font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     ForEach(saved, id: \.ssid) { n in
                         Button {
                             draft.ssid = n.ssid; draft.password = n.password
                         } label: { Label(n.ssid.hasPrefix("AndroidAP") ? "CoreBar hotspot (\(n.ssid))" : n.ssid, systemImage: n.ssid.hasPrefix("AndroidAP") ? "dot.radiowaves.left.and.right" : "wifi") }
                         .controlSize(.small)
+                        .contextMenu { Button("Forget this network") { if let b = model.selectedCoreBar { Store.shared.forgetNetwork(serial: b.serialNo, ssid: n.ssid) }; draft.objectWillChange.send() } }
                     }
                 }
             } else {

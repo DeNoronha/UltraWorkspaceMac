@@ -88,6 +88,7 @@ final class AppModel: ObservableObject {
     @Published var pageProgress = StepProgress()
     @Published var lastCubeSentAt: Date?
     var claudeWatchTask: Task<Void, Never>?
+    var keepAwakeTask: Task<Void, Never>?
     @Published var lastPagePublishedAt: Date?
     @Published var lastCoverRefreshAt: Date?
     @Published var showingVivoWiFi = false

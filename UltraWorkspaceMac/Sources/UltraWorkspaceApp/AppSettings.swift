@@ -63,6 +63,8 @@ final class AppSettings: ObservableObject {
     /// Your own daily token budget (for the % on the card); 0 = no percentage.
     @Published var claudeDailyBudget: Int = 0 { didSet { save() } }
     @Published var claudeNotifyWaiting: Bool = true { didSet { save() } }
+    /// Experimental: re-select the bar's current page every few minutes so its screen does not time out.
+    @Published var keepBarAwake: Bool = false { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows about this many cards without scrolling (the clock card is double width).
     static let coreCardsThatFit = 4
@@ -117,6 +119,7 @@ final class AppSettings: ObservableObject {
         var claudePlan: ClaudePlan? = nil
         var claudeDailyBudget: Int? = nil
         var claudeNotifyWaiting: Bool? = nil
+        var keepBarAwake: Bool? = nil
     }
 
     // MARK: VivoCube cards (ordered, max 6)
@@ -207,6 +210,7 @@ final class AppSettings: ObservableObject {
             claudePlan = p.claudePlan ?? .max5
             claudeDailyBudget = p.claudeDailyBudget ?? 0
             claudeNotifyWaiting = p.claudeNotifyWaiting ?? true
+            keepBarAwake = p.keepBarAwake ?? false
         }
     }
 
@@ -224,7 +228,7 @@ final class AppSettings: ObservableObject {
                           worldClockZones: worldClockZones, clockStyle: clockStyle, clockSeconds: clockSeconds,
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
-                          claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting)
+                          claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, keepBarAwake: keepBarAwake)
         if let data = try? JSONEncoder().encode(p) { try? data.write(to: url, options: .atomic) }
     }
 

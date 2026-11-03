@@ -78,6 +78,13 @@ public final class Store: @unchecked Sendable {
             persist()
         }
     }
+    public func forgetNetwork(serial: String, ssid: String) {
+        queue.sync {
+            guard let idx = state.coreBars.firstIndex(where: { $0.serialNo == serial }) else { return }
+            state.coreBars[idx].savedNetworks?[ssid] = nil
+            persist()
+        }
+    }
     public func savedNetworks(serial: String) -> [(ssid: String, password: String)] {
         queue.sync { (state.coreBars.first { $0.serialNo == serial }?.savedNetworks ?? [:]).sorted { $0.key < $1.key }.map { ($0.key, $0.value) } }
     }

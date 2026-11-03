@@ -11,11 +11,15 @@ extension AppModel {
             self.vivoWiFi[serial] = w
             if let w {
                 WireLog.shared.event("cube wifi: \(w.ssid)\(w.isCoreBarHotspot ? " (CoreBar hotspot)" : "")")
-                if w.isCoreBarHotspot, !w.password.isEmpty { Store.shared.setHotspot(serial: bar.serialNo, ssid: w.ssid, password: w.password) }
-                if !w.password.isEmpty { Store.shared.rememberNetwork(serial: bar.serialNo, ssid: w.ssid, password: w.password) }
             }
             else { self.say("Could not read the cube's Wi-Fi setting.") }
             await self.refreshDeviceState()
+            // Remember credentials only when the cube is actually connected with them — a typo read back
+            // from the cube must not become a one-click button.
+            if let w, !w.password.isEmpty, self.vivoWiFiState == 3 {
+                if w.isCoreBarHotspot { Store.shared.setHotspot(serial: bar.serialNo, ssid: w.ssid, password: w.password) }
+                Store.shared.rememberNetwork(serial: bar.serialNo, ssid: w.ssid, password: w.password)
+            }
         }
     }
 
@@ -25,8 +29,6 @@ extension AppModel {
         guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
         let w = CoreBarSession.ModuleWiFi(ssid: ssid.trimmingCharacters(in: .whitespaces), password: password)
         guard !w.ssid.isEmpty else { say("Enter the Wi-Fi name."); return }
-        if w.isCoreBarHotspot, !w.password.isEmpty { Store.shared.setHotspot(serial: bar.serialNo, ssid: w.ssid, password: w.password) }
-        if !w.password.isEmpty { Store.shared.rememberNetwork(serial: bar.serialNo, ssid: w.ssid, password: w.password) }
         isWorking = true
         say("Sending Wi-Fi “\(w.ssid)” to the cube…")
         Task {
@@ -36,6 +38,9 @@ extension AppModel {
                 self.say("The cube accepted the Wi-Fi settings and is reconnecting (about 20 s).")
                 try? await Task.sleep(nanoseconds: 20_000_000_000)
                 self.refreshVivoWiFi(serial: serial)
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                if self.vivoWiFiState == 3 { self.say("The cube is on “\(w.ssid)”.") }
+                else { self.say("The cube did not join “\(w.ssid)” — wrong password (\(w.password.count) characters sent), or a 5 GHz-only network.") }
             } else {
                 self.say("The cube did not accept the Wi-Fi settings. Is it attached and awake?")
             }

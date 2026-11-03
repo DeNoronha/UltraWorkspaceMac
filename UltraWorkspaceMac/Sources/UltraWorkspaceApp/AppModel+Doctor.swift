@@ -52,11 +52,12 @@ extension AppModel {
         }
         if cube, let vivo = firstVivoCube {
             if cubeOffline {
-                let tail = lastCubeSentAt == nil ? "new cards cannot reach it." : "it still shows its previous cards — the ones you sent never arrived."
+                let tail = lastCubeSentAt == nil ? "new cards cannot be downloaded." : "the cards you sent never arrived; it still shows the previous ones."
+                let link = "The cube is attached and answers the bar (screen, card switching work), but "
                 if let w = vivoWiFi[vivo.serial] ?? nil, !w.isCoreBarHotspot {
-                    return ("The cube cannot hold Wi-Fi “\(w.ssid)”, so \(tail)", hotspotAction(serial: vivo.serial))
+                    return (link + "it is not joined to Wi-Fi “\(w.ssid)”, which it needs only to download cards — so \(tail)", hotspotAction(serial: vivo.serial))
                 }
-                return ("The cube is not on Wi-Fi, so \(tail)",
+                return (link + "it is not on Wi-Fi, which it needs only to download cards — so \(tail)",
                         DoctorAction(title: "Set cube Wi-Fi…") { [weak self] in self?.nav = .vivoCube; self?.showingVivoWiFi = true })
             }
             if let w = vivoWiFi[vivo.serial] ?? nil, !w.isCoreBarHotspot, CoreBarSession.UploadDiag.shared.last.contains("error:4") {
