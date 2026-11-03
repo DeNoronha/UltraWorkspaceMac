@@ -51,7 +51,7 @@ struct CoreBarPageView: View {
     // MARK: Preview strip
 
     private var preview: some View {
-        let cards = settings.coreCards.compactMap(AppSettings.coreCard)
+        let cards = settings.coreCards.compactMap(model.coreCard)
         return Panel("Preview", footer: "Drawn from the list below — not read back from the bar.") {
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black)
@@ -88,7 +88,7 @@ struct CoreBarPageView: View {
     // MARK: Cards on the page
 
     private var onPage: some View {
-        let cards = settings.coreCards.compactMap(AppSettings.coreCard)
+        let cards = settings.coreCards.compactMap(model.coreCard)
         return Panel("Cards on the bar", footer: "Drag to reorder. \(cards.count) card\(cards.count == 1 ? "" : "s") · about \(AppSettings.coreCardsThatFit) fit without scrolling. ⌁ = live from this Mac, only while Deckhand runs.") {
             if cards.isEmpty { Text("Nothing on the bar yet — add a card.").foregroundStyle(.secondary) }
             List {
@@ -135,7 +135,7 @@ struct CoreBarPageView: View {
 
     /// Same control as on the VivoCube page: one "Add a card…" menu.
     private var addCardMenu: some View {
-        let available = AppSettings.allCoreCards.filter { !settings.coreCards.contains($0.id) }
+        let available = model.allCoreCardsNow.filter { !settings.coreCards.contains($0.id) }
         let hasSense = model.modules.contains { $0.type == "SENSE_CUBE" }
         return Menu {
             ForEach(available) { c in

@@ -40,11 +40,21 @@ struct WidgetsView: View {
                             }.tag(Item.bar(c.id))
                         }
                     } header: { Text("For the CoreBar") } footer: { Text("Cards the bar draws itself and updates live (CPU every 3 s, network every 5 s).").font(.caption).foregroundStyle(.secondary) }
+                    Section {
+                        if model.appCards.isEmpty { Text(model.link.isConnected ? "No apps read from the bar yet." : "Connect to the bar to list its apps.").font(.caption).foregroundStyle(.secondary) }
+                        ForEach(model.appCards) { c in
+                            HStack {
+                                Label(c.title, systemImage: c.icon)
+                                Spacer()
+                                if settings.coreCards.contains(c.id) { Image(systemName: "rectangle.on.rectangle").font(.caption).foregroundStyle(.secondary).help("On the CoreBar page") }
+                            }.tag(Item.bar(c.id))
+                        }
+                    } header: { Text("Apps on the bar") } footer: { Text("One card per app installed on the bar (Settings → Marketplace on the bar, or kitcheck app). Tapping the card opens the app on the bar.").font(.caption).foregroundStyle(.secondary) }
                 }
                 .frame(minWidth: 220, maxWidth: 280)
 
                 ScrollView {
-                    if case .bar(let id) = ui.selected, let c = AppSettings.coreCard(id) {
+                    if case .bar(let id) = ui.selected, let c = model.coreCard(id) {
                         barDetail(c)
                     } else {
                     VStack(alignment: .leading, spacing: 16) {

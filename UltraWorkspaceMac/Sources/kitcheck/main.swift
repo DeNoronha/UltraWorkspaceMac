@@ -119,6 +119,19 @@ if let i = CommandLine.arguments.firstIndex(of: "raw"), CommandLine.arguments.co
     exit(0)
 }
 
+// apps <ip> <serial> — the bar's installed apps (GET_APP_LIST 1000 "ALL") with the page-card / web-UI flags.
+if let i = CommandLine.arguments.firstIndex(of: "apps"), CommandLine.arguments.count > i + 2 {
+    let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2]
+    guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token"); exit(2) }
+    let s = CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
+    do {
+        for a in try await s.listApps() {
+            print("\(a.appName) | \(a.packageName) | \(a.versionName) | system=\(a.systemApp) card=\(a.allowProfile) screensaver=\(a.isScreensaver) port=\(a.port.map(String.init) ?? "-") token=\(a.sessionToken == nil ? "-" : "yes") icon=\(a.iconUrl ?? "-")")
+        }
+    } catch { print("request failed: \(error)"); exit(1) }
+    exit(0)
+}
+
 // app <ip> <serial> status|install|uninstall <packageName> — the bar's app store (APP_MANAGER 30600).
 // install: the bar fetches the APK itself from the vendor cloud (apps/100/<package>/fetchLastVerV2) and
 // installs it; this prints the first progress push, then polls the status every 5 s for up to a minute.

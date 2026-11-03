@@ -14,12 +14,28 @@ extension AppModel {
     static let defaultPageId = "default"
 
     /// Read-only: list page ids/names on the CoreBar.
+    static let appCardPrefix = "APP:"
+    static func appPackage(_ cardId: String) -> String? { cardId.hasPrefix(appCardPrefix) ? String(cardId.dropFirst(appCardPrefix.count)) : nil }
+
+    /// A bar card by id: the fixed library first, then one "Open <app>" card per app installed on the bar.
+    func coreCard(_ id: String) -> AppSettings.CoreCard? {
+        if let c = AppSettings.coreCard(id) { return c }
+        guard let pkg = Self.appPackage(id) else { return nil }
+        let name = barApps.first { $0.packageName == pkg }?.appName ?? pkg
+        return AppSettings.CoreCard(id: id, title: "Open \(name)", needsMac: false, icon: "app.badge",
+                                    note: "Opens \(name) on the bar when tapped; the bar draws the app's own icon.")
+    }
+    /// Everything that can go on the Deckhand page right now.
+    var allCoreCardsNow: [AppSettings.CoreCard] { AppSettings.allCoreCards + appCards }
+    var appCards: [AppSettings.CoreCard] { barApps.filter { !$0.isScreensaver }.compactMap { coreCard(Self.appCardPrefix + $0.packageName) } }
+
     func refreshPages() {
         guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
         Task {
             do {
                 let pages = try await session.listPages()
                 self.corebarPages = pages
+                if let apps = try? await session.listApps() { self.barApps = apps }
                 WireLog.shared.event("pages: " + pages.map { "\($0.name) [\($0.id)]" }.joined(separator: ", "))
             } catch { self.say("The bar did not answer when asked for its pages: \(FriendlyError.text(error))") }
         }
@@ -121,7 +137,13 @@ extension AppModel {
                     case "MUSIC":
                         w.append(["id": "deckhand.music", "type": "PC_CONTROL", "name": "Play / Pause", "icon": "deckhand/btn-music.png", "iconScale": 80,
                                   "param": ["output": 10, "payload": ["deckhand": "music.playpause"]]])
-                    default: break
+                    default:
+                        if let pkg = Self.appPackage(card) {
+                            // APPS card: the launcher matches the widget by id == packageName and draws the app's own icon
+                            // (HomeDataSource.getProfile); `param.package` is what the vendor client also sends.
+                            let name = self.barApps.first { $0.packageName == pkg }?.appName ?? pkg
+                            w.append(["id": pkg, "type": "APPS", "name": name, "param": ["package": pkg]])
+                        }
                     }
                 }
                 let deckhand: [String: Any] = [

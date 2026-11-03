@@ -227,7 +227,7 @@ The CoreBar runs LineOS (`com.ultrabar.launch`); the screen protocol lives there
 | `CPU`, `MEMORY`, `STORAGE`, `NETWORK` | `{"data":"<string>"}`; values come from `PUSH_MESSAGE` queries to the PC (`ScheduledQueryRegistry`) — without a PC replying they stay empty | no |
 | `SENSE_CUBE`, `SENSE_CUBE_TEMP/HUM/ALS/AUDIO/RADAR` | `{"uid":"<module uid>"}` (vendor sends `moduleUid`) | no |
 | `PC_BOOT` | `{"uid":"<module uid>"}` | no |
-| `APPS` | none; vendor sends `{"package":…}`; `id` = package name, icon from the installed app; the `screensaver` app is hidden from this list | no |
+| `APPS` | none; vendor sends `{"package":…}`; **`id` must be the package name** — the launcher matches the saved widget to an installed app by `id` (`HomeDataSource.getProfile`) and draws that app's icon; `com.ultrabar.homeassistant` is excluded from the app list; the `screensaver` app is hidden from the vendor's picker. GET_APP_LIST (1000) on LineOS 1.0.9.9 answers only `{appName, packageName}` (no `allowProfile`/`port`/`sessionToken`, whatever `data` is sent) | no |
 | `HA_SCENE` and HA device types (`SWITCH`, `LIGHT*`, `AC`, `FAN`, `CURTAIN*`, `TEMPERATURE_SENSOR`, `HUMIDITY_SENSOR`) | ids from the 1002 tree under `sys.widget.iot` | `HA_SCENE`: yes |
 | `AUDIO_PLAYER` | `{"source":…}`; id `sys.player.sonos|music|spotify` | no |
 | `EMAIL_CARD` | configured through 1500–1502 | no |

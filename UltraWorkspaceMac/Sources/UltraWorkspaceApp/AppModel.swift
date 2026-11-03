@@ -39,6 +39,8 @@ final class AppModel: ObservableObject {
     @Published var themeRunning = false
     @Published var currentThemeLabel = ""
     @Published var corebarPages: [CoreBarSession.PageInfo] = []
+    /// Apps installed on the bar (GET_APP_LIST). Each becomes an "Open <app>" bar card (`APP:<package>`).
+    @Published var barApps: [CoreBarSession.AppInfo] = []
     // Persistent link ("Mac agent") that answers the CoreBar's push queries. Wording lives in `LinkBadge`.
     @Published var link: CoreBarLink.State = .stopped
     @Published var pushCount = 0

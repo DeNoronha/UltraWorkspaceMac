@@ -543,6 +543,40 @@ public struct CoreBarSession: Sendable {
     // (30710), which lists ids + names. A missing/empty array wipes the home
     // screen, so callers must always send the complete list.
 
+    /// An app installed on the bar (GET_APP_LIST 1000 with data "ALL"). `allowProfile` = may be a
+    /// page card (`{type:"APPS", param:{package}}`); `port`/`sessionToken` = it has a web UI at
+    /// `http://<bar>:<port>?sessionToken=…`.
+    public struct AppInfo: Sendable, Hashable {
+        public let packageName: String, appName: String, versionName: String
+        public let systemApp: Bool, allowProfile: Bool, isScreensaver: Bool
+        public let port: Int?, sessionToken: String?, iconUrl: String?
+    }
+
+    /// GET_APP_LIST (1000). The launcher's `AppListRead` takes a plain string (`"ALL"` / `"SCREENSAVER"`)
+    /// as `data`; `{}` also answers but with fewer fields.
+    public func listApps() async throws -> [AppInfo] {
+        let client = try await authedClient()
+        defer { Task { await client.close() } }
+        guard let line = try await client.request(act: 1000, dataJSON: Data("\"ALL\"".utf8), timeout: 10),
+              let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+            throw UltraBarError.protocolError("no reply to GET_APP_LIST (1000)")
+        }
+        guard code(reply) == 200 else { throw UltraBarError.protocolError("1000 failed: \(String(data: line, encoding: .utf8) ?? "")") }
+        let arr = (reply["data"] as? [[String: Any]]) ?? []
+        func b(_ d: [String: Any], _ k: String) -> Bool { (d[k] as? Bool) ?? ((d[k] as? NSNumber)?.boolValue ?? false) }
+        return arr.compactMap { d in
+            guard let pkg = (d["packageName"] as? String) ?? (d["application"] as? String) else { return nil }
+            let cfg = d["config"] as? [String: Any] ?? [:]
+            let port = (cfg["port"] as? Int) ?? (d["port"] as? Int)
+            return AppInfo(packageName: pkg, appName: (d["appName"] as? String) ?? pkg,
+                           versionName: (d["versionName"] as? String) ?? "",
+                           systemApp: b(d, "systemApp"), allowProfile: b(d, "allowProfile"), isScreensaver: b(d, "isScreensaver"),
+                           port: (port ?? 0) > 0 ? port : nil,
+                           sessionToken: (cfg["sessionToken"] as? String) ?? (d["sessionToken"] as? String),
+                           iconUrl: (d["iconUrl"] as? String) ?? (d["icon"] as? String))
+        }
+    }
+
     public struct PageInfo: Sendable, Hashable { public let id: String; public let name: String }
 
     /// List the page (profile) ids and names currently on the CoreBar.
