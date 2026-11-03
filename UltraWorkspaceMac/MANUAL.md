@@ -117,7 +117,7 @@ Sidebar → Library → **Apps**. **Update all** (top right) updates every app w
 
 ### Screensavers
 
-Sidebar → Library → **Screensavers**: a switch (on/off), the idle time (30 s … 5 min, never) and the installed screensaver apps with a radio button for the active one; the bar starts that app after the idle time. The vendor's screensaver catalogue (Whale, Spectrum Stream, Black Hole, a flip clock …) is listed under **Available** with **Install**; a removed screensaver can be put back from there.
+Sidebar → Library → **Screensavers**, laid out like the macOS screensaver pane: the active screensaver large at the top with the switch (**Start screensaver**) and the idle time (30 s … 5 min, never); below it **All screensavers** as a grid of every screensaver, installed and from the vendor's catalogue (Whale, Spectrum Stream, Black Hole, a flip clock …). Click an installed one to use it (the blue frame and tick mark the active one); a tile with a download badge is not on the bar yet and installs on click (about ten seconds, the bar fetches it itself). Right-click an installed one to remove it from the bar; the active one cannot be removed until another is chosen.
 
 ### People
 Save contacts; each gets one-click **Teams chat / call**, **FaceTime**, **Mail**. Stored locally on your Mac.
