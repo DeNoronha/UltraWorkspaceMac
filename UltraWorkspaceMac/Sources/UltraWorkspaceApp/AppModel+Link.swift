@@ -20,7 +20,7 @@ extension AppModel {
                     switch st {
                     case .stopped: self.linkState = "Link off"
                     case .connecting: self.linkState = "Linking…"
-                    case .connected: self.linkState = "Live link"
+                    case .connected: self.linkState = "Live link"; self.showDeckhandPageIfPublished()
                     case .reconnecting(let why): self.linkState = "Reconnecting (\(why.prefix(40)))"
                     }
                 }

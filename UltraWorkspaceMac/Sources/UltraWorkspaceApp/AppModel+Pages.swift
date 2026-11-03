@@ -82,7 +82,7 @@ extension AppModel {
                 // Cards subscribe to the module uid (= serial in our gateway config).
                 let senseSerial = self.modules.first(where: { $0.type == "SENSE_CUBE" }).map { $0.deviceId.isEmpty ? $0.serial : $0.deviceId }
                 let standard: [String: Any] = [
-                    "id": Self.defaultPageId, "name": "Standard Mode", "isDefault": true, "showName": true, "iconScale": 100,
+                    "id": Self.defaultPageId, "name": "Standard Mode", "isDefault": false, "showName": true, "iconScale": 100,
                     "icon": "http://cdn.lifex360.com/ultrabar/desktop/default.png",
                     "module": self.moduleBindings(),
                     "widget": [
@@ -119,7 +119,7 @@ extension AppModel {
                     }
                 }
                 let deckhand: [String: Any] = [
-                    "id": Self.deckhandPageId, "name": "Deckhand", "isDefault": false, "showName": true, "iconScale": 100,
+                    "id": Self.deckhandPageId, "name": "Deckhand", "isDefault": true,   // the page the bar boots into "showName": true, "iconScale": 100,
                     "icon": "deckhand/cover.png",
                     "module": self.moduleBindings(),
                     "widget": w,
@@ -263,6 +263,21 @@ extension AppModel {
     }
 
     /// Non-destructive: switch pages by id.
+    /// After (re)connecting: if the Deckhand page is on the bar, show it. Covers a bar that
+    /// rebooted into its default/black screen and Deckhand starting after the bar.
+    func showDeckhandPageIfPublished() {
+        guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
+        Task {
+            guard let pages = try? await session.listPages() else { return }
+            self.corebarPages = pages
+            guard pages.contains(where: { $0.id == Self.deckhandPageId }) else { return }
+            if (try? await session.switchPage(id: Self.deckhandPageId)) != nil {
+                self.currentPageId = Self.deckhandPageId
+                WireLog.shared.event("pages: showing the Deckhand page after connect")
+            }
+        }
+    }
+
     func switchPage(id: String) {
         guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
         Task {
