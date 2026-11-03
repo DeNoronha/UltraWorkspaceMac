@@ -8,7 +8,7 @@ struct CoreBarPageView: View {
     @EnvironmentObject var settings: AppSettings
     @StateObject private var cover = PreviewModel()
     @StateObject private var ui = UI()
-    private final class UI: ObservableObject { @Published var confirm = false; @Published var pages = false; @Published var advanced = false; @Published var keyOpen = false }
+    private final class UI: ObservableObject { @Published var confirm = false; @Published var keyOpen = false }
 
     var body: some View {
         VStack(spacing: 0) {

@@ -18,8 +18,6 @@ public enum Proto {
     public static let actAuth = 100               // AUTH — data = token
     public static let actPair = 101               // REQ_AUTH_TOKEN — data = {id, clientType:"pc", name}
     public static let actGetDevice = 1300         // GET_DEVICE — list all devices/modules
-    public static let actGetAppList = 1000        // GET_APP_LIST
-    public static let actGetProfileWidget = 1002  // GET_PROFILE_WIDGET — placeable widget tree
     public static let actTriggerProfileChange = 1103 // TRIGGER_PROFILE_CHANGE — data = profile id (switch page)
     public static let actBatchSaveProfile = 1108  // BATCH_SAVE_PROFILE — data = [ProfileDTO] (REPLACES all pages)
     public static let actIntegratedConfigSet = 1010 // INTEGRATED_CONFIG_SET — {packageName, config}; "com.ultrabar.weather" = the built-in weather card's AccuWeather key
@@ -27,21 +25,11 @@ public enum Proto {
     public static let actPreviewScreensaver = 30742 // PREVIEW_SCREENSAVER — {url, mediaType} one-shot full-screen
     public static let actPushMessage = 1000000    // PUSH_MESSAGE — device→client {type:PushType, payload} (SET_VOLUME, PC_CONTROL, CPU/MEMORY/STORAGE/NETWORK requests, …)
     public static let actModuleStartDiscovery = 30100 // MODULE_START_DISCOVERY — scan the bus
-    public static let actModuleStopDiscovery = 30101  // MODULE_STOP_DISCOVERY
     public static let actModuleDiscoveryReplay = 30102 // MODULE_START_DISCOVERY_REPLAY — pushed per found module
     public static let actSetGatewayConfig = 30300 // SET_GATEWAY_CONFIG — body is a CoreBarConfiguration directly
     public static let actReadProp = 30200         // MODULE_PROPERTY_READ — {serialNo, deviceId, propertyId, extra}
     public static let actWriteProp = 30201        // MODULE_PROPERTY_WRITE — {serialNo, deviceId, propertyId, value}
-    public static let actQueryModuleState = 30730 // QUERY_MODULE_STATE
     public static let actGetCoreBarConfig = 30740 // GET_COREBAR_CONFIG
-    public static let actSetCoreBarConfig = 30741 // SET_COREBAR_CONFIG — ReadWriteRequest {type, value}; BASE_SET (screensaver) works, GATEWAY_CONFIG fails on tested firmware → use 30300 for provisioning
-    public static let actSysReboot = 20100        // SYS_REBOOT (CoreBar)
-    public static let actWifiScanStart = 1633     // CUBE_SCAN_WIFI start
-    public static let actWifiScanStop = 1634      // CUBE_SCAN_WIFI stop
-    public static let actWifiScanResult = 1635    // CUBE_SCAN_WIFI_LIST_RESULT — pushed [{name,signal,frequency}] (open nets filtered)
-
-    // Deprecated alias — 30730 is module STATE, not the device list.
-    public static let actListModules = 30730
 
     // Logical device id addressed inside a module.
     public static let deviceMain = 256

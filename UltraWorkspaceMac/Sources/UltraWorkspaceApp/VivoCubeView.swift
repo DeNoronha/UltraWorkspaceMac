@@ -8,7 +8,7 @@ struct VivoCubeView: View {
     @EnvironmentObject var settings: AppSettings
     let module: AttachedModule
     @StateObject private var ui = UI()
-    private final class UI: ObservableObject { @Published var confirmRestart = false; @Published var maintenance = false }
+    private final class UI: ObservableObject { @Published var confirmRestart = false }
 
     var body: some View {
         VStack(spacing: 0) {

@@ -516,11 +516,6 @@ public struct CoreBarSession: Sendable {
         return "sent (the CoreBar does not acknowledge 30742; watch the screen)"
     }
 
-    @available(*, deprecated, renamed: "previewScreen(url:isVideo:)")
-    public func previewScreen(path: String, isVideo: Bool = false) async throws -> String {
-        try await previewScreen(url: path, isVideo: isVideo)
-    }
-
     // MARK: CoreBar pages (profiles)
     //
     // The vendor client never reads profiles back; it owns them and full-replaces

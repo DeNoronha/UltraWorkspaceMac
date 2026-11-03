@@ -121,7 +121,7 @@ extension AppModel {
     /// (property 9); used by the DotKey "Next" binding and PC_CONTROL cards.
     func stepVivoLayer(_ delta: Int) {
         guard let bar = selectedCoreBar, let session = session(for: bar), let serial = vivoCubeSerial else { return }
-        let count = max(1, min(Self.maxVivoLayers, max(lastPublishedVivoLayers, UserDefaultsLayerCount.read())))
+        let count = max(1, min(Self.maxVivoLayers, max(lastPublishedVivoLayers, vivoLayerNames.count)))
         vivoLayerIndex = ((vivoLayerIndex + delta) % count + count) % count
         let layer = vivoLayerIndex + 1
         Task { _ = await self.showCubeCard(layer, session: session, serial: serial) }
@@ -129,16 +129,6 @@ extension AppModel {
     }
 
     // MARK: Mac helpers
-
-    /// Reads the persisted layer count without needing the settings object here.
-    enum UserDefaultsLayerCount {
-        static func read() -> Int {
-            let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-                .appendingPathComponent("UltraWorkspaceMac/settings.json")
-            guard let d = try? Data(contentsOf: url), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { return 1 }
-            return (o["vivoLayerCount"] as? Int) ?? 1
-        }
-    }
 
     nonisolated static func diskUsedPercent() -> Int {
         guard let a = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),

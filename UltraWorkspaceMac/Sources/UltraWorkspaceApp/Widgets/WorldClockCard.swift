@@ -10,7 +10,6 @@ import CoreGraphics
 /// size x size, bottom-left origin (NOT flipped).
 @MainActor
 enum WorldClockCard {
-    static let defaultZones = ["Europe/Amsterdam", "America/New_York", "Asia/Tokyo"]
 
     static func render(size: Int, zones: [String], clock24h: Bool, now: Date = Date()) -> [UInt8]? {
         let W = CGFloat(size), H = CGFloat(size)

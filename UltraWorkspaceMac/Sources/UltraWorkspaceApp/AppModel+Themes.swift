@@ -25,7 +25,6 @@ extension AppModel {
         let timed = settings.vivoSwitchMode == .timed && cards.count > 1
         themeRunning = timed
         settings.vivoRotationOn = timed
-        themeIndex = 0
         let interval = max(10, settings.vivoSeconds)
         let refreshEvery = TimeInterval(max(300, interval * cards.count))
         cubeProgress.begin([("render", cards.count == 1 ? "Drawing \(settings.cardTitle(cards[0]))" : "Drawing \(cards.count) cards"),
@@ -86,16 +85,13 @@ extension AppModel {
         }
     }
 
-    /// Kept for the launch-time resume path.
-    func startThemeRotation(settings: AppSettings) { sendToCube(settings: settings) }
-
     /// Point the cube at card `layer` (1-based) and remember what it should be showing.
     @discardableResult
     func showCubeCard(_ layer: Int, session: CoreBarSession? = nil, serial: String? = nil) async -> Int? {
         guard let bar = selectedCoreBar, let session = session ?? self.session(for: bar), let serial = serial ?? vivoCubeSerial else { return nil }
         let code = await session.setLayer(serial: serial, layer: layer, widget: Self.widgetId(forLayer: layer))
         if code == 200 {
-            vivoLayerIndex = layer - 1; themeIndex = layer - 1
+            vivoLayerIndex = layer - 1
             vivoLayerShowing = layer; vivoWidgetShowing = Self.widgetId(forLayer: layer)
             currentThemeLabel = (layer - 1 < vivoLayerNames.count) ? vivoLayerNames[layer - 1] : ""
         }
@@ -242,58 +238,11 @@ extension AppModel {
         say("Timed switching is off; the cube stays on its current card.")
     }
 
-    /// Render one theme now and push it to a specific VivoCube (default: first).
-    func pushTheme(_ theme: Theme, settings: AppSettings, to serial: String? = nil) async {
-        guard let bar = selectedCoreBar, let session = session(for: bar),
-              let target = serial ?? vivoCubeSerial else { return }
-        guard let rgba = await renderTheme(theme, settings: settings) else { return }
-        let bin = DeviceImage.encode(width: 240, height: 240, rgba: rgba)
-        let layer = DeployPackager.Layer(layerId: 1, widgetId: 101, defaultBin: bin, pressedBin: bin)
-        let tgz = DeployPackager.buildTgz(layers: [layer], defaultLayer: 1)
-        do { _ = try await session.upload(serial: target, tgz: tgz); selectFirstLayerAfterSettle(session: session, serial: target) }
-        catch { say("\(theme.title): push failed (\(error.localizedDescription))") }
-    }
-
-    /// Publish one add-on to a specific VivoCube now (user-facing, with status).
-    func publishAddon(_ theme: Theme, to serial: String, settings: AppSettings) {
-        guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
-        say("Publishing \(theme.title) to \(serial)…")
-        Task {
-            guard let rgba = await self.renderTheme(theme, settings: settings) else {
-                self.say("\(theme.title): could not render."); return
-            }
-            let bin = DeviceImage.encode(width: 240, height: 240, rgba: rgba)
-            let layer = DeployPackager.Layer(layerId: 1, widgetId: 101, defaultBin: bin, pressedBin: bin)
-            let tgz = DeployPackager.buildTgz(layers: [layer], defaultLayer: 1)
-            do {
-                _ = try await session.upload(serial: serial, tgz: tgz)
-                self.selectFirstLayerAfterSettle(session: session, serial: serial)
-                self.say("\(theme.title) accepted by \(serial) — the VivoCube applies it in a few seconds. ✓")
-            }
-            catch { self.say("\(theme.title): publish failed (\(error.localizedDescription))") }
-        }
-    }
-
     /// Render a widget to an NSImage for an on-screen preview (240×240 cube).
     /// Pure/local — never touches the device.
     func previewImage(_ theme: Theme, settings: AppSettings) async -> NSImage? {
         guard let rgba = await renderTheme(theme, settings: settings),
               let png = AppModel.pngData(fromRGBA: rgba, width: 240, height: 240) else { return nil }
-        return NSImage(data: png)
-    }
-
-    /// Render the wide (1424×280) CoreBar card for preview. Only the weather
-    /// card has a wide layout today; other widgets get wide layouts later.
-    func previewWideImage(_ theme: Theme, settings: AppSettings) async -> NSImage? {
-        let rgba: [UInt8]?
-        switch theme {
-        case .weather:
-            let now = try? await resolveWeather(settings: settings, metric: settings.units == .metric)
-            rgba = WeatherCard.render(width: 1424, height: 280, now: now, clock24h: settings.clock24h)
-        default:
-            rgba = nil
-        }
-        guard let rgba, let png = AppModel.pngData(fromRGBA: rgba, width: 1424, height: 280) else { return nil }
         return NSImage(data: png)
     }
 

@@ -20,8 +20,6 @@ final class AppModel: ObservableObject {
     @Published var statusLine = "Ready."
     @Published var log: [LogEntry] = []
     @Published var pairingPrompt: String?
-    @Published var showingSettings = false
-    @Published var showingAbout = false
     @Published var showingAddIP = false
     @Published var showingConnect = false
     @Published var nav: NavItem = .coreBarPage
@@ -30,19 +28,12 @@ final class AppModel: ObservableObject {
     @Published var pairingStartedAt: Date?
     @Published var selectedAddon: Theme = .weather
 
-    // Upload options (VivoCube native resolution is ~240×240)
-    @Published var canvasSize = 240
-
     // Music
     @Published var nowPlaying = AppleMusic.NowPlaying(isPlaying: false, title: "", artist: "", album: "", hasTrack: false)
-    @Published var autoPushNowPlaying = false
     var musicPollTask: Task<Void, Never>?
-    var lastPushedKey = ""
 
     // Weather
     @Published var lastWeather: OpenMeteo.Now?
-    @Published var weatherAutoUpdate = false
-    var weatherTask: Task<Void, Never>?
 
     // Theme carousel
     @Published var themeRunning = false
@@ -99,7 +90,6 @@ final class AppModel: ObservableObject {
     let netStats = NetworkStats()
     let diskStats = DiskActivityStats()
     var themeTask: Task<Void, Never>?
-    var themeIndex = 0
 
     struct LogEntry: Identifiable {
         let id = UUID()
@@ -283,18 +273,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Provision the CoreBar: scan + write the discovered modules into the
-    /// gateway config so they become controllable. Changes device config.
-    func provisionModules() {
-        guard let bar = selectedCoreBar, let session = session(for: bar), !isWorking else {
-            if selectedCoreBar != nil { say("No stored token — pair this CoreBar again.") }
-            return
-        }
-        // Refresh now also writes the config, so "Set up modules" == Refresh.
-        _ = bar; _ = session
-        refreshModules()
-    }
-
     // MARK: Control
 
     func setScreen(on: Bool) {
@@ -316,74 +294,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func chooseAndUploadImage() {
-        guard let bar = selectedCoreBar, let session = session(for: bar),
-              let serial = selectedModuleSerial else {
-            say("Select a CoreBar and a module first.")
-            return
-        }
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.png, .jpeg, .image]
-        panel.allowsMultipleSelection = false
-        panel.message = "Pick an image to show on \(serial)"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-
-        let size = canvasSize
-        isWorking = true
-        say("Rendering and uploading \(url.lastPathComponent) to \(serial)…")
-        Task.detached {
-            guard let tgz = Self.buildTgz(from: url, size: size) else {
-                await MainActor.run { self.say("Could not read that image."); self.isWorking = false }
-                return
-            }
-            do {
-                _ = try await session.upload(serial: serial, tgz: tgz)
-                await MainActor.run {
-                    self.selectFirstLayerAfterSettle(session: session, serial: serial)
-                    self.say("Uploaded \(tgz.count) bytes to \(serial) — the VivoCube applies it in a few seconds. ✓"); self.isWorking = false
-                }
-            } catch {
-                await MainActor.run { self.say("Upload failed: \(error.localizedDescription)"); self.isWorking = false }
-            }
-        }
-    }
-
-    /// Experimental: render a wide card and show it on the CoreBar's own big
-    /// screen (1424×280) using the non-destructive PREVIEW_SCREENSAVER path —
-    /// no profile/page is modified. Uploads a one-image zip, then previews it.
-    func previewCoreBarScreen(settings: AppSettings) {
-        guard let bar = selectedCoreBar, let session = session(for: bar) else {
-            say("Pair a CoreBar first."); return
-        }
-        guard !isWorking else { return }
-        isWorking = true
-        say("Rendering a 1424×280 card for the CoreBar screen…")
-        Task {
-            let now = try? await self.resolveWeather(settings: settings, metric: settings.units == .metric)
-            guard let rgba = WeatherCard.render(width: 1424, height: 280, now: now, clock24h: settings.clock24h),
-                  let png = Self.pngData(fromRGBA: rgba, width: 1424, height: 280) else {
-                self.say("Could not render the CoreBar card."); self.isWorking = false; return
-            }
-            do {
-                // The CoreBar *pulls* the image over HTTP (its preview dialog only
-                // accepts http URLs), so serve it from this Mac and hand it the URL.
-                try PreviewServer.shared.start()
-                let name = "corebar-preview-\(Int(Date().timeIntervalSince1970)).png"
-                PreviewServer.shared.publish(png, name: name)
-                guard let url = PreviewServer.shared.url(for: name, reachableFrom: session.ip) else {
-                    self.say("Could not determine this Mac's LAN address for \(session.ip)."); self.isWorking = false; return
-                }
-                let reply = try await session.previewScreen(url: url)
-                self.say("CoreBar preview: \(url) — \(reply.prefix(100))")
-                // Keep it published a while so the device can fetch (and the user can retry), then free it.
-                Task { try? await Task.sleep(nanoseconds: 120_000_000_000); PreviewServer.shared.unpublish(name: name) }
-            } catch {
-                self.say("CoreBar preview failed: \(error.localizedDescription)")
-            }
-            self.isWorking = false
-        }
-    }
-
     /// RGBA8888 (row 0 = top, as the card renderers' buffer is laid out) → PNG.
     /// The buffer is already in top-left order for CGImage/Glide, so no flip.
     nonisolated static func pngData(fromRGBA rgba: [UInt8], width: Int, height: Int) -> Data? {
@@ -397,17 +307,5 @@ final class AppModel: ObservableObject {
                                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { return nil }
         let rep = NSBitmapImageRep(cgImage: cg)
         return rep.representation(using: .png, properties: [:])
-    }
-
-    nonisolated static func buildTgz(from url: URL, size: Int) -> Data? {
-        guard let src = NSImage(contentsOf: url),
-              let cg = src.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
-        guard let fullRGBA = DeviceImage.rgba(from: cg, width: size, height: size) else { return nil }
-        let pressedSize = max(1, Int(Double(size) * 0.8))
-        guard let pressedRGBA = DeviceImage.rgba(from: cg, width: pressedSize, height: pressedSize) else { return nil }
-        let def = DeviceImage.encode(width: size, height: size, rgba: fullRGBA)
-        let pre = DeviceImage.encode(width: pressedSize, height: pressedSize, rgba: pressedRGBA)
-        let layer = DeployPackager.Layer(layerId: 1, widgetId: 101, defaultBin: def, pressedBin: pre)
-        return DeployPackager.buildTgz(layers: [layer], defaultLayer: 1)
     }
 }

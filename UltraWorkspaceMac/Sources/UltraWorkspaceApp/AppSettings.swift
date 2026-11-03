@@ -1,11 +1,6 @@
 import Foundation
 import CoreLocation
 
-/// Which display device a rotation is configured for. Each device keeps its own
-/// set of enabled widgets and its own interval (a VivoCube is 240×240, the
-/// CoreBar screen is 1424×280, so they don't share a widget selection).
-enum RotationTarget: String, Codable, CaseIterable, Sendable { case vivocube, corebar }
-
 /// App-wide preferences, persisted to Application Support. These feed the
 /// weather feature (location + units) and the per-device widget rotations.
 @MainActor
@@ -20,11 +15,9 @@ final class AppSettings: ObservableObject {
     @Published var units: Units = .metric { didSet { save() } }
     @Published var clock24h: Bool = true { didSet { save() } }
 
-    // Per-device widget rotations.
+    // VivoCube cards + switching interval.
     @Published var vivoThemes: [String] = [Theme.weather.rawValue] { didSet { save() } }
     @Published var vivoSeconds: Int = 30 { didSet { save() } }
-    @Published var coreThemes: [String] = [] { didSet { save() } }
-    @Published var coreSeconds: Int = 30 { didSet { save() } }
     /// Device-native cards on the Deckhand page (CoreBar renders these itself).
     @Published var coreCards: [String] = AppSettings.defaultCoreCards { didSet { save() } }
     /// Whether the Deckhand page has been published (enables the daily cover refresh).
@@ -99,6 +92,7 @@ final class AppSettings: ObservableObject {
         var rotateSeconds: Int? = nil
         var vivoThemes: [String]? = nil
         var vivoSeconds: Int? = nil
+        // Retired (CoreBar-screen rotation, 2026-11-03); kept so old settings.json still decodes.
         var coreThemes: [String]? = nil
         var coreSeconds: Int? = nil
         var coreCards: [String]? = nil
@@ -161,19 +155,6 @@ final class AppSettings: ObservableObject {
         var c = coreCards; c.swapAt(i, j); coreCards = c
     }
 
-    // MARK: Per-device rotation helpers
-
-    func themes(for t: RotationTarget) -> [String] { t == .vivocube ? vivoThemes : coreThemes }
-    /// Cards in the order the user arranged them (not enum order).
-    func enabledList(for t: RotationTarget) -> [Theme] { themes(for: t).compactMap { Theme(rawValue: $0) } }
-    func isEnabled(_ th: Theme, for t: RotationTarget) -> Bool { themes(for: t).contains(th.rawValue) }
-    func setEnabled(_ th: Theme, _ on: Bool, for t: RotationTarget) {
-        var list = themes(for: t)
-        if on { if !list.contains(th.rawValue) { list.append(th.rawValue) } } else { list.removeAll { $0 == th.rawValue } }
-        if t == .vivocube { vivoThemes = list } else { coreThemes = list }
-    }
-    func seconds(for t: RotationTarget) -> Int { t == .vivocube ? vivoSeconds : coreSeconds }
-
     init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("UltraWorkspaceMac", isDirectory: true)
@@ -190,8 +171,6 @@ final class AppSettings: ObservableObject {
             // Prefer the new per-device fields; fall back to the legacy single list.
             vivoThemes = p.vivoThemes ?? p.enabledThemes ?? [Theme.weather.rawValue]
             vivoSeconds = p.vivoSeconds ?? p.rotateSeconds ?? 30
-            coreThemes = p.coreThemes ?? []
-            coreSeconds = p.coreSeconds ?? 30
             coreCards = p.coreCards ?? AppSettings.defaultCoreCards
             deckhandPagePublished = p.deckhandPagePublished ?? false
             accuWeatherKey = p.accuWeatherKey ?? ""
@@ -215,15 +194,12 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    private var saving = false
     func save() {
-        guard !saving else { return }
         let p = Persisted(locationMode: locationMode, manualCity: manualCity,
                           manualLat: manualLat, manualLon: manualLon,
                           units: units, clock24h: clock24h,
                           enabledThemes: nil, rotateSeconds: nil,
                           vivoThemes: vivoThemes, vivoSeconds: vivoSeconds,
-                          coreThemes: coreThemes, coreSeconds: coreSeconds,
                           coreCards: coreCards, deckhandPagePublished: deckhandPagePublished, accuWeatherKey: accuWeatherKey, vivoRotationOn: vivoRotationOn, vivoLayerCount: vivoLayerCount,
                           vivoSwitchMode: vivoSwitchMode, vivoPicturePath: vivoPicturePath,
                           worldClockZones: worldClockZones, clockStyle: clockStyle, clockSeconds: clockSeconds,

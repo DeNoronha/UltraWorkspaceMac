@@ -6,7 +6,7 @@ struct StatusView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
     @StateObject private var ui = UI()
-    private final class UI: ObservableObject { @Published var copied = false; @Published var showFine = false }
+    private final class UI: ObservableObject { @Published var copied = false }
 
     private var problems: [DoctorItem] { model.doctorItems.filter { $0.state == .fail || $0.state == .warn } }
     private var infos: [DoctorItem] { model.doctorItems.filter { $0.state == .info } }
