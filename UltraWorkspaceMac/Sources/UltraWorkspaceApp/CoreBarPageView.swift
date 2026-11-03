@@ -8,7 +8,7 @@ struct CoreBarPageView: View {
     @EnvironmentObject var settings: AppSettings
     @StateObject private var cover = PreviewModel()
     @StateObject private var ui = UI()
-    private final class UI: ObservableObject { @Published var confirm = false; @Published var keyOpen = false }
+    private final class UI: ObservableObject { @Published var confirm = false; @Published var keyOpen = false; @Published var stripPage = 0 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -52,21 +52,31 @@ struct CoreBarPageView: View {
 
     private var preview: some View {
         let cards = settings.coreCards.compactMap(model.coreCard)
+        // One screenful of the bar at a time (about 4 cards on the 1424 × 280 strip); the bar scrolls
+        // sideways through the rest, so the preview pages through them the same way. A fixed width keeps
+        // a long list from pushing the split view wider than the window (2026-11-03).
+        let per = AppSettings.coreCardsThatFit
+        let pages = max(1, Int((Double(cards.count) / Double(per)).rounded(.up)))
+        let page = min(ui.stripPage, pages - 1)
+        let shown = Array(cards.dropFirst(page * per).prefix(per))
         return Panel("Preview", footer: "Drawn from the list below — not read back from the bar.") {
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black)
                 HStack(spacing: 6) {
-                    ForEach(Array(cards.enumerated()), id: \.element.id) { i, c in
+                    ForEach(shown, id: \.id) { c in
                         tile(c, cover: c.id == "TIME" ? cover.image : nil)
                             .frame(width: c.id == "TIME" ? 164 : 82, height: 82)
-                            .opacity(i >= AppSettings.coreCardsThatFit ? 0.35 : 1)
                     }
                     if cards.isEmpty { Text("No cards yet — use Add a card… below.").foregroundStyle(.secondary).padding(.leading, 12) }
                 }.padding(8)
             }
-            .frame(height: 98).clipped()
-            if cards.count > AppSettings.coreCardsThatFit {
-                Text("Dimmed cards scroll into view sideways on the bar.").font(.caption).foregroundStyle(.secondary)
+            .frame(width: 8 + CGFloat(per) * 88 + 82 + 8, height: 98).clipped()
+            if pages > 1 {
+                HStack(spacing: 8) {
+                    Button { ui.stripPage = max(0, page - 1) } label: { Image(systemName: "chevron.left") }.disabled(page == 0).accessibilityLabel("Previous screenful")
+                    Text("Screenful \(page + 1) of \(pages) · the bar scrolls sideways through them").font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    Button { ui.stripPage = min(pages - 1, page + 1) } label: { Image(systemName: "chevron.right") }.disabled(page >= pages - 1).accessibilityLabel("Next screenful")
+                }
             }
         }
     }
