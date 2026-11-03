@@ -177,9 +177,8 @@ extension AppModel {
     func sendPanelSizeTest(serial: String, size: Int) {
         guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
         let w = size, h = size
-        let cs = CGColorSpaceCreateDeviceRGB()
-        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-                                  space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        guard let g = CardKit.context(width: w, height: h) else { return }
+        let ctx = g.ctx
         ctx.setFillColor(CGColor(red: 0.06, green: 0.06, blue: 0.10, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
         // 4 px frame at the very edge: if visible on all sides, the panel is ≥ size.
         ctx.setStrokeColor(CGColor(red: 1, green: 0.3, blue: 0.2, alpha: 1)); ctx.setLineWidth(8)
@@ -191,14 +190,12 @@ extension AppModel {
         // Label
         let label = "\(size)" as NSString
         let font = NSFont.systemFont(ofSize: CGFloat(size) * 0.28, weight: .bold)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.white]
-        let sz = label.size(withAttributes: attrs)
-        label.draw(at: CGPoint(x: (CGFloat(w) - sz.width) / 2, y: (CGFloat(h) - sz.height) / 2), withAttributes: attrs)
-        NSGraphicsContext.restoreGraphicsState()
-        guard let data = ctx.data else { return }
-        let rgba = Array(UnsafeBufferPointer(start: data.assumingMemoryBound(to: UInt8.self), count: w * h * 4))
+        CardKit.withAppKit(g) {
+            let sz = label.size(withAttributes: attrs)
+            label.draw(at: CGPoint(x: (CGFloat(w) - sz.width) / 2, y: (CGFloat(h) - sz.height) / 2), withAttributes: attrs)
+        }
+        guard let rgba = CardKit.rgba(g, width: w, height: h) else { return }
         let bin = DeviceImage.encode(width: w, height: h, rgba: rgba)
         let tgz = DeployPackager.buildTgz(layers: [.init(layerId: 1, widgetId: 101, defaultBin: bin, pressedBin: bin)], defaultLayer: 1)
         say("Sending \(size)×\(size) test pattern to \(serial)… (\(tgz.count) B)")

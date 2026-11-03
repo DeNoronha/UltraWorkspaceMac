@@ -8,74 +8,57 @@ import UltraBarKit
 @MainActor
 enum WeatherCard {
     static func render(width: Int, height: Int, now: OpenMeteo.Now?, clock24h: Bool, date: Date = Date()) -> [UInt8]? {
-        let cs = CGColorSpaceCreateDeviceRGB()
-        let info = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
-        guard let ctx = CGContext(data: nil, width: width, height: height,
-                                  bitsPerComponent: 8, bytesPerRow: width * 4,
-                                  space: cs, bitmapInfo: info) else { return nil }
-        let W = CGFloat(width), H = CGFloat(height)
-        let wide = W / H > 2.2
+        // Background gradient from the sky/day; no title/icon row — this card has its own layout.
+        CardKit.draw(width: width, height: height, accent: backgroundColors(for: now), title: nil, icon: nil) { g, W, H in
+            let ctx = g.ctx
+            let wide = W / H > 2.2
 
-        // Background gradient from the sky/day.
-        let (top, bottom) = backgroundColors(for: now)
-        if let g = CGGradient(colorsSpace: cs, colors: [top, bottom] as CFArray, locations: [0, 1]) {
-            ctx.drawLinearGradient(g, start: CGPoint(x: 0, y: H), end: CGPoint(x: 0, y: 0), options: [])
-        }
+            let df = DateFormatter()
+            df.dateFormat = clock24h ? "HH:mm" : "h:mm"
+            let timeStr = df.string(from: date)
+            let dd = DateFormatter(); dd.dateFormat = "EEE d MMM"
+            let dateStr = dd.string(from: date)
+            let tempStr = now.map { "\(Int($0.temperature.rounded()))\($0.unitSuffix)" } ?? "—"
+            let condStr = now?.sky.label ?? "No data"
+            let place = now?.place ?? ""
 
-        let ns = NSGraphicsContext(cgContext: ctx, flipped: false)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = ns
+            let white = NSColor.white
+            let dim = NSColor.white.withAlphaComponent(0.8)
+            // Heavier shadow than CardKit.text (readability on bright skies), so the text helper stays local.
+            let shadow = NSShadow(); shadow.shadowColor = NSColor.black.withAlphaComponent(0.45)
+            shadow.shadowBlurRadius = wide ? 6 : 3; shadow.shadowOffset = .init(width: 0, height: -1)
 
-        let df = DateFormatter()
-        df.dateFormat = clock24h ? "HH:mm" : "h:mm"
-        let timeStr = df.string(from: date)
-        let dd = DateFormatter(); dd.dateFormat = "EEE d MMM"
-        let dateStr = dd.string(from: date)
-        let tempStr = now.map { "\(Int($0.temperature.rounded()))\($0.unitSuffix)" } ?? "—"
-        let condStr = now?.sky.label ?? "No data"
-        let place = now?.place ?? ""
+            func draw(_ s: String, _ size: CGFloat, _ weight: NSFont.Weight, _ color: NSColor, _ rect: CGRect, align: NSTextAlignment = .left) {
+                let para = NSMutableParagraphStyle(); para.alignment = align; para.lineBreakMode = .byTruncatingTail
+                let a: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.systemFont(ofSize: size, weight: weight),
+                    .foregroundColor: color, .shadow: shadow, .paragraphStyle: para,
+                ]
+                (s as NSString).draw(in: rect, withAttributes: a)
+            }
 
-        let white = NSColor.white
-        let dim = NSColor.white.withAlphaComponent(0.8)
-        let shadow = NSShadow(); shadow.shadowColor = NSColor.black.withAlphaComponent(0.45)
-        shadow.shadowBlurRadius = wide ? 6 : 3; shadow.shadowOffset = .init(width: 0, height: -1)
-
-        func draw(_ s: String, _ size: CGFloat, _ weight: NSFont.Weight, _ color: NSColor, _ rect: CGRect, align: NSTextAlignment = .left) {
-            let para = NSMutableParagraphStyle(); para.alignment = align; para.lineBreakMode = .byTruncatingTail
-            let a: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: size, weight: weight),
-                .foregroundColor: color, .shadow: shadow, .paragraphStyle: para,
-            ]
-            (s as NSString).draw(in: rect, withAttributes: a)
-        }
-
-        let iconName = symbolName(for: now)
-        if wide {
-            // CoreBar 1424×280: time/date left, icon center, temp/cond right.
-            draw(timeStr, H*0.44, .bold, white, CGRect(x: W*0.04, y: H*0.40, width: W*0.40, height: H*0.5))
-            draw(dateStr, H*0.14, .medium, dim, CGRect(x: W*0.045, y: H*0.20, width: W*0.40, height: H*0.2))
-            drawIcon(iconName, in: CGRect(x: W*0.46, y: H*0.22, width: H*0.56, height: H*0.56), ctx: ctx)
-            draw(tempStr, H*0.34, .bold, white, CGRect(x: W*0.63, y: H*0.38, width: W*0.35, height: H*0.45), align: .right)
-            draw(condStr, H*0.13, .medium, dim, CGRect(x: W*0.63, y: H*0.24, width: W*0.35, height: H*0.2), align: .right)
-            draw(place, H*0.12, .regular, dim, CGRect(x: W*0.63, y: H*0.08, width: W*0.35, height: H*0.18), align: .right)
-        } else {
-            // VivoCube 240×240 (and the bar's clock-card cover): weather only — no clock, because
-            // the cube gets a new picture every 5 minutes at most and a stale time is worse than none.
-            draw(place, W*0.085, .medium, dim, CGRect(x: 0, y: H*0.84, width: W, height: W*0.11), align: .center)
-            drawIcon(iconName, in: CGRect(x: W*0.5 - H*0.19, y: H*0.44, width: H*0.38, height: H*0.38), ctx: ctx)
-            draw(tempStr, W*0.26, .bold, white, CGRect(x: 0, y: H*0.11, width: W, height: W*0.33), align: .center)
-            draw(condStr, W*0.085, .regular, dim, CGRect(x: 0, y: H*0.025, width: W, height: W*0.11), align: .center)
-            if let n = now, let hum = n.humidity, let wind = n.windSpeed {
-                let extra = "\(hum)%  ·  \(Int(wind.rounded())) \(n.windSuffix)"
-                draw(extra, W*0.06, .regular, dim, CGRect(x: 0, y: H*0.385, width: W, height: W*0.08), align: .center)
+            let iconName = symbolName(for: now)
+            if wide {
+                // CoreBar 1424×280: time/date left, icon center, temp/cond right.
+                draw(timeStr, H*0.44, .bold, white, CGRect(x: W*0.04, y: H*0.40, width: W*0.40, height: H*0.5))
+                draw(dateStr, H*0.14, .medium, dim, CGRect(x: W*0.045, y: H*0.20, width: W*0.40, height: H*0.2))
+                drawIcon(iconName, in: CGRect(x: W*0.46, y: H*0.22, width: H*0.56, height: H*0.56), ctx: ctx)
+                draw(tempStr, H*0.34, .bold, white, CGRect(x: W*0.63, y: H*0.38, width: W*0.35, height: H*0.45), align: .right)
+                draw(condStr, H*0.13, .medium, dim, CGRect(x: W*0.63, y: H*0.24, width: W*0.35, height: H*0.2), align: .right)
+                draw(place, H*0.12, .regular, dim, CGRect(x: W*0.63, y: H*0.08, width: W*0.35, height: H*0.18), align: .right)
+            } else {
+                // VivoCube 240×240 (and the bar's clock-card cover): weather only — no clock, because
+                // the cube gets a new picture every 5 minutes at most and a stale time is worse than none.
+                draw(place, W*0.085, .medium, dim, CGRect(x: 0, y: H*0.84, width: W, height: W*0.11), align: .center)
+                drawIcon(iconName, in: CGRect(x: W*0.5 - H*0.19, y: H*0.44, width: H*0.38, height: H*0.38), ctx: ctx)
+                draw(tempStr, W*0.26, .bold, white, CGRect(x: 0, y: H*0.11, width: W, height: W*0.33), align: .center)
+                draw(condStr, W*0.085, .regular, dim, CGRect(x: 0, y: H*0.025, width: W, height: W*0.11), align: .center)
+                if let n = now, let hum = n.humidity, let wind = n.windSpeed {
+                    let extra = "\(hum)%  ·  \(Int(wind.rounded())) \(n.windSuffix)"
+                    draw(extra, W*0.06, .regular, dim, CGRect(x: 0, y: H*0.385, width: W, height: W*0.08), align: .center)
+                }
             }
         }
-
-        NSGraphicsContext.restoreGraphicsState()
-
-        guard let data = ctx.data else { return nil }
-        let count = width * height * 4
-        return Array(UnsafeBufferPointer(start: data.bindMemory(to: UInt8.self, capacity: count), count: count))
     }
 
     private static func drawIcon(_ name: String, in rect: CGRect, ctx: CGContext) {
@@ -113,7 +96,7 @@ enum WeatherCard {
     }
 
     private static func backgroundColors(for now: OpenMeteo.Now?) -> (CGColor, CGColor) {
-        func c(_ r: Double, _ g: Double, _ b: Double) -> CGColor { CGColor(red: r, green: g, blue: b, alpha: 1) }
+        let c = CardKit.c
         guard let now else { return (c(0.18, 0.20, 0.28), c(0.08, 0.09, 0.13)) }
         if !now.isDay { return (c(0.10, 0.12, 0.24), c(0.03, 0.04, 0.10)) }
         switch now.sky {

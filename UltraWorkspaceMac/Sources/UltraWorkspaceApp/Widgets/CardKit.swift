@@ -2,37 +2,65 @@ import Foundation
 import AppKit
 import CoreGraphics
 
-/// Shared drawing scaffold for the newer 240×240 cards (clock, date, crypto coin).
-/// Same contract as StatCard: RGBA8888, premultipliedLast | byteOrder32Big,
-/// bottom-left origin (not flipped); title top-left, SF Symbol top-right.
+/// The one bitmap contract for every card Deckhand draws: RGBA8888,
+/// premultipliedLast | byteOrder32Big, bottom-left origin (NOT flipped), row 0 = top
+/// of the buffer as `DeviceImage.encode` / `AppModel.pngData` expect it.
+/// `draw` adds the shared look (vertical gradient, title top-left, SF Symbol top-right);
+/// `context` / `withAppKit` / `rgba` are the pieces for cards that paint their own background.
 @MainActor
 enum CardKit {
     typealias GC = (ctx: CGContext, cs: CGColorSpace)
 
-    static func draw(size: Int, accent: (CGColor, CGColor), title: String?, icon: String?,
-                     body: (GC, CGFloat, CGFloat) -> Void) -> [UInt8]? {
-        let W = CGFloat(size), H = CGFloat(size)
+    /// A bitmap context in the card contract. `nil` only when CoreGraphics refuses the size.
+    static func context(width: Int, height: Int) -> GC? {
         let cs = CGColorSpaceCreateDeviceRGB()
         let info = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
-        guard let ctx = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8,
-                                  bytesPerRow: size * 4, space: cs, bitmapInfo: info) else { return nil }
-        if let g = CGGradient(colorsSpace: cs, colors: [accent.0, accent.1] as CFArray, locations: [0, 1]) {
-            ctx.drawLinearGradient(g, start: CGPoint(x: 0, y: H), end: CGPoint(x: 0, y: 0), options: [])
-        }
-        let ns = NSGraphicsContext(cgContext: ctx, flipped: false)
-        NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = ns
-        if let title {
-            text(title, W * 0.085, .semibold, NSColor.white.withAlphaComponent(0.9),
-                 CGRect(x: W * 0.07, y: H * 0.86, width: W * 0.7, height: H * 0.12))
-        }
-        if let icon {
-            symbol(icon, color: .white, rect: CGRect(x: W * 0.78, y: H * 0.84, width: W * 0.14, height: W * 0.14))
-        }
-        body((ctx, cs), W, H)
-        NSGraphicsContext.restoreGraphicsState()
-        guard let data = ctx.data else { return nil }
-        let count = size * size * 4
+        guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                  bytesPerRow: width * 4, space: cs, bitmapInfo: info) else { return nil }
+        return (ctx, cs)
+    }
+
+    /// The context's pixels, `width × height × 4` bytes.
+    static func rgba(_ g: GC, width: Int, height: Int) -> [UInt8]? {
+        guard let data = g.ctx.data else { return nil }
+        let count = width * height * 4
         return Array(UnsafeBufferPointer(start: data.bindMemory(to: UInt8.self, capacity: count), count: count))
+    }
+
+    /// Runs `body` with AppKit string/image drawing routed into `g` (not flipped).
+    static func withAppKit(_ g: GC, _ body: () -> Void) {
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: g.ctx, flipped: false)
+        body()
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    /// Square card (VivoCube 240×240).
+    static func draw(size: Int, accent: (CGColor, CGColor), title: String?, icon: String?,
+                     body: (GC, CGFloat, CGFloat) -> Void) -> [UInt8]? {
+        draw(width: size, height: size, accent: accent, title: title, icon: icon, body: body)
+    }
+
+    /// Any size (the weather card also renders the 1424×280 CoreBar strip). The gradient runs
+    /// top (`accent.0`) to bottom (`accent.1`); title/icon are placed relative to W and H.
+    static func draw(width: Int, height: Int, accent: (CGColor, CGColor), title: String?, icon: String?,
+                     body: (GC, CGFloat, CGFloat) -> Void) -> [UInt8]? {
+        let W = CGFloat(width), H = CGFloat(height)
+        guard let g = context(width: width, height: height) else { return nil }
+        if let grad = CGGradient(colorsSpace: g.cs, colors: [accent.0, accent.1] as CFArray, locations: [0, 1]) {
+            g.ctx.drawLinearGradient(grad, start: CGPoint(x: 0, y: H), end: CGPoint(x: 0, y: 0), options: [])
+        }
+        withAppKit(g) {
+            if let title {
+                text(title, W * 0.085, .semibold, NSColor.white.withAlphaComponent(0.9),
+                     CGRect(x: W * 0.07, y: H * 0.86, width: W * 0.7, height: H * 0.12))
+            }
+            if let icon {
+                symbol(icon, color: .white, rect: CGRect(x: W * 0.78, y: H * 0.84, width: W * 0.14, height: W * 0.14))
+            }
+            body(g, W, H)
+        }
+        return rgba(g, width: width, height: height)
     }
 
     static func text(_ s: String, _ size: CGFloat, _ w: NSFont.Weight, _ color: NSColor, _ rect: CGRect,

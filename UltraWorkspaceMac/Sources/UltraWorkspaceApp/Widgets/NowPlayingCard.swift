@@ -7,11 +7,8 @@ import CoreGraphics
 @MainActor
 enum NowPlayingCard {
     static func render(size: Int, art: NSImage?, title: String, artist: String) -> [UInt8]? {
-        let cs = CGColorSpaceCreateDeviceRGB()
-        let info = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
-        guard let ctx = CGContext(data: nil, width: size, height: size,
-                                  bitsPerComponent: 8, bytesPerRow: size * 4,
-                                  space: cs, bitmapInfo: info) else { return nil }
+        guard let g = CardKit.context(width: size, height: size) else { return nil }
+        let ctx = g.ctx, cs = g.cs
 
         let rect = CGRect(x: 0, y: 0, width: size, height: size)
         ctx.setFillColor(CGColor(red: 0.05, green: 0.05, blue: 0.07, alpha: 1))
@@ -40,11 +37,7 @@ enum NowPlayingCard {
             ctx.restoreGState()
         }
 
-        // Text via AppKit, flipped into the CG context.
-        let ns = NSGraphicsContext(cgContext: ctx, flipped: false)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = ns
-
+        // Text via AppKit (own, heavier shadow over album art — not CardKit.text).
         let margin = CGFloat(size) * 0.06
         let titleFont = NSFont.systemFont(ofSize: CGFloat(size) * 0.085, weight: .bold)
         let artistFont = NSFont.systemFont(ofSize: CGFloat(size) * 0.065, weight: .regular)
@@ -64,13 +57,10 @@ enum NowPlayingCard {
                                  withAttributes: attrs)
         }
         // y is from bottom; artist below title.
-        draw(artist, font: artistFont, color: NSColor.white.withAlphaComponent(0.85), y: margin)
-        draw(title, font: titleFont, color: .white, y: margin + artistFont.pointSize * 1.5)
-
-        NSGraphicsContext.restoreGraphicsState()
-
-        guard let data = ctx.data else { return nil }
-        let count = size * size * 4
-        return Array(UnsafeBufferPointer(start: data.bindMemory(to: UInt8.self, capacity: count), count: count))
+        CardKit.withAppKit(g) {
+            draw(artist, font: artistFont, color: NSColor.white.withAlphaComponent(0.85), y: margin)
+            draw(title, font: titleFont, color: .white, y: margin + artistFont.pointSize * 1.5)
+        }
+        return CardKit.rgba(g, width: size, height: size)
     }
 }
