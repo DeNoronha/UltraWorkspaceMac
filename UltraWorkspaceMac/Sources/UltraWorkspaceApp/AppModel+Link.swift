@@ -6,23 +6,23 @@ import UltraBarKit
 /// device's own questions. This is what makes the CoreBar's native CPU /
 /// MEMORY / STORAGE / NETWORK cards, KnobKey → volume, and PC_CONTROL cards work
 /// — device-first: the CoreBar renders, the Mac only supplies Mac-only data.
+extension CoreBarLink.State {
+    var isConnected: Bool { self == .connected }
+}
+
 @MainActor
 extension AppModel {
     func startLink() {
         stopLink()
-        guard let bar = selectedCoreBar, let session = session(for: bar) else { linkState = "No CoreBar"; return }
+        guard let bar = selectedCoreBar, let session = session(for: bar) else { link = .stopped; return }
         let l = CoreBarLink(ip: session.ip, token: session.token, certPin: session.certPin)
-        link = l
+        activeLink = l
         Task {
             await l.start(onState: { [weak self] st in
                 Task { @MainActor in
                     guard let self else { return }
-                    switch st {
-                    case .stopped: self.linkState = "Link off"
-                    case .connecting: self.linkState = "Linking…"
-                    case .connected: self.linkState = "Live link"; self.showDeckhandPageIfPublished()
-                    case .reconnecting(let why): self.linkState = "Reconnecting (\(why.prefix(40)))"
-                    }
+                    self.link = st
+                    if st == .connected { self.showDeckhandPageIfPublished() }
                 }
             }, handler: { [weak self] type, payloadJSON in
                 guard let self else { return nil }
@@ -32,8 +32,8 @@ extension AppModel {
     }
 
     func stopLink() {
-        if let l = link { Task { await l.stop() } }
-        link = nil
+        if let l = activeLink { Task { await l.stop() } }
+        activeLink = nil
     }
 
     // MARK: Push handling (runs on the main actor; keep it quick)

@@ -344,17 +344,26 @@ struct LinkBadge: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         HStack(spacing: 5) {
-            Circle().fill(model.linkState == "Live link" ? Color.green : (model.linkState.hasPrefix("Link") ? Color.secondary : Color.orange)).frame(width: 7, height: 7)
+            Circle().fill(dot).frame(width: 7, height: 7)
             Text(linkText).font(.caption).foregroundStyle(.secondary)
         }
         .help("Deckhand keeps a connection to the bar and answers its questions (CPU, memory, network, storage, volume) so the bar's Mac cards and the KnobKey work.")
         .accessibilityLabel(linkText)
     }
+    private var dot: Color {
+        switch model.link {
+        case .connected: return .green
+        case .connecting: return .secondary
+        case .stopped: return model.selectedCoreBar == nil ? .orange : .secondary
+        case .reconnecting: return .orange
+        }
+    }
     private var linkText: String {
-        switch model.linkState {
-        case "Live link": return model.pushCount > 0 ? "Connected · \(model.pushCount) requests answered" : "Connected"
-        case "Link off": return model.selectedCoreBar == nil ? "No CoreBar" : "Not connected"
-        default: return model.linkState.hasPrefix("Reconnecting") ? "Reconnecting…" : model.linkState
+        switch model.link {
+        case .connected: return model.pushCount > 0 ? "Connected · \(model.pushCount) requests answered" : "Connected"
+        case .connecting: return "Linking…"
+        case .stopped: return model.selectedCoreBar == nil ? "No CoreBar" : "Not connected"
+        case .reconnecting: return "Reconnecting…"
         }
     }
 }

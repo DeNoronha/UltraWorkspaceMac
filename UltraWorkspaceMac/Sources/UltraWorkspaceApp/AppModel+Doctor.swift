@@ -46,7 +46,7 @@ extension AppModel {
     /// One fault + one fix for a device page. `cube` = the VivoCube page (cube Wi-Fi/screen/card faults);
     /// otherwise the CoreBar page (link and page faults only — cube problems belong on the cube page).
     func deviceFault(settings: AppSettings, cube: Bool) -> (message: String, action: DoctorAction)? {
-        if linkState != "Live link" {
+        if !link.isConnected {
             return ("Not connected to the bar — its Mac cards and the KnobKey volume won't update.",
                     DoctorAction(title: "Reconnect") { [weak self] in self?.startLink() })
         }
@@ -125,10 +125,11 @@ extension AppModel {
             else if tc.mismatch { add("CoreBar", "Certificate changed", .fail, "The bar presents a different certificate than when you paired. If you reset or replaced it, pair again.", DoctorAction(title: "Forget & pair again") { [weak self] in self?.unpair(bar); self?.scan() }) }
             else { add("CoreBar", "Not reachable", .fail, "No answer from \(ip). Is the bar on and on the same Wi-Fi?", DoctorAction(title: "Check again") { [weak self] in self?.runDoctor(settings: settings) }) }
             let age = lastPushAt.map { Int(Date().timeIntervalSince($0)) }
-            if linkState == "Live link" {
+            if link.isConnected {
                 add("CoreBar", "Answering the bar", .ok, "\(pushCount) requests answered" + (age.map { " · last \($0) s ago" } ?? " · none yet (the bar only asks while a page with Mac cards is on screen)"))
             } else {
-                add("CoreBar", "Not connected", .warn, "\(linkState). The bar's Mac cards and the KnobKey volume won't update.", DoctorAction(title: "Reconnect") { [weak self] in self?.startLink() })
+                let why: String = { switch link { case .reconnecting(let r): return "Reconnecting (\(r.prefix(40)))."; case .connecting: return "Still connecting."; default: return "The link is off." } }()
+                add("CoreBar", "Not connected", .warn, "\(why) The bar's Mac cards and the KnobKey volume won't update.", DoctorAction(title: "Reconnect") { [weak self] in self?.startLink() })
             }
             if let pages = try? await session.listPages() {
                 corebarPages = pages

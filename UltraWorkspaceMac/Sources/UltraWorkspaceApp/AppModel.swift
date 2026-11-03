@@ -39,11 +39,11 @@ final class AppModel: ObservableObject {
     @Published var themeRunning = false
     @Published var currentThemeLabel = ""
     @Published var corebarPages: [CoreBarSession.PageInfo] = []
-    // Persistent link ("Mac agent") that answers the CoreBar's push queries.
-    @Published var linkState: String = "Link off"
+    // Persistent link ("Mac agent") that answers the CoreBar's push queries. Wording lives in `LinkBadge`.
+    @Published var link: CoreBarLink.State = .stopped
     @Published var pushCount = 0
     @Published var lastKnobVolume: Int?
-    var link: CoreBarLink?
+    var activeLink: CoreBarLink?
     let agentSystemStats = SystemStats()
     let agentNetworkStats = NetworkStats()
     /// Layers in the last VivoCube package (for DotKey / card "next" stepping).
