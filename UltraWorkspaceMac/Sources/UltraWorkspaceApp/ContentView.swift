@@ -22,7 +22,7 @@ struct ContentView: View {
         .environmentObject(contacts)
         .environmentObject(settings)
         .onAppear {
-            model.startMusicPolling(); model.startDailyCoverRefresh(settings: settings)
+            model.startMusicPolling(); model.startDailyCoverRefresh(settings: settings); model.startClaudeWatch(settings: settings)
             // Resume timed switching if it was on when the app last quit.
             if settings.vivoRotationOn, settings.vivoSwitchMode == .timed, !model.themeRunning { model.sendToCube(settings: settings) }
         }

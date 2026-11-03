@@ -25,16 +25,28 @@ enum StatCard {
         }
     }
 
-    static func claude(_ s: ClaudeUsage.Snapshot, size: Int) -> [UInt8]? {
+    static func claude(_ s: ClaudeUsage.Snapshot, plan: String, dailyBudget: Int, size: Int) -> [UInt8]? {
         draw(size: size, accent: (c(0.42, 0.26, 0.60), c(0.14, 0.09, 0.22)),
              title: "Claude Code", icon: "sparkles") { g, W, H in
-            if s.hasData {
-                bigValue(g, ClaudeUsage.shortTokens(s.todayTokens), sub: "tokens today", W: W, yFrac: 0.52)
-                center(g, "\(s.activeSessions) active session\(s.activeSessions == 1 ? "" : "s")",
-                       size: W*0.085, color: s.activeSessions > 0 ? .systemGreen : NSColor.white.withAlphaComponent(0.7),
-                       W: W, y: H*0.20)
-            } else {
-                center(g, "No Claude data", size: W*0.10, color: NSColor.white.withAlphaComponent(0.8), W: W, y: H*0.45)
+            guard s.hasData else {
+                center(g, "No Claude data", size: W*0.10, color: NSColor.white.withAlphaComponent(0.8), W: W, y: H*0.45); return
+            }
+            // Big number sized so "16.1M" never touches its caption (rect height = font × 1.2).
+            let big = W*0.20
+            drawText(ClaudeUsage.shortTokens(s.todayTokens), big, .bold, .white,
+                     CGRect(x: 0, y: H*0.60, width: W, height: big*1.2), align: .center)
+            drawText("tokens today · \(plan)", W*0.065, .regular, NSColor.white.withAlphaComponent(0.75),
+                     CGRect(x: 0, y: H*0.53, width: W, height: W*0.08), align: .center)
+            if dailyBudget > 0 {
+                let frac = Double(s.todayTokens) / Double(dailyBudget)
+                let pct = Int((frac * 100).rounded())
+                bar(g, label: "\(min(pct, 999))%", frac: frac, color: frac < 0.8 ? .systemGreen : (frac < 1 ? .systemOrange : .systemRed), W: W, y: H*0.42)
+            }
+            center(g, "\(s.activeSessions) active session\(s.activeSessions == 1 ? "" : "s")",
+                   size: W*0.075, color: s.activeSessions > 0 ? .systemGreen : NSColor.white.withAlphaComponent(0.7),
+                   W: W, y: H*0.25)
+            if s.waitingForInput > 0 {
+                center(g, "\(s.waitingForInput) waiting for you", size: W*0.075, color: .systemOrange, W: W, y: H*0.13)
             }
         }
     }

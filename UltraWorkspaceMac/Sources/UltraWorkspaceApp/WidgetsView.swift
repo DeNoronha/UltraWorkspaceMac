@@ -86,12 +86,14 @@ struct WidgetsView: View {
         case .music: return "What Music is playing, with album art."
         case .cpu: return "CPU and memory use of this Mac."
         case .network: return "Download and upload speed of this Mac."
-        case .claude: return "Claude Code activity: tokens used today and active sessions."
+        case .claude: return "Claude Code: tokens today, your plan, % of your own daily budget, active sessions, and which sessions wait for your input."
         case .battery: return "Battery charge and power state (a desktop Mac shows “On AC power”)."
         case .disk: return "How full the startup disk is."
-        case .worldclock: return "The time in Amsterdam, New York and Tokyo."
-        case .crypto: return "Bitcoin and Ethereum in EUR with 24-hour change (CoinGecko, no key)."
-        case .calendar: return "Your next calendar events. macOS asks for Calendar access the first time."
+        case .worldclock: return "The time in three cities of your choice."
+        case .crypto, .crypto2, .crypto3, .crypto4, .crypto5: return "One coin: price now, today's low and high, change since midnight and a chart of today (CoinGecko, no key)."
+        case .calendar: return "Your next events from the calendars you pick, each in its calendar's colour."
+        case .clock: return "A clock face — analog or digital, 12 or 24 hours."
+        case .date: return "Today's date: weekday, day, month and year, long or short."
         case .diskio: return "Live disk read/write throughput."
         case .topcpu: return "The apps using the most CPU right now."
         case .uptime: return "How long this Mac has been running, with load averages."
@@ -119,6 +121,72 @@ struct WidgetsView: View {
             }
         case .music:
             Panel("Music") { MusicControls() }
+        case .worldclock:
+            Panel("World clock") {
+                ForEach(0..<3, id: \.self) { i in
+                    HStack {
+                        Text("City \(i + 1)").frame(width: 60, alignment: .leading)
+                        TimeZonePicker(selection: Binding(get: { i < settings.worldClockZones.count ? settings.worldClockZones[i] : "" },
+                                                          set: { v in var z = settings.worldClockZones; while z.count < 3 { z.append("") }; z[i] = v; settings.worldClockZones = z }))
+                    }
+                }
+                Toggle("24-hour clock", isOn: $settings.clock24h).toggleStyle(.switch)
+            }
+        case .clock:
+            Panel("Clock") {
+                Picker("Style", selection: $settings.clockStyle) { Text("Analog").tag(AppSettings.ClockStyle.analog); Text("Digital").tag(AppSettings.ClockStyle.digital) }
+                    .pickerStyle(.segmented).frame(width: 200)
+                Toggle("24-hour clock", isOn: $settings.clock24h).toggleStyle(.switch)
+                Toggle("Show seconds", isOn: $settings.clockSeconds).toggleStyle(.switch)
+                Text("The cube's picture is redrawn only when Deckhand sends it again (every few minutes), so seconds are a snapshot, not a running hand.").font(.caption).foregroundStyle(.secondary)
+            }
+        case .date:
+            Panel("Date") {
+                Picker("Style", selection: $settings.dateStyle) { Text("Long").tag(AppSettings.DateStyle.long); Text("Short").tag(AppSettings.DateStyle.short); Text("Numeric").tag(AppSettings.DateStyle.numeric) }
+                    .pickerStyle(.segmented).frame(width: 260)
+                Toggle("Weekday", isOn: $settings.dateShowWeekday).toggleStyle(.switch)
+                Toggle("Year", isOn: $settings.dateShowYear).toggleStyle(.switch)
+                Text("Language follows this Mac (\(Locale.current.identifier)).").font(.caption).foregroundStyle(.secondary)
+            }
+        case .crypto, .crypto2, .crypto3, .crypto4, .crypto5:
+            let slot = t.cryptoSlot ?? 0
+            Panel("Crypto \(slot + 1)") {
+                HStack {
+                    Text("Coin").frame(width: 60, alignment: .leading)
+                    Picker("", selection: Binding(get: { slot < settings.cryptoCoins.count ? settings.cryptoCoins[slot] : "" },
+                                                  set: { v in var c = settings.cryptoCoins; while c.count < 5 { c.append("") }; c[slot] = v; settings.cryptoCoins = c })) {
+                        Text("None").tag("")
+                        ForEach(CryptoStats.knownCoins, id: \.id) { k in Text("\(k.symbol) — \(k.name)").tag(k.id) }
+                    }.labelsHidden().frame(width: 220)
+                }
+                HStack {
+                    Text("Other").frame(width: 60, alignment: .leading)
+                    TextField("CoinGecko id, e.g. ripple", text: Binding(get: { slot < settings.cryptoCoins.count ? settings.cryptoCoins[slot] : "" },
+                                                                       set: { v in var c = settings.cryptoCoins; while c.count < 5 { c.append("") }; c[slot] = v.lowercased(); settings.cryptoCoins = c })).frame(width: 220)
+                }
+                HStack {
+                    Text("Currency").frame(width: 60, alignment: .leading)
+                    Picker("", selection: $settings.cryptoCurrency) { ForEach(CryptoStats.currencies, id: \.self) { Text($0.uppercased()).tag($0) } }
+                        .labelsHidden().frame(width: 100)
+                    Text("applies to all five crypto cards").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        case .calendar:
+            Panel("Calendars") { CalendarPicker() }
+        case .claude:
+            Panel("Claude Code") {
+                HStack {
+                    Text("Plan").frame(width: 100, alignment: .leading)
+                    Picker("", selection: $settings.claudePlan) { ForEach(AppSettings.ClaudePlan.allCases, id: \.self) { Text($0.title).tag($0) } }.labelsHidden().frame(width: 160)
+                }
+                HStack {
+                    Text("Daily budget").frame(width: 100, alignment: .leading)
+                    TextField("tokens, e.g. 20000000", value: $settings.claudeDailyBudget, format: .number).frame(width: 160)
+                    Text("0 = no percentage").font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Anthropic does not publish per-plan token limits, so the % is against a budget you set yourself (input + output + cache writes, from ~/.claude transcripts).").font(.caption).foregroundStyle(.secondary)
+                Toggle("Notify me when a session waits for my input", isOn: $settings.claudeNotifyWaiting).toggleStyle(.switch)
+            }
         case .picture:
             Panel("Picture") {
                 HStack {
@@ -146,5 +214,59 @@ struct MusicControls: View {
                 Button { model.musicVolume(10) } label: { Image(systemName: "speaker.wave.3.fill") }.accessibilityLabel("Louder")
             }.buttonStyle(.bordered)
         }
+    }
+}
+
+
+/// Searchable time-zone picker (600+ identifiers): a text filter plus a menu of matches.
+struct TimeZonePicker: View {
+    @Binding var selection: String
+    @StateObject private var ui = UI()
+    private final class UI: ObservableObject { @Published var filter = "" }
+    private var matches: [String] {
+        let all = TimeZone.knownTimeZoneIdentifiers
+        let f = ui.filter.trimmingCharacters(in: .whitespaces).lowercased()
+        if f.isEmpty { return all }
+        return all.filter { $0.lowercased().replacingOccurrences(of: "_", with: " ").contains(f) }
+    }
+    var body: some View {
+        HStack {
+            TextField("Search city", text: $ui.filter).frame(width: 130)
+            Picker("", selection: $selection) {
+                if !selection.isEmpty, !matches.contains(selection) { Text(selection).tag(selection) }
+                ForEach(matches.prefix(200), id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) }
+            }.labelsHidden().frame(width: 230)
+        }
+    }
+}
+
+/// Toggle list of the Mac's calendars with their colours; nothing ticked = all calendars.
+struct CalendarPicker: View {
+    @EnvironmentObject var settings: AppSettings
+    @StateObject private var ui = UI()
+    private final class UI: ObservableObject { @Published var cals: [CalendarSource.CalInfo] = []; @Published var auth: CalAuth = .notDetermined }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if ui.auth != .authorized {
+                Text("Calendar access is off for Deckhand. Allow it in System Settings → Privacy & Security → Calendars.").foregroundStyle(.orange)
+                Button("Ask for access") { Task { _ = await CalendarSource.requestAccess(); ui.auth = CalendarSource.authStatus(); ui.cals = CalendarSource.calendars() } }
+            } else if ui.cals.isEmpty {
+                Text("No calendars found.").foregroundStyle(.secondary)
+            } else {
+                Text(settings.calendarIDs.isEmpty ? "All calendars are shown. Tick some to limit the card." : "\(settings.calendarIDs.count) selected.").font(.caption).foregroundStyle(.secondary)
+                ForEach(ui.cals) { c in
+                    Toggle(isOn: Binding(get: { settings.calendarIDs.contains(c.id) },
+                                         set: { on in if on { settings.calendarIDs.append(c.id) } else { settings.calendarIDs.removeAll { $0 == c.id } } })) {
+                        HStack(spacing: 6) {
+                            Circle().fill(Color(red: c.rgb.0, green: c.rgb.1, blue: c.rgb.2)).frame(width: 10, height: 10)
+                            Text(c.title)
+                            Text(c.source).font(.caption).foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+                if !settings.calendarIDs.isEmpty { Button("Show all") { settings.calendarIDs = [] }.buttonStyle(.link).font(.caption) }
+            }
+        }
+        .onAppear { ui.auth = CalendarSource.authStatus(); ui.cals = CalendarSource.calendars() }
     }
 }

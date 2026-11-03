@@ -46,14 +46,13 @@ enum WorldClockCard {
             let n = CGFloat(shown.count)
             let slot = band / n
             for (i, id) in shown.enumerated() {
-                let isHome = (i == 0)
-                // Row baseline centre (bottom-left origin => first zone highest).
+                // All rows identical (the first city is not special).
                 let yCentre = bandTop - slot * (CGFloat(i) + 0.5)
-                let labelSize = isHome ? W * 0.105 : W * 0.085
-                let timeSize = isHome ? W * 0.145 : W * 0.115
-                let labelWeight: NSFont.Weight = isHome ? .bold : .medium
-                let timeWeight: NSFont.Weight = isHome ? .bold : .semibold
-                let alpha = isHome ? 1.0 : 0.88
+                let labelSize = W * 0.09
+                let timeSize = W * 0.125
+                let labelWeight: NSFont.Weight = .medium
+                let timeWeight: NSFont.Weight = .semibold
+                let alpha = 0.95
 
                 let zone = TimeZone(identifier: id) ?? .current
                 let city = cityLabel(from: id)

@@ -297,20 +297,26 @@ extension AppModel {
             return StatCard.network(netStats.sample(), size: 240)
         case .claude:
             let snap = await Task.detached { ClaudeUsage.snapshot() }.value
-            return StatCard.claude(snap, size: 240)
+            return StatCard.claude(snap, plan: settings.claudePlan.title, dailyBudget: settings.claudeDailyBudget, size: 240)
         case .battery:
             return BatteryCard.render(BatteryStats.sample(), size: 240)
         case .disk:
             return DiskCard.render(size: 240)
         case .worldclock:
-            return WorldClockCard.render(size: 240, zones: WorldClockCard.defaultZones, clock24h: settings.clock24h)
-        case .crypto:
-            let coins = await CryptoStats.fetch(currency: "eur")
-            return CryptoCard.render(coins, size: 240, currencySymbol: CryptoStats.suffix(for: "eur"))
+            return WorldClockCard.render(size: 240, zones: settings.worldClockZones, clock24h: settings.clock24h)
+        case .crypto, .crypto2, .crypto3, .crypto4, .crypto5:
+            let slot = theme.cryptoSlot ?? 0
+            let id = slot < settings.cryptoCoins.count ? settings.cryptoCoins[slot] : ""
+            let day = id.isEmpty ? nil : await CryptoStats.today(id: id, currency: settings.cryptoCurrency)
+            return CryptoCoinCard.render(day, coinId: id, currency: settings.cryptoCurrency, size: 240)
+        case .clock:
+            return ClockCard.render(size: 240, style: settings.clockStyle, clock24h: settings.clock24h, seconds: settings.clockSeconds)
+        case .date:
+            return DateCard.render(size: 240, style: settings.dateStyle, showWeekday: settings.dateShowWeekday, showYear: settings.dateShowYear)
         case .calendar:
             var auth = CalendarSource.authStatus()
             if auth == .notDetermined { _ = await CalendarSource.requestAccess(); auth = CalendarSource.authStatus() }
-            let events = auth == .authorized ? await CalendarSource.upcoming() : []
+            let events = auth == .authorized ? await CalendarSource.upcoming(calendarIDs: settings.calendarIDs) : []
             return CalendarCard.render(events, auth: auth, size: 240, clock24h: settings.clock24h)
         case .diskio:
             _ = diskStats.sample()

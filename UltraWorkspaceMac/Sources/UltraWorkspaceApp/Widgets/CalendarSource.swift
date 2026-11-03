@@ -70,16 +70,28 @@ final class CalendarSource {
         }
     }
 
+    struct CalInfo: Identifiable, Sendable { let id: String; let title: String; let source: String; let rgb: (Double, Double, Double) }
+
+    /// All event calendars on this Mac (empty when not authorized).
+    static func calendars() -> [CalInfo] {
+        guard authStatus() == .authorized else { return [] }
+        return EKEventStore().calendars(for: .event)
+            .map { CalInfo(id: $0.calendarIdentifier, title: $0.title, source: $0.source?.title ?? "", rgb: rgb(from: $0.cgColor)) }
+            .sorted { ($0.source, $0.title) < ($1.source, $1.title) }
+    }
+
     /// Events from now through the next 24 hours, sorted by start, mapped to
-    /// `CalEvent`. Returns `[]` if not authorized or on any error.
-    static func upcoming(limit: Int = 3) async -> [CalEvent] {
+    /// `CalEvent`. `calendarIDs` empty = all calendars. Returns `[]` if not authorized.
+    static func upcoming(limit: Int = 3, calendarIDs: [String] = []) async -> [CalEvent] {
         guard authStatus() == .authorized else { return [] }
 
         let store = EKEventStore()
         let now = Date()
         let end = now.addingTimeInterval(24 * 60 * 60)
 
-        let predicate = store.predicateForEvents(withStart: now, end: end, calendars: nil)
+        let chosen = calendarIDs.isEmpty ? nil : store.calendars(for: .event).filter { calendarIDs.contains($0.calendarIdentifier) }
+        if let chosen, chosen.isEmpty { return [] }
+        let predicate = store.predicateForEvents(withStart: now, end: end, calendars: chosen)
         let events = store.events(matching: predicate)
 
         let mapped = events

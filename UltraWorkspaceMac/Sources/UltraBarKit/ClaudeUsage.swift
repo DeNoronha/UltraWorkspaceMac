@@ -7,6 +7,45 @@ public enum ClaudeUsage {
         public var activeSessions: Int
         public var todayTokens: Int
         public var hasData: Bool
+        /// Sessions whose last turn is an assistant message with no pending tool call: they wait for you.
+        public var waitingForInput: Int = 0
+    }
+
+    /// Count recently touched sessions that are waiting for the user (cheap: reads the tail of each file).
+    public static func waitingSessions(window: TimeInterval = 900) -> Int {
+        let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/projects", isDirectory: true)
+        guard let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.contentModificationDateKey]) else { return 0 }
+        let now = Date()
+        var waiting = 0
+        for case let url as URL in en {
+            guard url.pathExtension == "jsonl",
+                  let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
+                  now.timeIntervalSince(mod) <= window else { continue }
+            if isWaiting(url) { waiting += 1 }
+        }
+        return waiting
+    }
+
+    private static func isWaiting(_ url: URL) -> Bool {
+        guard let h = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? h.close() }
+        let size = (try? h.seekToEnd()) ?? 0
+        let tailLen: UInt64 = 64_000
+        try? h.seek(toOffset: size > tailLen ? size - tailLen : 0)
+        guard let data = try? h.readToEnd(), let text = String(data: data, encoding: .utf8) else { return false }
+        // Last line that is a user or assistant turn decides.
+        for line in text.split(separator: "\n").reversed() {
+            guard let d = line.data(using: .utf8), let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+                  let type = obj["type"] as? String else { continue }
+            if type == "user" { return false }                      // the user (or a tool result) spoke last → agent is working
+            if type == "assistant" {
+                let msg = obj["message"] as? [String: Any]
+                let content = msg?["content"] as? [[String: Any]] ?? []
+                let pendingTool = content.contains { ($0["type"] as? String) == "tool_use" }
+                return !pendingTool                                   // ended its turn → waiting for input
+            }
+        }
+        return false
     }
 
     public static func snapshot(activeWindow: TimeInterval = 300) -> Snapshot {
@@ -45,7 +84,7 @@ public enum ClaudeUsage {
                 }
             }
         }
-        return Snapshot(activeSessions: active, todayTokens: tokens, hasData: anyFile)
+        return Snapshot(activeSessions: active, todayTokens: tokens, hasData: anyFile, waitingForInput: waitingSessions())
     }
 
     private static func findUsage(_ obj: [String: Any]) -> [String: Any]? {

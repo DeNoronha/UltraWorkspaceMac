@@ -40,6 +40,29 @@ final class AppSettings: ObservableObject {
     @Published var vivoSwitchMode: SwitchMode = .timed { didSet { save() } }
     /// Image file for the "Picture" card (copied into Application Support).
     @Published var vivoPicturePath: String = "" { didSet { save() } }
+
+    // MARK: Card preferences (2026-11-03)
+    /// World clock: three time-zone identifiers, top to bottom.
+    @Published var worldClockZones: [String] = ["Europe/Amsterdam", "America/New_York", "Asia/Tokyo"] { didSet { save() } }
+    enum ClockStyle: String, Codable, CaseIterable { case analog, digital }
+    @Published var clockStyle: ClockStyle = .analog { didSet { save() } }
+    @Published var clockSeconds: Bool = false { didSet { save() } }
+    enum DateStyle: String, Codable, CaseIterable { case long, short, numeric }
+    @Published var dateStyle: DateStyle = .long { didSet { save() } }
+    @Published var dateShowWeekday: Bool = true { didSet { save() } }
+    @Published var dateShowYear: Bool = true { didSet { save() } }
+    /// CoinGecko coin ids for the five crypto cards (empty slot = card shows "choose a coin").
+    @Published var cryptoCoins: [String] = ["ethereum", "ripple", "", "", ""] { didSet { save() } }
+    @Published var cryptoCurrency: String = "eur" { didSet { save() } }
+    /// Calendar identifiers to show; empty = all calendars.
+    @Published var calendarIDs: [String] = [] { didSet { save() } }
+    enum ClaudePlan: String, Codable, CaseIterable { case pro, max5, max20, api
+        var title: String { switch self { case .pro: return "Pro"; case .max5: return "Max 5×"; case .max20: return "Max 20×"; case .api: return "API / Console" } }
+    }
+    @Published var claudePlan: ClaudePlan = .max5 { didSet { save() } }
+    /// Your own daily token budget (for the % on the card); 0 = no percentage.
+    @Published var claudeDailyBudget: Int = 0 { didSet { save() } }
+    @Published var claudeNotifyWaiting: Bool = true { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows about this many cards without scrolling (the clock card is double width).
     static let coreCardsThatFit = 4
@@ -82,6 +105,18 @@ final class AppSettings: ObservableObject {
         var vivoLayerCount: Int? = nil
         var vivoSwitchMode: SwitchMode? = nil
         var vivoPicturePath: String? = nil
+        var worldClockZones: [String]? = nil
+        var clockStyle: ClockStyle? = nil
+        var clockSeconds: Bool? = nil
+        var dateStyle: DateStyle? = nil
+        var dateShowWeekday: Bool? = nil
+        var dateShowYear: Bool? = nil
+        var cryptoCoins: [String]? = nil
+        var cryptoCurrency: String? = nil
+        var calendarIDs: [String]? = nil
+        var claudePlan: ClaudePlan? = nil
+        var claudeDailyBudget: Int? = nil
+        var claudeNotifyWaiting: Bool? = nil
     }
 
     // MARK: VivoCube cards (ordered, max 6)
@@ -141,6 +176,18 @@ final class AppSettings: ObservableObject {
             vivoLayerCount = p.vivoLayerCount ?? 1
             vivoSwitchMode = p.vivoSwitchMode ?? ((p.vivoRotationOn ?? false) ? .timed : .timed)
             vivoPicturePath = p.vivoPicturePath ?? ""
+            worldClockZones = p.worldClockZones ?? worldClockZones
+            clockStyle = p.clockStyle ?? .analog
+            clockSeconds = p.clockSeconds ?? false
+            dateStyle = p.dateStyle ?? .long
+            dateShowWeekday = p.dateShowWeekday ?? true
+            dateShowYear = p.dateShowYear ?? true
+            cryptoCoins = p.cryptoCoins ?? cryptoCoins
+            cryptoCurrency = p.cryptoCurrency ?? "eur"
+            calendarIDs = p.calendarIDs ?? []
+            claudePlan = p.claudePlan ?? .max5
+            claudeDailyBudget = p.claudeDailyBudget ?? 0
+            claudeNotifyWaiting = p.claudeNotifyWaiting ?? true
         }
     }
 
@@ -154,7 +201,11 @@ final class AppSettings: ObservableObject {
                           vivoThemes: vivoThemes, vivoSeconds: vivoSeconds,
                           coreThemes: coreThemes, coreSeconds: coreSeconds,
                           coreCards: coreCards, deckhandPagePublished: deckhandPagePublished, accuWeatherKey: accuWeatherKey, vivoRotationOn: vivoRotationOn, vivoLayerCount: vivoLayerCount,
-                          vivoSwitchMode: vivoSwitchMode, vivoPicturePath: vivoPicturePath)
+                          vivoSwitchMode: vivoSwitchMode, vivoPicturePath: vivoPicturePath,
+                          worldClockZones: worldClockZones, clockStyle: clockStyle, clockSeconds: clockSeconds,
+                          dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
+                          cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
+                          claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting)
         if let data = try? JSONEncoder().encode(p) { try? data.write(to: url, options: .atomic) }
     }
 
