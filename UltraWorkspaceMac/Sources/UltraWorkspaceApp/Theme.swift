@@ -7,6 +7,11 @@ enum Theme: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Cards offered in the library / "Add a card". The extra crypto slots are internal:
+    /// one "Crypto" entry expands to one card per coin at send time.
+    static var library: [Theme] { allCases.filter { !$0.isHiddenCryptoSlot } }
+    var isHiddenCryptoSlot: Bool { [.crypto2, .crypto3, .crypto4, .crypto5].contains(self) }
+
     var title: String {
         switch self {
         case .weather: return "Weather & time"
@@ -17,7 +22,7 @@ enum Theme: String, CaseIterable, Codable, Identifiable {
         case .battery: return "Battery & power"
         case .disk: return "Storage"
         case .worldclock: return "World clock"
-        case .crypto: return "Crypto ticker"
+        case .crypto: return "Crypto"
         case .calendar: return "Calendar"
         case .diskio: return "Disk I/O"
         case .topcpu: return "Top CPU"

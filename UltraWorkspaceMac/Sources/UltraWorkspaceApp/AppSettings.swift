@@ -121,10 +121,29 @@ final class AppSettings: ObservableObject {
 
     // MARK: VivoCube cards (ordered, max 6)
 
-    var vivoCards: [Theme] { vivoThemes.compactMap { Theme(rawValue: $0) } }
-    var vivoSlotsLeft: Int { max(0, AppModel.maxVivoLayers - vivoThemes.count) }
+    var vivoCards: [Theme] { vivoThemes.compactMap { Theme(rawValue: $0) }.filter { !$0.isHiddenCryptoSlot } }
+    /// Coins configured for the Crypto card (non-empty slots, in order).
+    var cryptoCoinsConfigured: [String] { cryptoCoins.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }
+    /// The cards actually sent to the cube: the list with "Crypto" expanded to one card per coin (max 6 in total).
+    var cubePackageCards: [Theme] {
+        var out: [Theme] = []
+        let slots: [Theme] = [.crypto, .crypto2, .crypto3, .crypto4, .crypto5]
+        for t in vivoCards {
+            if t == .crypto { out += slots.prefix(max(1, cryptoCoinsConfigured.count)) } else { out.append(t) }
+        }
+        return Array(out.prefix(AppModel.maxVivoLayers))
+    }
+    var vivoSlotsLeft: Int { max(0, AppModel.maxVivoLayers - cubePackageCards.count) }
+    /// Human title for a package card ("Crypto: ETH / EUR" for coin slots).
+    func cardTitle(_ t: Theme) -> String {
+        if let slot = t.cryptoSlot {
+            let coins = cryptoCoinsConfigured
+            return slot < coins.count ? "Crypto: \(CryptoStats.symbol(for: coins[slot])) / \(cryptoCurrency.uppercased())" : "Crypto"
+        }
+        return t.title
+    }
     func addVivoCard(_ t: Theme) {
-        guard !vivoThemes.contains(t.rawValue), vivoThemes.count < AppModel.maxVivoLayers else { return }
+        guard !vivoThemes.contains(t.rawValue), vivoSlotsLeft > 0 else { return }
         vivoThemes.append(t.rawValue)
     }
     func removeVivoCard(_ t: Theme) { vivoThemes.removeAll { $0 == t.rawValue } }

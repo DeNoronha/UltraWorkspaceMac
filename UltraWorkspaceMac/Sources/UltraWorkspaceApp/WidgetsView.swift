@@ -13,7 +13,7 @@ struct WidgetsView: View {
             Divider()
             HSplitView {
                 List(selection: Binding(get: { model.selectedAddon as Theme? }, set: { if let v = $0 { model.selectedAddon = v } })) {
-                    ForEach(Theme.allCases) { t in
+                    ForEach(Theme.library) { t in
                         HStack {
                             Label(t.title, systemImage: t.icon)
                             Spacer()
@@ -90,7 +90,7 @@ struct WidgetsView: View {
         case .battery: return "Battery charge and power state (a desktop Mac shows “On AC power”)."
         case .disk: return "How full the startup disk is."
         case .worldclock: return "The time in three cities of your choice."
-        case .crypto, .crypto2, .crypto3, .crypto4, .crypto5: return "One coin: price now, today's low and high, change since midnight and a chart of today (CoinGecko, no key)."
+        case .crypto, .crypto2, .crypto3, .crypto4, .crypto5: return "Up to five coins, each as its own card: price now, today's low and high, change since midnight and a chart of today (CoinGecko, no key)."
         case .calendar: return "Your next events from the calendars you pick, each in its calendar's colour."
         case .clock: return "A clock face — analog or digital, 12 or 24 hours."
         case .date: return "Today's date: weekday, day, month and year, long or short."
@@ -149,26 +149,25 @@ struct WidgetsView: View {
                 Text("Language follows this Mac (\(Locale.current.identifier)).").font(.caption).foregroundStyle(.secondary)
             }
         case .crypto, .crypto2, .crypto3, .crypto4, .crypto5:
-            let slot = t.cryptoSlot ?? 0
-            Panel("Crypto \(slot + 1)") {
-                HStack {
-                    Text("Coin").frame(width: 60, alignment: .leading)
-                    Picker("", selection: Binding(get: { slot < settings.cryptoCoins.count ? settings.cryptoCoins[slot] : "" },
-                                                  set: { v in var c = settings.cryptoCoins; while c.count < 5 { c.append("") }; c[slot] = v; settings.cryptoCoins = c })) {
-                        Text("None").tag("")
-                        ForEach(CryptoStats.knownCoins, id: \.id) { k in Text("\(k.symbol) — \(k.name)").tag(k.id) }
-                    }.labelsHidden().frame(width: 220)
-                }
-                HStack {
-                    Text("Other").frame(width: 60, alignment: .leading)
-                    TextField("CoinGecko id, e.g. ripple", text: Binding(get: { slot < settings.cryptoCoins.count ? settings.cryptoCoins[slot] : "" },
-                                                                       set: { v in var c = settings.cryptoCoins; while c.count < 5 { c.append("") }; c[slot] = v.lowercased(); settings.cryptoCoins = c })).frame(width: 220)
+            Panel("Crypto", footer: "Each coin becomes its own card on the cube; they count towards the \(AppModel.maxVivoLayers) slots.") {
+                ForEach(0..<5, id: \.self) { slot in
+                    HStack {
+                        Text("Coin \(slot + 1)").frame(width: 60, alignment: .leading)
+                        Picker("", selection: Binding(get: { slot < settings.cryptoCoins.count ? settings.cryptoCoins[slot] : "" },
+                                                      set: { v in var c = settings.cryptoCoins; while c.count < 5 { c.append("") }; c[slot] = v; settings.cryptoCoins = c })) {
+                            Text("None").tag("")
+                            ForEach(CryptoStats.knownCoins, id: \.id) { k in Text("\(k.symbol) — \(k.name)").tag(k.id) }
+                            let cur = slot < settings.cryptoCoins.count ? settings.cryptoCoins[slot] : ""
+                            if !cur.isEmpty, !CryptoStats.knownCoins.contains(where: { $0.id == cur }) { Text(cur).tag(cur) }
+                        }.labelsHidden().frame(width: 200)
+                        TextField("or a CoinGecko id", text: Binding(get: { slot < settings.cryptoCoins.count ? settings.cryptoCoins[slot] : "" },
+                                                                   set: { v in var c = settings.cryptoCoins; while c.count < 5 { c.append("") }; c[slot] = v.lowercased(); settings.cryptoCoins = c })).frame(width: 160)
+                    }
                 }
                 HStack {
                     Text("Currency").frame(width: 60, alignment: .leading)
                     Picker("", selection: $settings.cryptoCurrency) { ForEach(CryptoStats.currencies, id: \.self) { Text($0.uppercased()).tag($0) } }
                         .labelsHidden().frame(width: 100)
-                    Text("applies to all five crypto cards").font(.caption).foregroundStyle(.secondary)
                 }
             }
         case .calendar:

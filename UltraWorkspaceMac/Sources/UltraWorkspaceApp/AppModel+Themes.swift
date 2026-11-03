@@ -17,7 +17,7 @@ extension AppModel {
     /// property 9; "only by button" leaves switching to the DotKey / bar button.
     func sendToCube(settings: AppSettings) {
         themeTask?.cancel(); themeTask = nil
-        let cards = Array(settings.vivoCards.prefix(Self.maxVivoLayers))
+        let cards = settings.cubePackageCards
         guard let bar = selectedCoreBar, let session = session(for: bar), let serial = vivoCubeSerial else {
             cubeProgress.failNow("Pair a CoreBar with a VivoCube first."); themeRunning = false; return
         }
@@ -28,7 +28,7 @@ extension AppModel {
         themeIndex = 0
         let interval = max(10, settings.vivoSeconds)
         let refreshEvery = TimeInterval(max(300, interval * cards.count))
-        cubeProgress.begin([("render", cards.count == 1 ? "Drawing \(cards[0].title)" : "Drawing \(cards.count) cards"),
+        cubeProgress.begin([("render", cards.count == 1 ? "Drawing \(settings.cardTitle(cards[0]))" : "Drawing \(cards.count) cards"),
                             ("upload", "Uploading"), ("apply", "Cube applying"), ("show", "Showing card 1")])
         themeTask = Task {
             defer { if timed { self.themeRunning = false } }
@@ -48,10 +48,10 @@ extension AppModel {
             self.cubeProgress.done("apply")
             self.cubeProgress.run("show")
             let code = await self.showCubeCard(1, session: session, serial: serial)
-            if code == 200 { self.cubeProgress.done("show", note: cards[0].title) }
+            if code == 200 { self.cubeProgress.done("show", note: settings.cardTitle(cards[0])) }
             else { self.cubeProgress.fail("show", "The bar did not confirm the card switch. Try “Fix black screen” under Maintenance.") }
-            self.say(timed ? "Cube: \(cards.map(\.title).joined(separator: ", ")) — switching every \(interval) s."
-                           : (cards.count == 1 ? "\(cards[0].title) is on the cube." : "\(cards.count) cards on the cube; switch them with the DotKey or the bar's button."))
+            self.say(timed ? "Cube: \(cards.map { settings.cardTitle($0) }.joined(separator: ", ")) — switching every \(interval) s."
+                           : (cards.count == 1 ? "\(settings.cardTitle(cards[0])) is on the cube." : "\(cards.count) cards on the cube; switch them with the DotKey or the bar's button."))
             guard timed else { return }
             var lastRefresh = Date()
             var step = 0
@@ -117,9 +117,9 @@ extension AppModel {
         var previews: [Int: NSImage] = [:]
         for (i, t) in themes.enumerated() {
             guard let rgba = await renderTheme(t, settings: settings) else {
-                say("\(t.title): could not be drawn — skipped."); continue
+                say("\(settings.cardTitle(t)): could not be drawn — skipped."); continue
             }
-            names.append(t.title)
+            names.append(settings.cardTitle(t))
             if let png = Self.pngData(fromRGBA: rgba, width: 240, height: 240), let img = NSImage(data: png) { previews[i + 1] = img }
             let bin = DeviceImage.encode(width: 240, height: 240, rgba: rgba)
             layers.append(.init(layerId: i + 1, widgetId: Self.widgetId(forLayer: i + 1), defaultBin: bin, pressedBin: bin))
@@ -306,7 +306,8 @@ extension AppModel {
             return WorldClockCard.render(size: 240, zones: settings.worldClockZones, clock24h: settings.clock24h)
         case .crypto, .crypto2, .crypto3, .crypto4, .crypto5:
             let slot = theme.cryptoSlot ?? 0
-            let id = slot < settings.cryptoCoins.count ? settings.cryptoCoins[slot] : ""
+            let coins = settings.cryptoCoinsConfigured
+            let id = slot < coins.count ? coins[slot] : ""
             let day = id.isEmpty ? nil : await CryptoStats.today(id: id, currency: settings.cryptoCurrency)
             return CryptoCoinCard.render(day, coinId: id, currency: settings.cryptoCurrency, size: 240)
         case .clock:

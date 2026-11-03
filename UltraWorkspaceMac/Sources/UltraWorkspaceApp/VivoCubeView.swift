@@ -84,7 +84,7 @@ struct VivoCubeView: View {
     // MARK: Ordered card list
 
     private var cards: some View {
-        Panel("What the cube shows", footer: "Drag to change the order. \(settings.vivoCards.count) of \(AppModel.maxVivoLayers) slots used.") {
+        Panel("What the cube shows", footer: "Drag to change the order. \(settings.cubePackageCards.count) of \(AppModel.maxVivoLayers) slots used.") {
             if settings.vivoCards.isEmpty {
                 Text("Nothing on the cube yet — add a card.").foregroundStyle(.secondary)
             }
@@ -95,6 +95,11 @@ struct VivoCubeView: View {
                         Text("\(i + 1)").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 14)
                         Label(t.title, systemImage: t.icon)
                         if t == .picture, settings.vivoPicturePath.isEmpty { Text("choose a file in Widgets").font(.caption2).foregroundStyle(.orange) }
+                        if t == .crypto {
+                            let coins = settings.cryptoCoinsConfigured
+                            Text(coins.isEmpty ? "choose coins in Widgets" : "\(coins.map { CryptoStats.symbol(for: $0) }.joined(separator: ", ")) → \(coins.count) card\(coins.count == 1 ? "" : "s")")
+                                .font(.caption2).foregroundStyle(coins.isEmpty ? .orange : .secondary)
+                        }
                         Spacer()
                         if i + 1 == showingLayer, !model.vivoLayerNames.isEmpty, i < model.vivoLayerNames.count {
                             Text("now").font(.caption2).padding(.horizontal, 6).padding(.vertical, 1).background(Color.green.opacity(0.2)).clipShape(Capsule())
@@ -112,7 +117,7 @@ struct VivoCubeView: View {
             .listStyle(.inset).scrollContentBackground(.hidden)
             .frame(height: CGFloat(max(1, settings.vivoCards.count)) * 28 + 10)
             Menu {
-                ForEach(Theme.allCases.filter { !settings.vivoCards.contains($0) }) { t in
+                ForEach(Theme.library.filter { !settings.vivoCards.contains($0) }) { t in
                     Button { add(t) } label: { Label(t.title, systemImage: t.icon) }
                 }
             } label: { Label("Add a card…", systemImage: "plus") }
