@@ -413,48 +413,68 @@ public struct CoreBarSession: Sendable {
         }
     }
 
-    /// Upload a layer package (tgz) to a module over HTTP. If the module isn't
-    /// registered yet ("module not found"), provision the CoreBar once and retry.
+    /// What one `/upload` POST came back with, parsed once so `upload` can decide
+    /// per case whether waiting can help.
+    public enum UploadReply: Equatable, Sendable {
+        case accepted
+        /// "hotspotIp ip address is empty": the bar's link to the module had no address yet
+        /// (right after a (re)boot or while the module re-joins). Clears by itself.
+        case hotspotNoIp
+        /// "module not found": the module is not in the gateway config; provisioning fixes it.
+        case moduleNotFound
+        /// "reply error:4" / "reply error:2": the cube is not on Wi-Fi. Waiting cannot clear it;
+        /// the user has to (re)send the cube's Wi-Fi settings.
+        case cubeOffline(code: Int)
+        /// Anything else ("state":-1 busy, HTTP 5xx, empty body…).
+        case other(String)
+
+        public init(accepted: Bool, text: String) {
+            if accepted { self = .accepted; return }
+            if text.contains("hotspotIp") { self = .hotspotNoIp; return }
+            if text.contains("module not found") { self = .moduleNotFound; return }
+            if let r = text.range(of: "reply error:"),
+               let n = Int(text[r.upperBound...].prefix(while: { $0.isNumber })), n == 4 || n == 2 {
+                self = .cubeOffline(code: n); return
+            }
+            self = .other(text)
+        }
+    }
+
+    /// Upload a layer package (tgz) to a module over HTTP. Retries only what can clear on
+    /// its own: a module link without an IP (3 × 6 s) and an unregistered module (provision
+    /// once). A cube that is off Wi-Fi, or any other rejection, fails immediately — the app
+    /// shows the reply text (`FriendlyError` reads "reply error:4" from it). Cancelling the
+    /// calling task stops the retries at the next sleep.
     public func upload(serial: String, tgz: Data) async throws -> Bool {
         var (accepted, text) = try await postUpload(serial: serial, tgz: tgz)
-        if accepted { return true }
-        // "hotspotIp ip address is empty": the CoreBar hands the package to the
-        // module over its own module hotspot (or the house Wi-Fi), and that
-        // interface had no address right now — typically right after the
-        // CoreBar (re)booted or while the module's Wi-Fi link is re-forming.
-        // It clears by itself; retry a few times before giving up.
+        var reply = UploadReply(accepted: accepted, text: text)
         var attempt = 0
-        while !accepted, text.contains("hotspotIp"), attempt < 3 {
+        while reply == .hotspotNoIp, attempt < 3 {
             attempt += 1
             WireLog.shared.event("upload: module link not ready (hotspot has no IP) — retry \(attempt)/3 in 6 s")
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            try await Task.sleep(nanoseconds: 6_000_000_000)
             (accepted, text) = try await postUpload(serial: serial, tgz: tgz)
-            if accepted { return true }
+            reply = UploadReply(accepted: accepted, text: text)
         }
-        if text.contains("hotspotIp") {
-            throw UltraBarError.uploadRejected("the CoreBar's link to the module is not up yet (its module hotspot has no IP address). Wait a minute, or detach and re-attach the VivoCube, then publish again")
-        }
-        // Any other module-side rejection ("reply error:<n>", busy, no network…):
-        // the cube is usually still applying the previous package or re-joining
-        // Wi-Fi. Back off and retry a few times before giving up.
-        attempt = 0
-        while !accepted, attempt < 3 {
-            attempt += 1
-            WireLog.shared.event("upload: module rejected (\(text.prefix(60))) — retry \(attempt)/3 in 10 s")
-            try? await Task.sleep(nanoseconds: 10_000_000_000)
-            (accepted, text) = try await postUpload(serial: serial, tgz: tgz)
-            if accepted { return true }
-        }
-        lastUploadReply = text
-        if text.contains("module not found") {
+        if reply == .moduleNotFound {
             WireLog.shared.event("upload: module not registered — provisioning then retrying")
             _ = try? await provision(scanSeconds: 14)
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            let (ok2, text2) = try await postUpload(serial: serial, tgz: tgz)
-            if ok2 { return true }
-            throw UltraBarError.uploadRejected(text2)
+            try await Task.sleep(nanoseconds: 1_500_000_000)
+            (accepted, text) = try await postUpload(serial: serial, tgz: tgz)
+            reply = UploadReply(accepted: accepted, text: text)
         }
-        throw UltraBarError.uploadRejected(text)
+        try Task.checkCancellation()
+        switch reply {
+        case .accepted:
+            return true
+        case .hotspotNoIp:
+            throw UltraBarError.uploadRejected("the CoreBar's link to the module is not up yet (its module hotspot has no IP address). Wait a minute, or detach and re-attach the VivoCube, then publish again")
+        case .cubeOffline(let code):
+            WireLog.shared.event("upload: cube is off Wi-Fi (reply error:\(code)) — not retrying")
+            throw UltraBarError.uploadRejected(text)
+        case .moduleNotFound, .other:
+            throw UltraBarError.uploadRejected(text)
+        }
     }
 
     // MARK: CoreBar big screen (1424×280)

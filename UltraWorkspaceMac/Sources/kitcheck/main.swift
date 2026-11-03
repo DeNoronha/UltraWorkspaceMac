@@ -137,6 +137,18 @@ var failures = 0
 check(CoreBarSession.CubeWiFiState.isConnected(1) && !CoreBarSession.CubeWiFiState.isConnected(3), "cube wifi: 1 = connected, 3 = connecting")
 check(CoreBarSession.CubeWiFiState.label(3) == "still connecting" && CoreBarSession.CubeWiFiState.label(nil) == "not read yet", "cube wifi labels")
 
+// /upload reply classification: only hotspot-no-IP and module-not-found are retried by `upload`.
+do {
+    typealias R = CoreBarSession.UploadReply
+    check(R(accepted: true, text: #"{"state":200,"msg":"ok"}"#) == .accepted, "upload reply: state 200 → accepted")
+    check(R(accepted: false, text: #"{"state":-1,"msg":"hotspotIp ip address is empty"}"#) == .hotspotNoIp, "upload reply: hotspotIp → hotspotNoIp (retried)")
+    check(R(accepted: false, text: #"{"state":-1,"msg":"module not found"}"#) == .moduleNotFound, "upload reply: module not found → provision once")
+    check(R(accepted: false, text: #"{"state":-1,"msg":"reply error:4"}"#) == .cubeOffline(code: 4), "upload reply: reply error:4 → cubeOffline (no retry)")
+    check(R(accepted: false, text: #"{"state":-1,"msg":"reply error:2"}"#) == .cubeOffline(code: 2), "upload reply: reply error:2 → cubeOffline (no retry)")
+    check(R(accepted: false, text: #"{"state":-1,"msg":"reply error:7"}"#) == .other(#"{"state":-1,"msg":"reply error:7"}"#), "upload reply: other reply error → other")
+    check(R(accepted: false, text: "HTTP 503") == .other("HTTP 503"), "upload reply: HTTP failure → other")
+}
+
 // CRC32 known vector
 check(DeployPackager.crc32(Array("123456789".utf8)) == 0xCBF4_3926, "crc32('123456789') == 0xCBF43926")
 
