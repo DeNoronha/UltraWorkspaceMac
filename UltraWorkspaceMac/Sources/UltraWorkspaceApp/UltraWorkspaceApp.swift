@@ -5,6 +5,8 @@ struct UltraWorkspaceApp: App {
     @StateObject private var model = AppModel()
 
     init() {
+        // Scroll bars always visible in this app (per-app override of the system "Show scroll bars" setting).
+        UserDefaults.standard.set("Always", forKey: "AppleShowScrollBars")
         let a = CommandLine.arguments
         if let i = a.firstIndex(of: "--render-weather"), i + 1 < a.count {
             WeatherPreview.run(dir: a[i + 1])

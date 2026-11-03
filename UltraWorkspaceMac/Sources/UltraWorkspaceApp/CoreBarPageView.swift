@@ -171,7 +171,7 @@ struct CoreBarPageView: View {
     // MARK: Disclosures
 
     private var pagesOnBar: some View {
-        Panel {
+        Group {
             if model.corebarPages.isEmpty { Text("Not read yet.").foregroundStyle(.secondary) }
             ForEach(model.corebarPages, id: \.id) { p in
                 HStack {
@@ -188,7 +188,7 @@ struct CoreBarPageView: View {
     }
 
     private var advanced: some View {
-        Panel {
+        Group {
             HStack(spacing: 10) {
                 Button { model.refreshModules() } label: { Label(model.isWorking ? "Looking…" : "Find modules", systemImage: "magnifyingglass") }.disabled(model.isWorking)
                 Button { model.refreshPages() } label: { Label("Re-read pages", systemImage: "arrow.clockwise") }

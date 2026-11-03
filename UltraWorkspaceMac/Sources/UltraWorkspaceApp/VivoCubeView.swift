@@ -160,7 +160,7 @@ struct VivoCubeView: View {
     }
 
     private var maintenance: some View {
-        Panel {
+        Group {
             HStack {
                 Toggle("Screen", isOn: Binding(get: { model.vivoScreenOn ?? true }, set: { model.setCubeScreen(on: $0, serial: module.serial) }))
                     .toggleStyle(.switch)

@@ -22,9 +22,10 @@ struct DeviceStrip: View {
             if let f = model.deviceFault(settings: settings) {
                 HStack(spacing: 10) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                    Text(f.message).font(.callout).fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Button(f.action.title) { f.action.run() }.controlSize(.small)
+                    // No fixedSize here: inside an HStack next to a button it gets measured at zero width,
+                    // reports a mile-high minimum, and the split view grows past the window (2026-11-03).
+                    Text(f.message).font(.callout).frame(maxWidth: .infinity, alignment: .leading)
+                    Button(f.action.title) { f.action.run() }.controlSize(.small).fixedSize()
                 }
                 .padding(8).background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
             }

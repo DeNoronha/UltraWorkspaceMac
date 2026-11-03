@@ -307,8 +307,11 @@ struct ActivityLog: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Activity").font(.headline)
+            // Plain VStack on purpose: a LazyVStack here makes the ScrollView report its whole
+            // content height as minimum on macOS, which pushes the split view taller than the
+            // window and clips the top of every column (seen 2026-11-03).
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 4) {
                     ForEach(model.log) { e in
                         HStack(alignment: .top) {
                             Text(e.time, style: .time).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
@@ -316,7 +319,7 @@ struct ActivityLog: View {
                         }
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
-            }
+            }.frame(minHeight: 0)
         }.padding()
     }
 }
