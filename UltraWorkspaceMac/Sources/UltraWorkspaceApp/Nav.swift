@@ -11,6 +11,7 @@ enum NavItem: Hashable {
     case widgets          // Library
     case people
     case apps
+    case screensavers
     case status           // Health
     case logs
     case settings         // Deckhand

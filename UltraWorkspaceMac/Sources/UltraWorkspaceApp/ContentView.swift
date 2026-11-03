@@ -58,6 +58,7 @@ private struct DetailRouter: View {
             case .widgets: WidgetsView()
             case .people: PeopleView()
             case .apps: AppsView()
+            case .screensavers: ScreensaversView()
             case .settings: SettingsView()
             case .about: AboutView()
             case .status: StatusView()
