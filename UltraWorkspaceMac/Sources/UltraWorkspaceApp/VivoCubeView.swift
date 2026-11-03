@@ -52,12 +52,16 @@ struct VivoCubeView: View {
                 if let img = model.vivoLayerImages[showingLayer] {
                     Image(nsImage: img).resizable().interpolation(.high)
                         .frame(width: 200, height: 200).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        .opacity(model.vivoScreenOn == false ? 0.25 : 1)
+                        .opacity(model.vivoScreenOn == false ? 0.25 : (model.cubePackageStale ? 0.3 : 1))
                 } else {
                     Text(model.vivoLayerImages.isEmpty ? (settings.vivoCards.isEmpty ? "Add a card, then Send to cube." : "Press Send to cube.") : "Card \(showingLayer) is not in the last package.")
                         .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center).padding()
                 }
                 if model.vivoScreenOn == false { Label("Screen off", systemImage: "moon.fill").foregroundStyle(.white) }
+                else if model.cubePackageStale {
+                    Text("Still the previous cards").font(.caption.bold()).foregroundStyle(.white)
+                        .padding(6).background(.orange.opacity(0.85), in: RoundedRectangle(cornerRadius: 6))
+                }
             }
             .frame(width: 220, height: 220)
             .accessibilityLabel("Picture the cube is showing")
@@ -65,14 +69,14 @@ struct VivoCubeView: View {
                 Button { model.stepCube(-1) } label: { Image(systemName: "chevron.left") }.accessibilityLabel("Previous card")
                 Spacer()
                 VStack(spacing: 2) {
-                    Text(model.vivoLayerNames.isEmpty ? "—" : "Card \(showingLayer) of \(model.vivoLayerNames.count)").font(.callout).monospacedDigit()
+                    Text(model.vivoLayerNames.isEmpty ? "—" : (model.cubePackageStale ? "Expected: card " : "Card ") + "\(showingLayer) of \(model.vivoLayerNames.count)").font(.callout).monospacedDigit()
                     Text((showingLayer - 1 < model.vivoLayerNames.count && showingLayer >= 1) ? model.vivoLayerNames[showingLayer - 1] : " ").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button { model.stepCube(1) } label: { Image(systemName: "chevron.right") }.accessibilityLabel("Next card")
             }.disabled(model.vivoLayerNames.count < 2)
             if let st = model.vivoWiFiState, st != 3 {
-                Label("Not on Wi-Fi — may still show an old picture.", systemImage: "wifi.slash").font(.caption).foregroundStyle(.orange)
+                Label(model.cubePackageStale ? "Not on Wi-Fi — the cards you sent never arrived; the cube shows what it had before." : "Not on Wi-Fi — new cards cannot reach it.", systemImage: "wifi.slash").font(.caption).foregroundStyle(.orange)
             }
         }.frame(width: 250)
     }
@@ -199,7 +203,7 @@ struct VivoWiFiSheet: View {
                 SecureField("Password", text: $draft.password)
             }.formStyle(.grouped)
             HStack {
-                Button("Back to the CoreBar hotspot") { draft.ssid = "AndroidAP_7757"; draft.password = "[redacted-hotspot-password]" }.buttonStyle(.link).font(.caption)
+                Button("Back to the CoreBar hotspot") { draft.ssid = AppModel.coreBarHotspot.ssid; draft.password = AppModel.coreBarHotspot.password }.buttonStyle(.link).font(.caption)
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Send to cube") { model.setVivoWiFi(serial: serial, ssid: draft.ssid, password: draft.password); dismiss() }

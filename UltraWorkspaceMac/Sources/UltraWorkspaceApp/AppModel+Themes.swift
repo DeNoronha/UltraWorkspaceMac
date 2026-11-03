@@ -38,6 +38,13 @@ extension AppModel {
             self.cubeProgress.run("apply", note: "about \(Self.vivoSettleSeconds) s")
             try? await Task.sleep(nanoseconds: Self.vivoSettleSeconds * 1_000_000_000)
             if Task.isCancelled { return }
+            if let st = await session.readProperty(serial: serial, propertyId: Proto.Property.wifi) { self.vivoWiFiState = Int(st) }
+            if self.cubeOffline {
+                self.cubeProgress.fail("apply", "The bar accepted the package, but the cube is not on Wi-Fi, so it cannot download it. The cube keeps showing its previous cards. Fix the cube's Wi-Fi (the CoreBar hotspot always works), then send again.")
+                self.say("The cube is not on Wi-Fi — it still shows its previous cards.")
+                self.themeRunning = false; settings.vivoRotationOn = false
+                return
+            }
             self.cubeProgress.done("apply")
             self.cubeProgress.run("show")
             let code = await self.showCubeCard(1, session: session, serial: serial)

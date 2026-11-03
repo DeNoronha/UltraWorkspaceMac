@@ -37,6 +37,9 @@ struct DeviceStrip: View {
     private var showing: Text {
         switch kind {
         case .cube:
+            if model.cubePackageStale {
+                return Text("Cube is off Wi-Fi — still shows its previous cards") + (model.lastCubeSentAt.map { Text(" · sent \($0.formatted(date: .omitted, time: .shortened)), not delivered") } ?? Text(""))
+            }
             if let l = model.vivoLayerShowing {
                 if l >= 1, l <= model.vivoLayerNames.count {
                     return Text("Cube shows card \(l) of \(model.vivoLayerNames.count): \(model.vivoLayerNames[l - 1])") + sent

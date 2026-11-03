@@ -49,8 +49,12 @@ extension AppModel {
                     DoctorAction(title: "Reconnect") { [weak self] in self?.startLink() })
         }
         if let vivo = firstVivoCube {
-            if let st = vivoWiFiState, st != 3 {
-                return ("The cube is not on Wi-Fi, so new cards cannot reach it.",
+            if cubeOffline {
+                let tail = lastCubeSentAt == nil ? "new cards cannot reach it." : "it still shows its previous cards — the ones you sent never arrived."
+                if let w = vivoWiFi[vivo.serial] ?? nil, !w.isCoreBarHotspot {
+                    return ("The cube cannot hold Wi-Fi “\(w.ssid)”, so \(tail)", hotspotAction(serial: vivo.serial))
+                }
+                return ("The cube is not on Wi-Fi, so \(tail)",
                         DoctorAction(title: "Set cube Wi-Fi…") { [weak self] in self?.nav = .vivoCube; self?.showingVivoWiFi = true })
             }
             if vivoScreenOn == false {
@@ -67,6 +71,13 @@ extension AppModel {
                     DoctorAction(title: "Publish page") { [weak self] in self?.publishDeckhandPage(settings: settings) })
         }
         return nil
+    }
+
+    /// One click back to the network that is known to work.
+    func hotspotAction(serial: String) -> DoctorAction {
+        DoctorAction(title: "Use the CoreBar hotspot") { [weak self] in
+            self?.setVivoWiFi(serial: serial, ssid: Self.coreBarHotspot.ssid, password: Self.coreBarHotspot.password)
+        }
     }
 
     func setCubeScreen(on: Bool, serial: String) {
@@ -136,7 +147,7 @@ extension AppModel {
                 let net = w.map { $0.isCoreBarHotspot ? "the CoreBar's hotspot (\($0.ssid))" : "“\($0.ssid)”" } ?? "an unknown network"
                 if st == 3 { add("VivoCube", "Wi-Fi", .ok, "Connected to \(net).") }
                 else if w == nil && st == nil { add("VivoCube", "Wi-Fi", .fail, "The cube did not answer. Is it attached?", DoctorAction(title: "Find modules") { [weak self] in self?.refreshModules() }) }
-                else { add("VivoCube", "Wi-Fi", .warn, "Set to \(net) but not connected\(st.map { " (state \($0))" } ?? ""). New cards cannot reach the cube until it is.", DoctorAction(title: "Set cube Wi-Fi…") { [weak self] in self?.nav = .vivoCube; self?.showingVivoWiFi = true }) }
+                else { add("VivoCube", "Wi-Fi", .fail, "Set to \(net) but not connected\(st.map { " (state \($0))" } ?? ""). New cards cannot reach the cube until it is.", (w?.isCoreBarHotspot ?? true) ? DoctorAction(title: "Set cube Wi-Fi…") { [weak self] in self?.nav = .vivoCube; self?.showingVivoWiFi = true } : hotspotAction(serial: vivo.serial)) }
                 switch vivoScreenOn {
                 case .some(true): add("VivoCube", "Screen", .ok, "On")
                 case .some(false): add("VivoCube", "Screen", .fail, "Off — it stays off until you turn it on.", DoctorAction(title: "Turn on") { [weak self] in self?.setCubeScreen(on: true, serial: vivo.serial) })
@@ -149,6 +160,7 @@ extension AppModel {
                 } else { add("VivoCube", "Showing", .warn, "Could not read which card the cube is on.") }
                 let last = CoreBarSession.UploadDiag.shared.last
                 if last.isEmpty { add("VivoCube", "Last upload", .info, "Nothing sent in this session.") }
+                else if last.hasPrefix("accepted"), cubeOffline { add("VivoCube", "Last upload", .fail, (lastCubeSentAt.map { "The bar accepted it at \($0.formatted(date: .omitted, time: .shortened))" } ?? "The bar accepted it") + ", but the cube is not on Wi-Fi, so it never downloaded it. The glass still shows the previous cards.", (w?.isCoreBarHotspot ?? true) ? DoctorAction(title: "Set cube Wi-Fi…") { [weak self] in self?.nav = .vivoCube; self?.showingVivoWiFi = true } : hotspotAction(serial: vivo.serial)) }
                 else if last.hasPrefix("accepted") { add("VivoCube", "Last upload", .ok, (lastCubeSentAt.map { "Accepted \($0.formatted(date: .omitted, time: .shortened))" } ?? "Accepted") + " — the cube applies it about 10 s later.") }
                 else { add("VivoCube", "Last upload", .fail, FriendlyError.text(last), DoctorAction(title: "Send again") { [weak self] in self?.sendToCube(settings: settings) }) }
                 let mode: String = { switch settings.vivoSwitchMode { case .stay: return "stays on one card"; case .timed: return themeRunning ? "switching every \(settings.vivoSeconds) s" : "set to switch every \(settings.vivoSeconds) s, but not running (send to the cube again)"; case .button: return "switches only with the DotKey / bar button" } }()
