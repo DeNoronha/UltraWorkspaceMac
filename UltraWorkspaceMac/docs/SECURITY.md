@@ -38,7 +38,7 @@ Outbound connections the app makes (nothing else; no telemetry, no account):
 - `ipwho.is` — IP geolocation, only when macOS Location is unavailable and no manual city is set.
 - `api.coingecko.com` — BTC/ETH prices (Crypto widget).
 
-Local data: the pairing token is a `0600` file under `~/Library/Application Support/UltraWorkspaceMac/tokens/`, the module cache under `.../endpoints/<serial>.json`; the wire log shown in **Logs** has the token redacted. People (contacts) are stored locally and only open deep links (Teams / FaceTime / Mail).
+Local data: the pairing token is a `0600` file under `~/Library/Application Support/UltraWorkspaceMac/tokens/`, the module cache under `.../endpoints/<serial>.json`; the wire log shown in **Logs** has the pairing token, the cube Wi-Fi password and the AccuWeather key redacted, and is capped at 5 MB (versions before 2026-11-03 logged the token in the AUTH frame in clear — the app scrubs an old log once). People (contacts) are stored locally and only open deep links (Teams / FaceTime / Mail).
 
 ## Mock CoreBar
 

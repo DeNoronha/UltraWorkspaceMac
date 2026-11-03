@@ -113,7 +113,7 @@ Save contacts; each gets one-click **Teams chat / call**, **FaceTime**, **Mail**
 Asks the bar and its modules what they are doing (and again every 30 seconds while open): connection, pages on the bar, the cube's Wi-Fi, screen and current card, the last upload result, SenseCube readings, the KnobKey link, modules seen before but missing now, and whether weather resolves. Problems come first, each with its one button. **Copy report** puts everything — plus your card lists and the last log lines — on the clipboard as text: paste that instead of taking a photo of the device.
 
 ### Logs
-Every message between this Mac and the bar, with the pairing key redacted.
+Every message between this Mac and the bar, with the pairing key, the cube Wi-Fi password and the weather key redacted; the file is capped at 5 MB.
 
 ### Settings (sidebar → Deckhand → Settings)
 Name, serial and address of the bar; the connection and USB-port guidance; what can only be set on the bar itself (time & time zone, Wi-Fi, Bluetooth).

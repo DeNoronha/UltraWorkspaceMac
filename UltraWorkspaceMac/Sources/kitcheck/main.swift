@@ -102,6 +102,20 @@ var failures = 0
 // CRC32 known vector
 check(DeployPackager.crc32(Array("123456789".utf8)) == 0xCBF4_3926, "crc32('123456789') == 0xCBF43926")
 
+// WireLog redaction: token, AUTH data, Wi-Fi config hex (property 7), apiKey
+do {
+    let auth = WireLog.redact(#"{"act":100,"data":"SECRETTOKEN123","id":"x"}"#)
+    check(!auth.contains("SECRETTOKEN123") && auth.contains("<redacted>"), "redact: AUTH frame token (act 100 data)")
+    let w = WireLog.redact(#"{"act":30201,"data":{"deviceId":256,"propertyId":7,"serialNo":"0000","value":"0D486F7573650B50617373"},"id":"y"}"#)
+    check(!w.contains("0D486F7573650B50617373"), "redact: Wi-Fi config write (property 7 value)")
+    let r = WireLog.redact(#"{"act":30200,"code":200,"data":{"deviceId":256,"propertyId":7,"result":"0D486F7573650B50617373","serialNo":"0000"}}"#)
+    check(!r.contains("0D486F7573650B50617373"), "redact: Wi-Fi config read (property 7 result)")
+    let k = WireLog.redact(#"{"act":1010,"data":{"config":{"apiKey":"ABCDEF","metric":true},"packageName":"com.ultrabar.weather"}}"#)
+    check(!k.contains("ABCDEF"), "redact: AccuWeather apiKey (act 1010)")
+    let ok = WireLog.redact(#"{"act":30200,"code":200,"data":{"deviceId":256,"propertyId":6,"result":3,"serialNo":"0000"}}"#)
+    check(ok.contains("\"result\":3"), "redact: leaves other properties alone")
+}
+
 // DeviceImage opaque header
 do {
     let w = 4, h = 2
