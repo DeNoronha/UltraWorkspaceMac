@@ -124,7 +124,7 @@ final class AppSettings: ObservableObject {
 
     // MARK: VivoCube cards (ordered, max 6)
 
-    var vivoCards: [Theme] { vivoThemes.compactMap { Theme(rawValue: $0) }.filter { !$0.isHiddenCryptoSlot } }
+    var vivoCards: [Theme] { vivoThemes.compactMap { Theme(rawValue: $0) }.filter { !$0.isHiddenCryptoSlot && !$0.isLiveFeed } }
     /// Coins configured for the Crypto card (non-empty slots, in order).
     var cryptoCoinsConfigured: [String] { cryptoCoins.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }
     /// The cards actually sent to the cube: the list with "Crypto" expanded to one card per coin (max 6 in total).

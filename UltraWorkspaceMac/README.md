@@ -40,12 +40,11 @@ Deckhand talks to the CoreBar over **Wi-Fi / your LAN**, not over USB; the cable
 
 **VivoCube widgets**
 Each widget renders a 240 × 240 image on the Mac, which is encoded to the module pixel format and pushed over HTTP. Widgets can be published one at a time or rotated at a configurable interval (15 s – 3 min). Rotation follows the vendor's own model: all ticked widgets (max 6) go into **one** multi-layer package (layer *n* → widget `100+n`), uploaded once; after a 10 s settle the app switches layers by writing property 9 (`(layer<<16)|widget`) instead of re-flashing the cube each step, and re-uploads contents only every few minutes. The VivoCube page also has **Recover display** (screen on + layer 1 / widget 101, for the CoreBar's cached-state black screen) and a **Panel size test…** menu (240 … 480 px test patterns to measure the real panel). All 13 widgets ship today (`Theme.swift`):
-- **Weather & time** — Open-Meteo (free, no API key). Location fallback order: macOS Location → the manual city/coordinates you entered → IP geolocation (ipwho.is).
+- **Weather** — Open-Meteo (free, no API key); current conditions only, no clock (a cube picture is refreshed every 5 minutes at most, so a clock would be stale). Location fallback order: macOS Location → the manual city/coordinates you entered → IP geolocation (ipwho.is).
 - **Music (album art)** — album art plus title/artist from Music.app.
-- **Claude Code monitor** — tokens used today and active sessions, read from `~/.claude`.
-- **CPU & memory**, **Network**, **Disk I/O**, **Top CPU**, **Uptime** (with load average).
-- **Battery & power**, **Storage**.
-- **World clock** (Amsterdam / New York / Tokyo), **Calendar** (next events; needs Calendar access), **Crypto ticker** (BTC/ETH via CoinGecko, no API key).
+- **Claude Code monitor** — tokens today, plan, % of your daily budget, sessions, and sessions waiting for input, read from `~/.claude`.
+- **Crypto** (up to five coins, one card each, today's chart via CoinGecko), **Calendar** (next events, per-calendar colours; needs Calendar access), **Date**, **Picture**.
+- Live readings (CPU, memory, network, storage, battery, disk I/O, top CPU, uptime) and running clocks (clock, world clock) are **not offered for the cube** since 2026-11-03: the cube only receives a picture every 5 minutes at most, while the bar draws its own live versions of CPU, memory, network, storage, clock and world clock. Battery, disk I/O, top CPU and uptime have no bar card, so they are gone.
 
 **CoreBar big screen (1424 × 280)**
 - **Live link (Mac agent)** — a persistent connection answers the CoreBar's own questions (CPU, memory, storage, network, volume, PC_CONTROL button presses) so the device's native cards and KnobKey → volume work; see the status bar. Device-first: the CoreBar renders, the Mac supplies Mac-only data.

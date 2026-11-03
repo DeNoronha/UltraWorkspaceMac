@@ -59,13 +59,16 @@ enum WeatherCard {
             draw(condStr, H*0.13, .medium, dim, CGRect(x: W*0.63, y: H*0.24, width: W*0.35, height: H*0.2), align: .right)
             draw(place, H*0.12, .regular, dim, CGRect(x: W*0.63, y: H*0.08, width: W*0.35, height: H*0.18), align: .right)
         } else {
-            // VivoCube 240×240: stacked.
-            // Rects are font-height (≈1.25×) so the time's descenders never reach the date line.
-            draw(timeStr, W*0.28, .bold, white, CGRect(x: 0, y: H*0.59, width: W, height: W*0.35), align: .center)
-            draw(dateStr, W*0.095, .medium, dim, CGRect(x: 0, y: H*0.50, width: W, height: W*0.12), align: .center)
-            drawIcon(iconName, in: CGRect(x: W*0.5 - H*0.115, y: H*0.275, width: H*0.23, height: H*0.23), ctx: ctx)
-            draw(tempStr, W*0.16, .bold, white, CGRect(x: 0, y: H*0.105, width: W, height: W*0.20), align: .center)
-            draw(condStr, W*0.08, .regular, dim, CGRect(x: 0, y: H*0.015, width: W, height: W*0.10), align: .center)
+            // VivoCube 240×240 (and the bar's clock-card cover): weather only — no clock, because
+            // the cube gets a new picture every 5 minutes at most and a stale time is worse than none.
+            draw(place, W*0.085, .medium, dim, CGRect(x: 0, y: H*0.84, width: W, height: W*0.11), align: .center)
+            drawIcon(iconName, in: CGRect(x: W*0.5 - H*0.19, y: H*0.44, width: H*0.38, height: H*0.38), ctx: ctx)
+            draw(tempStr, W*0.26, .bold, white, CGRect(x: 0, y: H*0.11, width: W, height: W*0.33), align: .center)
+            draw(condStr, W*0.085, .regular, dim, CGRect(x: 0, y: H*0.025, width: W, height: W*0.11), align: .center)
+            if let n = now, let hum = n.humidity, let wind = n.windSpeed {
+                let extra = "\(hum)%  ·  \(Int(wind.rounded())) \(n.windSuffix)"
+                draw(extra, W*0.06, .regular, dim, CGRect(x: 0, y: H*0.385, width: W, height: W*0.08), align: .center)
+            }
         }
 
         NSGraphicsContext.restoreGraphicsState()

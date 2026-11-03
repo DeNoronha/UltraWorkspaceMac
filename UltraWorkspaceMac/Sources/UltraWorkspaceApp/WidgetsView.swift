@@ -13,7 +13,7 @@ struct WidgetsView: View {
     @StateObject private var ui = UI()
 
     /// Cube cards whose numbers change by the second on the Mac but reach the cube only as a snapshot.
-    private static let snapshotCards: Set<Theme> = [.cpu, .network, .claude, .diskio, .topcpu, .uptime, .battery]
+    private static let snapshotCards: Set<Theme> = [.claude]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,7 +30,7 @@ struct WidgetsView: View {
                                 if settings.vivoCards.contains(t) { Image(systemName: "circle.circle").font(.caption).foregroundStyle(.secondary).help("In the cube's card list") }
                             }.tag(Item.cube(t))
                         }
-                    } header: { Text("For the VivoCube") } footer: { Text("Pictures drawn by this Mac, 240 × 240, re-sent every 5 minutes at most.").font(.caption).foregroundStyle(.secondary) }
+                    } header: { Text("For the VivoCube") } footer: { Text("Pictures drawn by this Mac, 240 × 240, re-sent every 5 minutes at most — so no live readings or clocks here; the bar has those.").font(.caption).foregroundStyle(.secondary) }
                     Section {
                         ForEach(AppSettings.allCoreCards) { c in
                             HStack {
@@ -134,7 +134,7 @@ struct WidgetsView: View {
 
     private func blurb(_ t: Theme) -> String {
         switch t {
-        case .weather: return "Live weather and clock via Open-Meteo — free, no key."
+        case .weather: return "Current weather via Open-Meteo — free, no key. No clock on purpose: the cube gets a new picture every 5 minutes at most."
         case .music: return "What Music is playing, with album art."
         case .cpu: return "CPU and memory use of this Mac."
         case .network: return "Download and upload speed of this Mac."

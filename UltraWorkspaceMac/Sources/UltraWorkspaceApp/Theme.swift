@@ -9,12 +9,16 @@ enum Theme: String, CaseIterable, Codable, Identifiable {
 
     /// Cards offered in the library / "Add a card". The extra crypto slots are internal:
     /// one "Crypto" entry expands to one card per coin at send time.
-    static var library: [Theme] { allCases.filter { !$0.isHiddenCryptoSlot } }
+    static var library: [Theme] { allCases.filter { !$0.isHiddenCryptoSlot && !$0.isLiveFeed } }
+    /// Cards whose value is a live reading (CPU, network, …) or a running clock. The cube only
+    /// gets a new picture every 5 minutes at most, so these are shown stale there; the bar draws
+    /// its own live versions. Not offered for the cube since 2026-11-03.
+    var isLiveFeed: Bool { [.cpu, .network, .battery, .disk, .worldclock, .diskio, .topcpu, .uptime, .clock].contains(self) }
     var isHiddenCryptoSlot: Bool { [.crypto2, .crypto3, .crypto4, .crypto5].contains(self) }
 
     var title: String {
         switch self {
-        case .weather: return "Weather & time"
+        case .weather: return "Weather"
         case .music: return "Music (album art)"
         case .claude: return "Claude Code monitor"
         case .cpu: return "CPU & memory"

@@ -101,9 +101,9 @@ Live **temperature**, **humidity** and **light**, read every 5 seconds while the
 What each control does, as it is bound today: knob **turn → Mac volume**, **press → mute**; DotKey **key 1 / 2 → cube card 1 / 2** (switched on the bar itself), **key 3 → next cube card**, **hold key 3 → Standard page**. These bindings are part of the CoreBar page and are active while that page is on the bar; publish it once to activate them. Changing them is planned.
 
 ### Widgets
-Two sections: **For the VivoCube** (pictures Deckhand draws; cards whose numbers change by the second carry a "snapshot" tag because the cube gets a new picture every 5 minutes at most) and **For the CoreBar** (cards the bar draws itself and updates live; add them to the Deckhand page from here or from the CoreBar page). The cube cards Deckhand can draw, with a preview and settings: **Weather & time**, **Music (album art)**, **Claude Code monitor**, **CPU & memory**, **Network**, **Battery & power**, **Storage**, **World clock**, **Crypto ticker**, **Calendar**, **Disk I/O**, **Top CPU**, **Uptime** and **Picture** (your own image). **Add to the cube** puts the selected card in the cube's list.
+Two sections: **For the VivoCube** (pictures Deckhand draws — only cards that stay valid for 5 minutes, because the cube gets a new picture every 5 minutes at most; live readings and clocks are deliberately not offered there) and **For the CoreBar** (cards the bar draws itself and updates live; add them to the Deckhand page from here or from the CoreBar page). The cube cards Deckhand can draw, with a preview and settings: **Weather & time**, **Music (album art)**, **Claude Code monitor**, **CPU & memory**, **Network**, **Battery & power**, **Storage**, **World clock**, **Crypto ticker**, **Calendar**, **Disk I/O**, **Top CPU**, **Uptime** and **Picture** (your own image). **Add to the cube** puts the selected card in the cube's list.
 
-- **Weather & time** — location (**Same as this Mac** or **Manual**), units and the 24-hour clock. See section 6.
+- **Weather** — location (**Same as this Mac** or **Manual**) and units; current conditions only, no clock. See section 6.
 - **Music** — play/pause, previous, next and volume for Apple Music.
 
 ### Two very different screens
@@ -130,7 +130,7 @@ Name, serial and address of the bar; the connection and USB-port guidance; what 
 
 ## 6. Weather
 
-The weather widget uses **Open-Meteo** (free, no API key). Set your location in **Widgets → Weather & time**:
+The weather widget uses **Open-Meteo** (free, no API key). Set your location in **Widgets → Weather**:
 
 - **Same as this Mac** uses macOS Location (macOS will ask for permission). If Location access isn't granted, the app falls back to the manual city if you entered one, and otherwise to approximate **IP geolocation** (ipwho.is) so the widget still works.
 - **Manual** takes a city name, or latitude/longitude for an exact spot.
@@ -152,7 +152,7 @@ This is independent of the CoreBar's own built-in AccuWeather widget, which need
 - **The Deckhand page shows no picture on the clock card** — press **Refresh cover only** (re-uploads `deckhand/cover.png`); if the official app deployed in between, its Deploy deleted Deckhand's images — publish the page again. There is no error message because the CoreBar does not acknowledge previews.
 - **My CoreBar images / pages disappeared** — most likely the official UltraWorkSpace app deployed in between; it erases other apps' files. Re-publish from Deckhand.
 - **CoreBar clock wrong** — set time/timezone on the CoreBar itself (it uses NTP); the Mac app can't push time.
-- **Weather shows the wrong place** — allow Location access, or set a manual city in **Widgets → Weather & time**.
+- **Weather shows the wrong place** — allow Location access, or set a manual city in **Widgets → Weather**.
 
 ---
 
