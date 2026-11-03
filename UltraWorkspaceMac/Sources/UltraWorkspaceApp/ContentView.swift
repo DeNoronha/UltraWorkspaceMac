@@ -264,10 +264,11 @@ struct ProgressRow: View {
     let progress: StepProgress
     let lastAt: Date?
     let idle: String
+    var never: String = "Not sent yet."
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if progress.isEmpty || (!progress.isRunning && progress.failure == nil && progress.succeeded && lastAt != nil && !recent) {
-                Text(lastAt.map { "\(idle) \($0.formatted(date: .omitted, time: .shortened)) ✓" } ?? "Not sent yet.").font(.caption).foregroundStyle(.secondary)
+                Text(lastAt.map { "\(idle) \($0.formatted(date: .omitted, time: .shortened)) ✓" } ?? never).font(.caption).foregroundStyle(.secondary)
             } else {
                 HStack(spacing: 10) {
                     ForEach(progress.steps) { st in

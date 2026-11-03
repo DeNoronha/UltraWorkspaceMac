@@ -27,7 +27,7 @@ struct CoreBarPageView: View {
                             .buttonStyle(.borderedProminent).controlSize(.large)
                             .keyboardShortcut(.return, modifiers: .command)
                             .disabled(model.isWorking || settings.coreCards.isEmpty)
-                        ProgressRow(progress: model.pageProgress, lastAt: model.lastPagePublishedAt, idle: "Published").padding(.top, 6)
+                        ProgressRow(progress: model.pageProgress, lastAt: model.lastPagePublishedAt, idle: "Published", never: settings.deckhandPagePublished ? "Published before this session." : "Not sent yet.").padding(.top, 6)
                     }
                     DisclosureGroup(isExpanded: $ui.pages) { pagesOnBar } label: { Text("Pages on the bar").font(.headline) }
                     DisclosureGroup(isExpanded: $ui.advanced) { advanced } label: { Text("Advanced").font(.headline) }
@@ -55,9 +55,9 @@ struct CoreBarPageView: View {
     @ViewBuilder private var pagePicker: some View {
         if !model.corebarPages.isEmpty {
             Picker("Showing", selection: Binding(get: { model.currentPageId ?? "" }, set: { if !$0.isEmpty { model.switchPage(id: $0) } })) {
-                if model.currentPageId == nil { Text("Unknown").tag("") }
                 ForEach(model.corebarPages, id: \.id) { Text($0.name).tag($0.id) }
             }.pickerStyle(.segmented).frame(maxWidth: 320)
+            .help(model.currentPageId == nil ? "The bar does not report its page; pick one to switch." : "Switch the page on the bar")
         }
     }
 

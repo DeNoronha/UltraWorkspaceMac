@@ -17,7 +17,7 @@ struct WidgetsView: View {
                         HStack {
                             Label(t.title, systemImage: t.icon)
                             Spacer()
-                            if settings.vivoCards.contains(t) { Image(systemName: "circle.circle").font(.caption).foregroundStyle(.secondary).help("On the cube") }
+                            if settings.vivoCards.contains(t) { Image(systemName: "circle.circle").font(.caption).foregroundStyle(.secondary).help("In the cube's card list") }
                         }.tag(t)
                     }
                 }
@@ -39,7 +39,11 @@ struct WidgetsView: View {
                                 Text(blurb(model.selectedAddon)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                                 HStack {
                                     if settings.vivoCards.contains(model.selectedAddon) {
-                                        Label("On the cube", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                                        if model.lastCubeSentAt != nil, !model.cubeOffline, CoreBarSession.UploadDiag.shared.last.hasPrefix("accepted") {
+                                            Label("On the cube", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                                        } else {
+                                            Label(model.lastCubeSentAt == nil ? "In the cube's list — not sent yet" : "In the cube's list — the last send did not arrive", systemImage: "circle.circle").foregroundStyle(.orange)
+                                        }
                                         Button("Remove") { settings.removeVivoCard(model.selectedAddon) }
                                     } else {
                                         Button { if model.selectedAddon == .picture, settings.vivoPicturePath.isEmpty { Self.choosePicture(settings) }; settings.addVivoCard(model.selectedAddon); model.requestCardPermissions(model.selectedAddon) } label: { Label("Add to the cube", systemImage: "plus") }
