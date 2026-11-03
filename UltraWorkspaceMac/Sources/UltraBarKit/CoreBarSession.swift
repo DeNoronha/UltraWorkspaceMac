@@ -557,7 +557,7 @@ public struct CoreBarSession: Sendable {
     public func listApps() async throws -> [AppInfo] {
         let client = try await authedClient()
         defer { Task { await client.close() } }
-        guard let line = try await client.request(act: 1000, dataJSON: Data("\"ALL\"".utf8), timeout: 10),
+        guard let line = try await client.request(act: 1000, dataJSON: Data("\"ALL\"".utf8), timeout: 10),  // LineOS 1.0.9.9 answers {appName, packageName} only, "ALL" or {}
               let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
             throw UltraBarError.protocolError("no reply to GET_APP_LIST (1000)")
         }

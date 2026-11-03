@@ -33,10 +33,10 @@ Deckhand pins the device cert on first pairing and never sends the token on a ce
 
 Outbound connections the app makes (nothing else; no telemetry, no account):
 
-- **The CoreBar on your LAN** — UDP 5319 (discovery, broadcast or unicast for Add-by-IP), TCP 7431 (TLS control), TCP 8080 (plain-HTTP upload of widget images and the big-screen zip).
+- **The CoreBar on your LAN** — UDP 5319 (discovery, broadcast or unicast for Connect by address…), TCP 7431 (TLS control; one connection per request plus one persistent link that answers the bar's pushes), TCP 8080 (plain-HTTP upload of cube packages and the page-asset zip).
 - `api.open-meteo.com`, `geocoding-api.open-meteo.com` — weather + city lookup (Weather widget).
 - `ipwho.is` — IP geolocation, only when macOS Location is unavailable and no manual city is set.
-- `api.coingecko.com` — BTC/ETH prices (Crypto widget).
+- `api.coingecko.com` — prices and today's chart for the coins you pick, up to five (Crypto widget).
 
 Local data: the pairing token is a `0600` file under `~/Library/Application Support/UltraWorkspaceMac/tokens/`, the module cache under `.../endpoints/<serial>.json`; the wire log shown in **Logs** has the pairing token, the cube Wi-Fi password and the AccuWeather key redacted, and is capped at 5 MB (versions before 2026-11-03 logged the token in the AUTH frame in clear — the app scrubs an old log once). People (contacts) are stored locally and only open deep links (Teams / FaceTime / Mail).
 

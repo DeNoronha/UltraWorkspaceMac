@@ -7,7 +7,7 @@ Deckhand is an independent, community macOS app for Sanytron **UltraBar X** hard
 ## 1. Install
 
 1. Open **Deckhand.dmg** and drag **Deckhand** onto the **Applications** folder.
-2. The first launch is blocked by macOS because the app is ad-hoc signed, not signed with a paid Apple Developer certificate. To open it the first time:
+2. A notarized build (the DMG's "Read Me First" says so) opens like any other app. An ad-hoc-signed build — the first prerelease, or one you built yourself without a Developer ID — is blocked by macOS on the first launch. To open it the first time:
    - In **Applications**, **right-click** (Control-click) **Deckhand** → **Open** → **Open** in the dialog.
    - If that doesn't offer "Open": **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Deckhand.
    - You only do this once.
@@ -67,7 +67,7 @@ The pairing key is stored in a protected, user-only file in Application Support,
 
 One window, a sidebar on the left, grouped by what you want to change:
 
-- **Screens** — **CoreBar** (the strip on the bar) and **VivoCube** (the small round module).
+- **Screens** — **CoreBar** (the strip on the bar) and **VivoCube** (the small square screen module).
 - **Controls** — **KnobKey**, **DotKey**: what the knob and keys do.
 - **Sensors** — **SenseCube**.
 - **Library** — **Widgets** (the cards Deckhand can draw) and **People**.
@@ -78,7 +78,7 @@ Every device page starts with a **status strip**: whether Deckhand is connected 
 ### CoreBar
 The bar's big screen shows a page: a row of the bar's own cards. About four fit; more scroll sideways. There is no full-screen picture — Deckhand's own picture (weather & date, free, refreshed hourly) is the **Clock** card's picture.
 
-- **Preview** — drawn from your card list; dimmed cards are the ones that scroll into view.
+- **Preview** — drawn from your card list, one screenful (four cards) at a time; ◀ ▶ step through the screenfuls the bar scrolls sideways through. It is not read back from the bar.
 - **Cards on the bar** — drag to reorder, ✕ to remove, **Add a card…** below the list. ⌁ marks cards fed live by this Mac (CPU, memory, storage, network, the two buttons): they update only while Deckhand runs; the others keep running when the Mac is off.
 - **Weather (bar's own)** is drawn by the bar from **AccuWeather, which is not free** (14-day trial, paid afterwards). Press **Key…** on that row to paste the key; it is sent to the bar with the next publish. Deckhand's own weather on the Clock card costs nothing.
 - **Publish page** (⌘↩) — draws the clock picture, uploads the button icons, writes the pages and shows the Deckhand page; the steps are shown under the button. Deckhand asks for confirmation only when it matters: the first time, or when the bar has pages made in the official app (those would be removed — the bar cannot send pages back). The knob and keys get their bindings with every publish (see Controls).
@@ -101,7 +101,7 @@ Live **temperature**, **humidity** and **light**, read every 5 seconds while the
 What each control does, as it is bound today: knob **turn → Mac volume**, **press → mute**; DotKey **key 1 / 2 → cube card 1 / 2** (switched on the bar itself), **key 3 → next cube card**, **hold key 3 → Standard page**. These bindings are part of the CoreBar page and are active while that page is on the bar; publish it once to activate them. Changing them is planned.
 
 ### Widgets
-Two sections: **For the VivoCube** (pictures Deckhand draws — only cards that stay valid for 5 minutes, because the cube gets a new picture every 5 minutes at most; live readings and clocks are deliberately not offered there) and **For the CoreBar** (cards the bar draws itself and updates live; add them to the Deckhand page from here or from the CoreBar page). The cube cards Deckhand can draw, with a preview and settings: **Weather**, **Music (album art)**, **Claude Code monitor**, **Crypto**, **Calendar**, **Date** and **Picture** (your own image). **Add to the cube** puts the selected card in the cube's list. A third section, **Apps on the bar**, lists one **Open <app>** card per app installed on the bar (Sonos, UltraNotes, UltraBar Radio, …): on the page it is the app's icon, and tapping it opens that app on the bar. The list is read from the bar when Deckhand connects and after **Re-read pages**; Home Assistant never appears in it (the bar keeps it out of the app list).
+Two sections: **For the VivoCube** (pictures Deckhand draws — only cards that stay valid for 5 minutes, because the cube gets a new picture every 5 minutes at most; live readings and clocks are deliberately not offered there) and **For the CoreBar** (cards the bar draws itself and updates live; add them to the Deckhand page from here or from the CoreBar page). The cube cards Deckhand can draw, with a preview and settings: **Weather**, **Music (album art)**, **Claude Code monitor**, **Crypto**, **Calendar**, **Date** and **Picture** (your own image). **Add to the cube** puts the selected card in the cube's list. A third section, **Apps on the bar**, lists one **Open <app>** card per app installed on the bar (Sonos, UltraNotes, UltraBar Radio, …): on the page it is the app's own icon, and tapping it opens that app on the bar — this works on the hardware (confirmed 2026-11-03). The list is read from the bar when Deckhand connects and after **Re-read pages**; Home Assistant never appears in it (the bar keeps it out of the app list).
 
 - **Weather** — location (**Same as this Mac** or **Manual**) and units; current conditions only, no clock. See section 6.
 - **Music** — play/pause, previous, next and volume for Apple Music.
@@ -141,7 +141,7 @@ This is independent of the CoreBar's own built-in AccuWeather widget, which need
 
 ## 7. Troubleshooting
 
-- **"No CoreBars found"** — CoreBar and Mac must be on the same Wi-Fi; grant **Local Network** permission (System Settings → Privacy & Security → Local Network → Deckhand); press Scan again. If broadcast is blocked, use **Add by IP…**.
+- **"No CoreBars found"** — CoreBar and Mac must be on the same Wi-Fi; grant **Local Network** permission (System Settings → Privacy & Security → Local Network → Deckhand); press **Look again**. If broadcast is blocked, use **Connect by address…**.
 - **App won't open (unidentified developer)** — right-click → Open (see Install), once.
 - **A module is missing after a scan** — tap the CoreBar screen to wake everything, make sure the module is attached and powered, then press **Find modules** (see section 4).
 - **"Module not accepted" on an image push** — the app auto-provisions and retries; if it still fails, re-scan modules first.
@@ -158,6 +158,6 @@ This is independent of the CoreBar's own built-in AccuWeather widget, which need
 
 ## 8. What's next (roadmap)
 
-Persistent pages on the CoreBar's big screen (the CoreBar's own cards configured from the Mac, with Deckhand's image as the clock card's picture), KnobKey → volume and DotKey → Mac actions (both need the profile-write path and a permanently open connection), presence-based wake, module OTA firmware updates, measuring the VivoCube's real panel size, a notarized release, and a Stream-Deck-style widget marketplace. This section can lag behind the code; the current status is in `docs/ROADMAP.md` in the repository.
+Choosing your own KnobKey and DotKey bindings (today they are fixed), presence-based wake, module OTA firmware updates, installing apps on the bar from Deckhand (today only from the bar's own Marketplace or the `kitcheck app` tool), a notarized release, and a Stream-Deck-style widget marketplace. This section can lag behind the code; the current status is in `docs/ROADMAP.md` in the repository.
 
 Support: this is community software — file issues at https://github.com/DeNoronha/UltraWorkspaceMac/issues.

@@ -1,6 +1,6 @@
 # Releasing Deckhand
 
-Distribution is via **GitHub Releases** (a DMG + the source). Until a Developer ID is in place, builds are ad-hoc-signed and users must right-click → Open once; after notarization that warning goes away.
+Distribution is via **GitHub Releases** (a DMG + the source). `make-app.sh` signs with the Developer ID Application identity when one is in the keychain (hardened runtime, timestamp) and `make-dmg.sh` then notarizes and staples the DMG; on a machine without the identity the build is ad-hoc-signed and users must right-click → Open once.
 
 ## Release ONLY to origin — never to upstream
 
@@ -25,17 +25,16 @@ git push origin "v$VER"              # origin only
 gh release create "v$VER" dist/Deckhand.dmg \
   --repo DeNoronha/UltraWorkspaceMac \
   --title "Deckhand v$VER" \
-  --notes "First public build. Ad-hoc signed: right-click → Open on first launch."
+  --notes "Signed with a Developer ID and notarized — opens without a Gatekeeper warning."
 ```
 
-## Signing & notarization (once the Apple Developer ID for DNC is active)
+## Signing & notarization (set up 2026-11-01, automatic in the scripts)
 
-1. In `packaging/make-app.sh`, replace the ad-hoc `codesign --sign -` with the Developer ID Application identity, with hardened runtime:
-   `codesign --force --deep --options runtime --sign "Developer ID Application: <DNC name> (<TEAMID>)" "$APP"`
-2. Notarize the DMG and staple:
-   `xcrun notarytool submit dist/Deckhand.dmg --keychain-profile <profile> --wait`
-   `xcrun stapler staple dist/Deckhand.dmg`
-3. Then releases install with no Gatekeeper warning.
+1. `packaging/make-app.sh` picks the first `Developer ID Application: …` identity from the keychain (`security find-identity`) and signs with `--options runtime --timestamp`; override with `DECKHAND_SIGN_IDENTITY="Developer ID Application: …"`, or force ad-hoc with `DECKHAND_SIGN_IDENTITY=-`.
+2. `packaging/make-dmg.sh` signs the DMG with the same identity and, when notary credentials exist under the keychain profile `deckhand-notary` (override with `DECKHAND_NOTARY_PROFILE`), runs `xcrun notarytool submit --wait`, staples the ticket and checks it with `spctl`. One-time setup: `xcrun notarytool store-credentials "deckhand-notary" --apple-id <apple-id> --team-id <TEAMID> --password <app-specific-password>`.
+3. Releases built this way install with no Gatekeeper warning; the DMG's "Read Me First" says so. Without the identity or the credentials the script says why it did not notarize.
+
+Gotcha in these scripts: never pipe `codesign … | grep -q` under `pipefail` — SIGPIPE makes codesign exit 141 and the test silently fails.
 
 Privacy usage descriptions to keep in mind for a signed build: local network (CoreBar discovery/control), Apple Events / Automation (Music), Calendar, Location (weather). These are the `NS…UsageDescription` strings declared in `packaging/Info.plist`; a Developer-ID (non-sandboxed) build needs no extra entitlements beyond the hardened runtime, but a future Mac App Store build would need sandbox entitlements (outgoing network, Apple Events, Calendar), and sandboxing may restrict local-network + Process use.
 

@@ -5,7 +5,7 @@ A frustrated UltraBar X backer ("The Developer Incognito") — a senior develope
 This is the same tool that originally inspired this project. He and Deckhand are complementary:
 
 - **He**: Windows client + community momentum + an about-to-exist open-source home. Same end goal — "replace all of the vendor's software."
-- **Us (Deckhand)**: a working, feature-rich **macOS** client, plus a deep reverse-engineering of the local protocol (see PROTOCOL.md), 13 widgets, the CoreBar big-screen preview path, SenseCube reads, input bindings (understood, not yet implemented), and a security review (SECURITY.md).
+- **Us (Deckhand)**: a working, feature-rich **macOS** client, plus a deep reverse-engineering of the local protocol (see PROTOCOL.md), VivoCube cards with the vendor's layer model, CoreBar pages made of the bar's own cards, SenseCube reads, KnobKey/DotKey bindings answered over a persistent link, and a security review (SECURITY.md).
 
 ## Why reach out now (before Christmas)
 
@@ -20,7 +20,7 @@ He hasn't architected the open-source project yet. If we align first, the **widg
 
 ## What we bring as goodwill
 
-PROTOCOL.md (discovery, pairing/TLS, provisioning, module upload, CoreBar big-screen pages/screensaver, SenseCube reads, input bindings — the last two mapped, input bindings not yet implemented), SECURITY.md (he'll care — he asked about units "burning up"), and a working macOS implementation of the device path (discovery through module upload, SenseCube reads, big-screen preview) plus a mock CoreBar and an end-to-end test (`kitcheck e2e`).
+PROTOCOL.md (discovery, pairing/TLS, provisioning, module upload, cube Wi-Fi, CoreBar pages, SenseCube reads, input bindings, the bar's app store), SECURITY.md (he'll care — he asked about units "burning up"), and a working macOS implementation of the device path (discovery through module upload, SenseCube reads, CoreBar pages, the persistent push link) plus a mock CoreBar and an end-to-end test (`kitcheck e2e`).
 
 ## Status
 
