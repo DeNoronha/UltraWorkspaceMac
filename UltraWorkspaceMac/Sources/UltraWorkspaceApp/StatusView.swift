@@ -38,9 +38,7 @@ struct StatusView: View {
                         }
                         if !infos.isEmpty { Panel("Details") { ForEach(infos) { row($0) } } }
                         if !fine.isEmpty {
-                            DisclosureGroup(isExpanded: $ui.showFine) {
-                                Panel { ForEach(fine) { row($0) } }
-                            } label: { Text("Looks fine (\(fine.count))").font(.headline) }
+                            Panel("Looks fine (\(fine.count))") { ForEach(fine) { row($0) } }
                         }
                     }
                 }.padding(20).frame(maxWidth: 760, alignment: .leading)

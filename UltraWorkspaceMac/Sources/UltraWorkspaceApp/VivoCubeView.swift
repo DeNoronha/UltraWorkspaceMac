@@ -30,7 +30,7 @@ struct VivoCubeView: View {
                             .help("Draw the cards, upload them as one package and show card 1 (⌘↩)")
                         ProgressRow(progress: model.cubeProgress, lastAt: model.lastCubeSentAt, idle: "Sent").padding(.top, 6)
                     }
-                    DisclosureGroup(isExpanded: $ui.maintenance) { maintenance } label: { Text("Maintenance").font(.headline) }
+                    Panel("Maintenance") { maintenance }
                 }.padding(20)
             }
         }

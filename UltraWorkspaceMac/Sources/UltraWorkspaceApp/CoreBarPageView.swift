@@ -29,8 +29,8 @@ struct CoreBarPageView: View {
                             .disabled(model.isWorking || settings.coreCards.isEmpty)
                         ProgressRow(progress: model.pageProgress, lastAt: model.lastPagePublishedAt, idle: "Published", never: settings.deckhandPagePublished ? "Published before this session." : "Not sent yet.").padding(.top, 6)
                     }
-                    DisclosureGroup(isExpanded: $ui.pages) { pagesOnBar } label: { Text("Pages on the bar").font(.headline) }
-                    DisclosureGroup(isExpanded: $ui.advanced) { advanced } label: { Text("Advanced").font(.headline) }
+                    Panel("Pages on the bar") { pagesOnBar }
+                    Panel("Advanced") { advanced }
                 }.padding(20)
             }
         }
