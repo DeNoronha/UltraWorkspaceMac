@@ -27,7 +27,9 @@ extension AppModel {
     }
     /// Everything that can go on the Deckhand page right now.
     var allCoreCardsNow: [AppSettings.CoreCard] { AppSettings.allCoreCards + appCards }
-    var appCards: [AppSettings.CoreCard] { barApps.filter { !$0.isScreensaver }.compactMap { coreCard(Self.appCardPrefix + $0.packageName) } }
+    /// Same rule as the launcher's picker: no screensavers, and only apps the bar flags `allowProfile`
+    /// (Home Assistant is not one — it is wired in as an integration).
+    var appCards: [AppSettings.CoreCard] { barApps.filter { !$0.isScreensaver && $0.allowProfile }.compactMap { coreCard(Self.appCardPrefix + $0.packageName) } }
 
     func refreshPages() {
         guard let bar = selectedCoreBar, let session = session(for: bar) else { return }

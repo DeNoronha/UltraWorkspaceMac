@@ -65,14 +65,26 @@ struct AppsView: View {
 
     private func barRow(_ a: CoreBarSession.AppInfo) -> some View {
         let inStore = model.storeApps.contains { $0.package == a.packageName }
+        let webUI: URL? = {
+            guard let port = a.port, let tok = a.sessionToken, let bar = model.selectedCoreBar else { return nil }
+            let ip = model.discovered.first(where: { $0.serialNo == bar.serialNo })?.ip ?? bar.lastIp
+            return URL(string: "http://\(ip):\(port)/?sessionToken=\(tok)")
+        }()
         return HStack(spacing: 12) {
-            Image(systemName: "app.badge").foregroundStyle(.secondary).frame(width: 32)
+            AsyncImage(url: a.iconUrl.flatMap(URL.init)) { img in img.resizable() } placeholder: { Image(systemName: a.isScreensaver ? "sparkles.tv" : "app.badge").foregroundStyle(.secondary) }
+                .frame(width: 32, height: 32).clipShape(RoundedRectangle(cornerRadius: 7))
             VStack(alignment: .leading, spacing: 2) {
-                Text(a.appName).fontWeight(.medium)
+                HStack(spacing: 6) {
+                    Text(a.appName).fontWeight(.medium)
+                    if !a.versionName.isEmpty { Text(a.versionName).font(.caption).foregroundStyle(.secondary) }
+                    if a.isScreensaver { Text("screensaver").font(.caption2).foregroundStyle(.secondary) }
+                    else if !a.allowProfile { Text("no card").font(.caption2).foregroundStyle(.secondary).help("The bar does not offer this app as a page card.") }
+                }
                 Text(a.packageName + (inStore ? "" : " · not in the marketplace")).font(.caption2).foregroundStyle(.tertiary)
             }
             Spacer()
             if model.appBusy == a.packageName { ProgressView().controlSize(.small) }
+            if let webUI { Link(destination: webUI) { Label("Web UI", systemImage: "safari") }.help("Opens the app's own web page on the bar (with its session token) in your browser.") }
             Button("Remove", role: .destructive) { model.uninstallApp(a.packageName, name: a.appName) }.disabled(model.appBusy != nil)
         }.padding(.vertical, 4)
     }
