@@ -82,7 +82,7 @@ The bar's big screen shows a page: a row of the bar's own cards. About four fit;
 - **Cards on the page** — drag to reorder, ✕ to remove, **Add a card** on the right. ⚡ marks cards fed live by this Mac (CPU, memory, storage, network, the two buttons): they update only while Deckhand runs; the others keep running when the Mac is off.
 - **Weather (bar's own)** is drawn by the bar from **AccuWeather, which is not free** (14-day trial, paid afterwards). Press **Key…** on that row to paste the key; it is sent to the bar with the next publish. Deckhand's own weather on the Clock card costs nothing.
 - **Publish page** (⌘↩) — draws the clock picture, uploads the button icons, writes the pages and shows the Deckhand page; the steps are shown under the button. Deckhand asks for confirmation only when it matters: the first time, or when the bar has pages made in the official app (those would be removed — the bar cannot send pages back). The knob and keys get their bindings with every publish (see Controls).
-- **Showing** (top right) — switch the bar between its Standard page and the Deckhand page.
+- **Start page** — publishing marks the Deckhand page as the bar's start page, so the bar boots into it; Deckhand also selects it again every time it (re)connects to the bar. Use **Show** in *Pages on the bar* to switch to Standard Mode for a moment.
 - **Pages on the bar** / **Advanced** — the page list, **Find modules**, **Re-read pages**, **Redraw preview**. The official app's Deploy removes Deckhand's pictures; publish again afterwards.
 
 ### VivoCube
