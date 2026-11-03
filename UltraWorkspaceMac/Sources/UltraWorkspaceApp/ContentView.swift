@@ -57,6 +57,7 @@ private struct DetailRouter: View {
             case .senseCube: moduleView("SENSE_CUBE", "SenseCube") { SenseCubeView(module: $0) }
             case .widgets: WidgetsView()
             case .people: PeopleView()
+            case .apps: AppsView()
             case .settings: SettingsView()
             case .about: AboutView()
             case .status: StatusView()

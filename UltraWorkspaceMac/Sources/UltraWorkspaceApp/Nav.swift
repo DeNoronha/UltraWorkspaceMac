@@ -10,6 +10,7 @@ enum NavItem: Hashable {
     case senseCube        // Sensors
     case widgets          // Library
     case people
+    case apps
     case status           // Health
     case logs
     case settings         // Deckhand

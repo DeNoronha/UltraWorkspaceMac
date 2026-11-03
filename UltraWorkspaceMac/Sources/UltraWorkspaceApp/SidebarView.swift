@@ -34,6 +34,7 @@ struct SidebarView: View {
             Section("Library") {
                 Label("Widgets", systemImage: "puzzlepiece.extension").tag(NavItem.widgets)
                 Label("People", systemImage: "person.2").tag(NavItem.people)
+                Label("Apps", systemImage: "bag").tag(NavItem.apps)
             }
             Section("Health") {
                 Label("Status", systemImage: "stethoscope").tag(NavItem.status)
