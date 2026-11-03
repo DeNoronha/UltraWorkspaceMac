@@ -101,7 +101,7 @@ Live **temperature**, **humidity** and **light**, read every 5 seconds while the
 What each control does, as it is bound today: knob **turn → Mac volume**, **press → mute**; DotKey **key 1 / 2 → cube card 1 / 2** (switched on the bar itself), **key 3 → next cube card**, **hold key 3 → Standard page**. These bindings are part of the CoreBar page and are active while that page is on the bar; publish it once to activate them. Changing them is planned.
 
 ### Widgets
-The cards Deckhand can draw for the cube, with a preview and settings: **Weather & time**, **Music (album art)**, **Claude Code monitor**, **CPU & memory**, **Network**, **Battery & power**, **Storage**, **World clock**, **Crypto ticker**, **Calendar**, **Disk I/O**, **Top CPU**, **Uptime** and **Picture** (your own image). **Add to the cube** puts the selected card in the cube's list.
+Two sections: **For the VivoCube** (pictures Deckhand draws; cards whose numbers change by the second carry a "snapshot" tag because the cube gets a new picture every 5 minutes at most) and **For the CoreBar** (cards the bar draws itself and updates live; add them to the Deckhand page from here or from the CoreBar page). The cube cards Deckhand can draw, with a preview and settings: **Weather & time**, **Music (album art)**, **Claude Code monitor**, **CPU & memory**, **Network**, **Battery & power**, **Storage**, **World clock**, **Crypto ticker**, **Calendar**, **Disk I/O**, **Top CPU**, **Uptime** and **Picture** (your own image). **Add to the cube** puts the selected card in the cube's list.
 
 - **Weather & time** — location (**Same as this Mac** or **Manual**), units and the 24-hour clock. See section 6.
 - **Music** — play/pause, previous, next and volume for Apple Music.

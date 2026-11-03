@@ -6,24 +6,47 @@ struct WidgetsView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
     @StateObject private var pm = PreviewModel()
+    /// The two screens take different things: the cube shows pictures drawn by this Mac,
+    /// the bar draws its own live cards. The library lists both, in separate sections.
+    enum Item: Hashable { case cube(Theme), bar(String) }
+    @MainActor final class UI: ObservableObject { @Published var selected: Item = .cube(.weather) }
+    @StateObject private var ui = UI()
+
+    /// Cube cards whose numbers change by the second on the Mac but reach the cube only as a snapshot.
+    private static let snapshotCards: Set<Theme> = [.cpu, .network, .claude, .diskio, .topcpu, .uptime, .battery]
 
     var body: some View {
         VStack(spacing: 0) {
-            Header("Widgets", "Cards Deckhand draws for the cube.")
+            Header("Widgets", "What each screen can show.")
             Divider()
             HSplitView {
-                List(selection: Binding(get: { model.selectedAddon as Theme? }, set: { if let v = $0 { model.selectedAddon = v } })) {
-                    ForEach(Theme.library) { t in
-                        HStack {
-                            Label(t.title, systemImage: t.icon)
-                            Spacer()
-                            if settings.vivoCards.contains(t) { Image(systemName: "circle.circle").font(.caption).foregroundStyle(.secondary).help("In the cube's card list") }
-                        }.tag(t)
-                    }
+                List(selection: Binding(get: { ui.selected as Item? }, set: { if let v = $0 { ui.selected = v; if case .cube(let t) = v { model.selectedAddon = t } } })) {
+                    Section {
+                        ForEach(Theme.library) { t in
+                            HStack {
+                                Label(t.title, systemImage: t.icon)
+                                Spacer()
+                                if Self.snapshotCards.contains(t) { Text("snapshot").font(.caption2).foregroundStyle(.secondary).help("Redrawn every 5 minutes at most — not a live meter.") }
+                                if settings.vivoCards.contains(t) { Image(systemName: "circle.circle").font(.caption).foregroundStyle(.secondary).help("In the cube's card list") }
+                            }.tag(Item.cube(t))
+                        }
+                    } header: { Text("For the VivoCube") } footer: { Text("Pictures drawn by this Mac, 240 × 240, re-sent every 5 minutes at most.").font(.caption).foregroundStyle(.secondary) }
+                    Section {
+                        ForEach(AppSettings.allCoreCards) { c in
+                            HStack {
+                                Label(c.title, systemImage: c.icon)
+                                Spacer()
+                                if settings.coreCards.contains(c.id) { Image(systemName: "rectangle.on.rectangle").font(.caption).foregroundStyle(.secondary).help("On the CoreBar page") }
+                            }.tag(Item.bar(c.id))
+                        }
+                    } header: { Text("For the CoreBar") } footer: { Text("Cards the bar draws itself and updates live (CPU every 3 s, network every 5 s).").font(.caption).foregroundStyle(.secondary) }
                 }
-                .frame(minWidth: 200, maxWidth: 260)
+                .frame(minWidth: 220, maxWidth: 280)
 
                 ScrollView {
+                    if case .bar(let id) = ui.selected, let c = AppSettings.coreCard(id) {
+                        barDetail(c)
+                    } else {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack(alignment: .top, spacing: 20) {
                             ZStack {
@@ -54,14 +77,19 @@ struct WidgetsView: View {
                                 }
                             }
                         }
+                        if Self.snapshotCards.contains(model.selectedAddon) {
+                            Label("The cube gets this as a picture, redrawn every 5 minutes at most — a snapshot, not a live meter. For live numbers use the bar's own card (see “For the CoreBar”).", systemImage: "camera.metering.spot")
+                                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
                         Divider()
                         addonSettings(model.selectedAddon)
                         Spacer()
                     }.padding(20).frame(minWidth: 360, alignment: .leading)
+                    }
                 }
             }
         }
-        .onAppear { reload() }
+        .onAppear { ui.selected = .cube(model.selectedAddon); reload() }
         .onChange(of: model.selectedAddon) { _ in reload() }
         .onChange(of: settings.vivoPicturePath) { _ in reload() }
     }
@@ -78,6 +106,30 @@ struct WidgetsView: View {
         let dest = base.appendingPathComponent("picture." + (url.pathExtension.isEmpty ? "png" : url.pathExtension))
         try? FileManager.default.removeItem(at: dest)
         if (try? FileManager.default.copyItem(at: url, to: dest)) != nil { settings.vivoPicturePath = dest.path } else { settings.vivoPicturePath = url.path }
+    }
+
+    /// Detail pane for a card the bar draws itself: no preview (the bar renders it), add/remove on the page.
+    private func barDetail(_ c: AppSettings.CoreCard) -> some View {
+        let onPage = settings.coreCards.contains(c.id)
+        let hasSense = model.modules.contains { $0.type == "SENSE_CUBE" }
+        let needsSense = c.id.hasPrefix("SENSE_") && !hasSense
+        return VStack(alignment: .leading, spacing: 12) {
+            Label(c.title, systemImage: c.icon).font(.title3).bold()
+            Text(c.note.isEmpty ? "Drawn by the bar itself from live data this Mac sends over the link." : c.note).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("The bar renders this card at its own size on the 1424 × 280 strip and updates it live. Deckhand cannot change how it looks; it only puts the card on the Deckhand page.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                if onPage {
+                    Label(settings.deckhandPagePublished ? "On the CoreBar page" : "On the CoreBar page — not published yet", systemImage: "rectangle.on.rectangle").foregroundStyle(settings.deckhandPagePublished ? .green : .orange)
+                    Button("Remove") { settings.coreCards.removeAll { $0 == c.id } }
+                } else {
+                    Button { settings.coreCards.append(c.id) } label: { Label("Add to the CoreBar page", systemImage: "plus") }
+                        .buttonStyle(.borderedProminent).disabled(needsSense)
+                    if needsSense { Text("No SenseCube found.").font(.caption).foregroundStyle(.secondary) }
+                }
+                Button("Open CoreBar page") { model.nav = .coreBarPage }
+            }
+        }.padding(20).frame(minWidth: 360, alignment: .leading)
     }
 
     private func blurb(_ t: Theme) -> String {
