@@ -51,6 +51,7 @@ struct AppsView: View {
                     if !a.versionName.isEmpty { Text(a.versionName).font(.caption).foregroundStyle(.secondary) }
                     if update, let store { tag("update \(store.versionName)", .orange) }
                     if a.isScreensaver { tag("screensaver", .secondary) }
+                    if a.systemApp { tag("built in", .secondary) }
                 }
                 Text(a.packageName + (store == nil ? " · not in the marketplace" : "")).font(.caption2).foregroundStyle(.tertiary)
             }
@@ -61,8 +62,12 @@ struct AppsView: View {
                 Button { model.installApp(a.packageName, name: a.appName) } label: { Label("Update", systemImage: "arrow.down.circle") }
                     .buttonStyle(.borderedProminent).disabled(model.appBusy != nil).help("Update to \(store.versionName)")
             }
-            Button { model.uninstallApp(a.packageName, name: a.appName) } label: { Label("Remove", systemImage: "trash") }
-                .buttonStyle(.bordered).tint(.red).disabled(model.appBusy != nil)
+            if a.systemApp {
+                Text("part of the firmware").font(.caption).foregroundStyle(.secondary).help("Built into the bar's system image; it cannot be removed, only updated.")
+            } else {
+                Button { model.uninstallApp(a.packageName, name: a.appName) } label: { Label("Remove", systemImage: "trash") }
+                    .buttonStyle(.bordered).tint(.red).disabled(model.appBusy != nil)
+            }
         }.padding(.vertical, 4)
     }
 
