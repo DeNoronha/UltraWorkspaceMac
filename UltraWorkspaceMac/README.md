@@ -2,7 +2,7 @@
 
 A native, open macOS client for Sanytron **UltraBar X** hardware (CoreBar + QuantumLink modules: VivoCube, SenseCube, KnobKey, DotKey, PC-Boot card). Built in Swift/SwiftUI, with no .NET or Qt runtime. The long-term goal is a full replacement for the official UltraWorkSpace desktop app on macOS.
 
-This is independent, community software. Not affiliated with or endorsed by Sanytron. Repository: https://github.com/DeNoronha/UltraWorkspaceMac
+This is independent, community software. Not affiliated with or endorsed by Sanytron. Repository: https://github.com/DeNoronha/UltraWorkspaceMac. Vendor product page (photos of the bar and every module): https://www.sanytron.com/products/ultrabar-x-the-modular-desktop-command-center — notes in `docs/research/sanytron-product-page.md`.
 
 > Naming: the user-facing app is **Deckhand** (`dist/Deckhand.app`, `dist/Deckhand.dmg`). The repository (`UltraWorkspaceMac`), the Swift targets (`UltraWorkspaceApp`, `UltraBarKit`, `kitcheck`) and the bundle id (`com.denoronha.ultraworkspacemac`) deliberately keep their original names.
 
