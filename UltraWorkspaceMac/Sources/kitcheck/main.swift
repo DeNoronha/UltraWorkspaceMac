@@ -119,6 +119,30 @@ if let i = CommandLine.arguments.firstIndex(of: "raw"), CommandLine.arguments.co
     exit(0)
 }
 
+// app <ip> <serial> status|install|uninstall <packageName> — the bar's app store (APP_MANAGER 30600).
+// install: the bar fetches the APK itself from the vendor cloud (apps/100/<package>/fetchLastVerV2) and
+// installs it; this prints the first progress push, then polls the status every 5 s for up to a minute.
+if let i = CommandLine.arguments.firstIndex(of: "app"), CommandLine.arguments.count > i + 4 {
+    let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2]
+    let verb = CommandLine.arguments[i + 3], pkg = CommandLine.arguments[i + 4]
+    guard let type = ["status": 0, "install": 1, "uninstall": 2][verb] else { print("verb must be status|install|uninstall"); exit(2) }
+    guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token"); exit(2) }
+    let s = CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
+    func status() async throws -> String { try await s.rawRequest(act: 30600, data: ["type": 0, "packageName": pkg], timeout: 15) }
+    do {
+        if type == 0 { print(try await status()); exit(0) }
+        var data: [String: Any] = ["type": type, "packageName": pkg]
+        if type == 1 { data["appType"] = 100 }
+        print(try await s.rawRequest(act: 30600, data: data, timeout: 15))
+        for _ in 0..<12 {
+            try await Task.sleep(nanoseconds: 5_000_000_000)
+            let r = try await status(); print(r)
+            if r.contains(type == 1 ? "\"INSTALLED\"" : "\"NOT_INSTALLED\"") || r.contains("\"FAIL\"") { break }
+        }
+    } catch { print("request failed: \(error)"); exit(1) }
+    exit(0)
+}
+
 if CommandLine.arguments.contains("discover") {
     print("scanning UDP \(Proto.discoveryPort) for 8s…")
     let bars = await Discovery.listen(timeout: 8)
