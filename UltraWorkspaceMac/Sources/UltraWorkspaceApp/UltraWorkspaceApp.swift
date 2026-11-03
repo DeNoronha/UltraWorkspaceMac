@@ -24,7 +24,7 @@ struct UltraWorkspaceApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .appInfo) {
-                Button("About Deckhand") { model.showingAbout = true }
+                Button("About Deckhand") { model.nav = .about }
             }
         }
     }

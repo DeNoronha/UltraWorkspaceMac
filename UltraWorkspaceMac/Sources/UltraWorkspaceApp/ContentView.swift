@@ -30,8 +30,6 @@ struct ContentView: View {
             ToolbarItem { Button { model.showActivity.toggle() } label: { Label("Activity", systemImage: "sidebar.trailing") }
                 .help("Show or hide the activity list") }
         }
-        .sheet(isPresented: $model.showingSettings) { SettingsView().environmentObject(model).environmentObject(settings) }
-        .sheet(isPresented: $model.showingAbout) { AboutView() }
         .sheet(isPresented: $model.showingConnect) { ConnectView(asSheet: true).environmentObject(model).frame(width: 520, height: 520) }
         .sheet(isPresented: $model.showingAddIP) { ConnectByAddressSheet().environmentObject(model) }
         .sheet(isPresented: Binding(get: { model.pairingPrompt != nil }, set: { if !$0 { model.pairingPrompt = nil } })) {
@@ -57,6 +55,8 @@ private struct DetailRouter: View {
             case .senseCube: moduleView("SENSE_CUBE", "SenseCube") { SenseCubeView(module: $0) }
             case .widgets: WidgetsView()
             case .people: PeopleView()
+            case .settings: SettingsView()
+            case .about: AboutView()
             case .status: StatusView()
             case .logs: LogsView()
             }

@@ -3,7 +3,6 @@ import AppKit
 
 /// About panel: version, author, license, repository and contact.
 struct AboutView: View {
-    @Environment(\.dismiss) private var dismiss
 
     private static let repoURL = URL(string: "https://github.com/DeNoronha/UltraWorkspaceMac")!
     private static let contactEmail = "ramon@denoronha.nl"
@@ -20,6 +19,13 @@ struct AboutView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            Header("About Deckhand", "Version, source and license.")
+            Divider()
+            ScrollView { about.frame(maxWidth: .infinity) }
+        }
+    }
+    private var about: some View {
         VStack(spacing: 14) {
             if let icon = NSApp.applicationIconImage {
                 Image(nsImage: icon).resizable().frame(width: 84, height: 84)
@@ -64,11 +70,9 @@ struct AboutView: View {
 
             HStack {
                 Button("View on GitHub") { NSWorkspace.shared.open(Self.repoURL) }
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }.padding(.top, 2)
         }
         .padding(28)
-        .frame(width: 420)
     }
 
     private func row(_ label: String, value: String) -> some View {

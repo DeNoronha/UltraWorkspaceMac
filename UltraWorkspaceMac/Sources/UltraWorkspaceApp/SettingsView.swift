@@ -4,16 +4,10 @@ import UltraBarKit
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Settings").font(.title2).bold()
-                Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
-            }
-            .padding()
+            Header("Settings", "Weather location, units and clock.")
             Divider()
 
             Form {
@@ -46,7 +40,6 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
         }
-        .frame(width: 540, height: 540)
     }
 
     private func note(_ title: String, _ body: String) -> some View {

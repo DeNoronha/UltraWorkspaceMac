@@ -115,7 +115,7 @@ Asks the bar and its modules what they are doing (and again every 30 seconds whi
 ### Logs
 Every message between this Mac and the bar, with the pairing key redacted.
 
-### Settings (sidebar → Deckhand → Settings…)
+### Settings (sidebar → Deckhand → Settings)
 Name, serial and address of the bar; the connection and USB-port guidance; what can only be set on the bar itself (time & time zone, Wi-Fi, Bluetooth).
 
 ### About

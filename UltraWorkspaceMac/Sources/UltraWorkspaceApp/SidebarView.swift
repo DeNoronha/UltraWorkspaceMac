@@ -40,8 +40,8 @@ struct SidebarView: View {
                 Label("Logs", systemImage: "doc.text.magnifyingglass").tag(NavItem.logs)
             }
             Section("Deckhand") {
-                Button { model.showingSettings = true } label: { Label("Settings…", systemImage: "gearshape") }.buttonStyle(.plain)
-                Button { model.showingAbout = true } label: { Label("About Deckhand", systemImage: "info.circle") }.buttonStyle(.plain)
+                Label("Settings", systemImage: "gearshape").tag(NavItem.settings)
+                Label("About Deckhand", systemImage: "info.circle").tag(NavItem.about)
             }
         }
         .listStyle(.sidebar)

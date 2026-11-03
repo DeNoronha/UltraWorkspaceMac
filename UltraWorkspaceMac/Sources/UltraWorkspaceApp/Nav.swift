@@ -12,4 +12,6 @@ enum NavItem: Hashable {
     case people
     case status           // Health
     case logs
+    case settings         // Deckhand
+    case about
 }
