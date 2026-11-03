@@ -19,7 +19,6 @@ struct ContentView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { StatusBar() }
         }
-        .background(WindowShiftGuard().frame(width: 0, height: 0))
         .environmentObject(contacts)
         .environmentObject(settings)
         .onAppear {
