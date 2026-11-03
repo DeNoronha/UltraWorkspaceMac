@@ -119,6 +119,25 @@ if let i = CommandLine.arguments.firstIndex(of: "raw"), CommandLine.arguments.co
     exit(0)
 }
 
+// modules <ip> <serial> — the app's Find modules from the command line: 16 s scan, then the gateway
+// config is rewritten with every module ever seen on this bar (so a sleeping DotKey is kept).
+if let i = CommandLine.arguments.firstIndex(of: "modules"), CommandLine.arguments.count > i + 2 {
+    let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2]
+    guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token"); exit(2) }
+    let s = CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
+    var priorList: [[String: Any]] = []
+    if let d = Store.shared.loadEndpoints(serial: serial), let arr = try? JSONSerialization.jsonObject(with: d) as? [[String: Any]] { priorList = arr }
+    let have = Set(priorList.compactMap { ($0["serialNumber"] as? String) ?? ($0["serialNo"] as? String) })
+    priorList += Store.shared.knownModules(corebar: serial).values.filter { !have.contains((($0["serialNumber"] as? String) ?? ($0["serialNo"] as? String) ?? "")) }
+    do {
+        let (mods, endpointsJSON, diag) = try await s.provision(priorEndpoints: try? JSONSerialization.data(withJSONObject: priorList))
+        Store.shared.saveEndpoints(endpointsJSON, serial: serial)
+        if let arr = try? JSONSerialization.jsonObject(with: endpointsJSON) as? [[String: Any]] { Store.shared.rememberModules(arr, corebar: serial) }
+        print(diag); for m in mods { print("  \(m.type) \(m.serial) online=\(m.online)") }
+    } catch { print("provision failed: \(error)"); exit(1) }
+    exit(0)
+}
+
 // apps <ip> <serial> — the bar's installed apps (GET_APP_LIST 1000 "ALL") with the page-card / web-UI flags.
 if let i = CommandLine.arguments.firstIndex(of: "apps"), CommandLine.arguments.count > i + 2 {
     let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2]
