@@ -109,10 +109,22 @@
 				"sha256":"94d88d996adcf126813d49393f427e3ef04c37389e31c81745882920d45e2bfb",
 				"versionCode":18,
 				"versionName":"1.0"
+			},
+			{
+				"appName":"MAMate",
+				"application":"com.mamate.app",
+				"changeLog":"",
+				"desc":"",
+				"fileUrl":"http://cdn-us.lifex360.com/app/apk/20261024/7ded62be697545218bfc86968221c11b.apk",
+				"icon":"http://cdn-us.lifex360.com/app/icon/20261024/2ef6219b37904cc5b795091ffc77108e.png",
+				"md5":"16aef67e250232e5a1cd8d58615d66eb",
+				"sha256":"e790842a74a06e17d7c485d5c36a3dc6cd0629b9531183d8892a5904e4e8f794",
+				"versionCode":3,
+				"versionName":"1.0.2"
 			}
 		],
 		"size":200,
-		"total":9
+		"total":10
 	},
 	"msg":"ok",
 	"state":200
