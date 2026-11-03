@@ -12,23 +12,20 @@ struct CoreBarPageView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Header("CoreBar page", "A row of the bar's own cards. About \(AppSettings.coreCardsThatFit) fit; more scroll sideways.") { pagePicker }
+            Header("CoreBar", "A row of the bar's own cards. About \(AppSettings.coreCardsThatFit) fit; more scroll sideways.") {
+                Button { publish() } label: { Label("Publish page", systemImage: "arrow.up.circle.fill").frame(minWidth: 120) }
+                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(model.isWorking || settings.coreCards.isEmpty)
+                    .help("Send these cards to the bar (⌘↩)")
+            }
             DeviceStrip(kind: .bar)
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     preview
-                    HStack(alignment: .top, spacing: 18) {
-                        onPage
-                        addCard.frame(width: 260)
-                    }
-                    HStack(alignment: .top, spacing: 14) {
-                        Button { publish() } label: { Label("Publish page", systemImage: "arrow.up.circle.fill").frame(minWidth: 120) }
-                            .buttonStyle(.borderedProminent).controlSize(.large)
-                            .keyboardShortcut(.return, modifiers: .command)
-                            .disabled(model.isWorking || settings.coreCards.isEmpty)
-                        ProgressRow(progress: model.pageProgress, lastAt: model.lastPagePublishedAt, idle: "Published", never: settings.deckhandPagePublished ? "Published before this session." : "Not sent yet.").padding(.top, 6)
-                    }
+                    onPage
+                    ProgressRow(progress: model.pageProgress, lastAt: model.lastPagePublishedAt, idle: "Published", never: settings.deckhandPagePublished ? "Published before this session." : "Not sent yet.")
                     Panel("Pages on the bar") { pagesOnBar }
                     Panel("Advanced") { advanced }
                 }.padding(20)
@@ -50,16 +47,6 @@ struct CoreBarPageView: View {
     }
     private func reloadCover() { cover.reload { guard let png = await model.renderPageCover(settings: settings) else { return nil }; return NSImage(data: png) } }
 
-    // MARK: Showing picker
-
-    @ViewBuilder private var pagePicker: some View {
-        if !model.corebarPages.isEmpty {
-            Picker("Showing", selection: Binding(get: { model.currentPageId ?? "" }, set: { if !$0.isEmpty { model.switchPage(id: $0) } })) {
-                ForEach(model.corebarPages, id: \.id) { Text($0.name).tag($0.id) }
-            }.pickerStyle(.segmented).frame(maxWidth: 320)
-            .help(model.currentPageId == nil ? "The bar does not report its page; pick one to switch." : "Switch the page on the bar")
-        }
-    }
 
     // MARK: Preview strip
 
@@ -142,30 +129,24 @@ struct CoreBarPageView: View {
             }
             .listStyle(.inset).scrollContentBackground(.hidden)
             .frame(height: CGFloat(max(1, cards.count)) * 28 + (ui.keyOpen ? 60 : 0) + 10)
+            addCardMenu
         }
     }
 
-    private var addCard: some View {
+    /// Same control as on the VivoCube page: one "Add a card…" menu.
+    private var addCardMenu: some View {
         let available = AppSettings.allCoreCards.filter { !settings.coreCards.contains($0.id) }
         let hasSense = model.modules.contains { $0.type == "SENSE_CUBE" }
-        return Panel("Add a card") {
-            if available.isEmpty { Text("Every card is on the page.").foregroundStyle(.secondary) }
+        return Menu {
             ForEach(available) { c in
                 let needsSense = c.id.hasPrefix("SENSE_") && !hasSense
-                HStack(alignment: .top, spacing: 8) {
-                    Button { settings.coreCards.append(c.id) } label: { Image(systemName: "plus.circle") }
-                        .buttonStyle(.borderless).disabled(needsSense).accessibilityLabel("Add \(c.title)")
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 6) {
-                            Label(c.title, systemImage: c.icon)
-                            if c.needsMac { Image(systemName: "bolt.horizontal").font(.caption).foregroundStyle(.orange) }
-                        }
-                        if needsSense { Text("No SenseCube found").font(.caption2).foregroundStyle(.secondary) }
-                        else if !c.note.isEmpty { Text(c.note).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-                    }
-                }
+                Button { settings.coreCards.append(c.id) } label: {
+                    Label(c.title + (needsSense ? " (no SenseCube found)" : (c.note.isEmpty ? "" : " — " + c.note)), systemImage: c.icon)
+                }.disabled(needsSense)
             }
-        }
+        } label: { Label("Add a card…", systemImage: "plus") }
+        .frame(width: 150).disabled(available.isEmpty)
+        .help(available.isEmpty ? "Every card is on the page." : "")
     }
 
     // MARK: Disclosures

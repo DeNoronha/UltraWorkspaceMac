@@ -49,7 +49,7 @@ The first time, Deckhand shows **Connect your UltraBar**:
 
 1. **Find the bar** — Deckhand looks on your network for about 8 seconds (a progress bar shows it). Your bar appears with a **Pair** button. macOS asks for *Local Network* access the first time; if you declined, use **Local Network permission…** to allow it. Can't see the bar (other subnet, VPN)? **Connect by address…** takes its IP address (shown on the bar under Settings → Network).
 2. **Approve on the bar** — press **Pair**; the bar shows an Approve button for 30 seconds (Deckhand shows the countdown). Tap it.
-3. Deckhand then finds the modules on its own and opens the **CoreBar page**.
+3. Deckhand then finds the modules on its own and opens the **CoreBar**.
 
 The pairing key is stored in a protected, user-only file in Application Support, and the bar's certificate is pinned, so an impostor on the network can't reuse your key. The paired bar is shown at the top of the sidebar; its menu has **Add another CoreBar…**, **Find modules** and **Forget this CoreBar…**.
 
@@ -67,7 +67,7 @@ The pairing key is stored in a protected, user-only file in Application Support,
 
 One window, a sidebar on the left, grouped by what you want to change:
 
-- **Screens** — **CoreBar page** (the strip on the bar) and **VivoCube** (the small round module).
+- **Screens** — **CoreBar** (the strip on the bar) and **VivoCube** (the small round module).
 - **Controls** — **KnobKey**, **DotKey**: what the knob and keys do.
 - **Sensors** — **SenseCube**.
 - **Library** — **Widgets** (the cards Deckhand can draw) and **People**.
@@ -75,7 +75,7 @@ One window, a sidebar on the left, grouped by what you want to change:
 
 Every device page starts with a **status strip**: whether Deckhand is connected and answering the bar, what the device is showing right now (read back from the device, not assumed), when something was last sent, and — only when something is wrong — one sentence and one button that fixes it ("The cube is not on Wi-Fi — Set cube Wi-Fi…", "The cube's screen is off — Turn on", "The Deckhand page is gone from the bar — Publish page"). The **Activity** list (toolbar button) shows what Deckhand did; the strip shows what the device *is*.
 
-### CoreBar page
+### CoreBar
 The bar's big screen shows a page: a row of the bar's own cards. About four fit; more scroll sideways. There is no full-screen picture — Deckhand's own picture (weather & date, free, refreshed hourly) is the **Clock** card's picture.
 
 - **Preview** — drawn from your card list; dimmed cards are the ones that scroll into view.

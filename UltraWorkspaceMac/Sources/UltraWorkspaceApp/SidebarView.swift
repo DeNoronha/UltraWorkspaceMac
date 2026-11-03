@@ -12,7 +12,7 @@ struct SidebarView: View {
         List(selection: Binding(get: { model.nav as NavItem? }, set: { if let v = $0 { model.nav = v } })) {
             if model.selectedCoreBar != nil {
                 Section("Screens") {
-                    Label("CoreBar page", systemImage: "rectangle.on.rectangle.angled").tag(NavItem.coreBarPage)
+                    Label("CoreBar", systemImage: "rectangle.on.rectangle.angled").tag(NavItem.coreBarPage)
                     if has("VIVO_CUBE") { row("VivoCube", "circle.circle", "VIVO_CUBE").tag(NavItem.vivoCube) }
                 }
                 if has("KNOB_KEY") || has("DOT_KEY") {
