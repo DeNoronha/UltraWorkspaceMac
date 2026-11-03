@@ -73,8 +73,11 @@ final class AppModel: ObservableObject {
     @Published var vivoWidgetShowing: Int?
     @Published var vivoScreenOn: Bool?
     @Published var vivoWiFiState: Int?
-    /// The CoreBar's own hotspot (factory values printed on the bar); modules reach the bar's :8080 through it.
-    static let coreBarHotspot = (ssid: "AndroidAP_7757", password: "[redacted-hotspot-password]")
+    /// The selected CoreBar's own hotspot, if Deckhand has learned it (from a cube that reported it,
+    /// or typed in the Wi-Fi sheet). Differs per unit — never a built-in value.
+    var knownHotspot: (ssid: String, password: String)? {
+        selectedCoreBar.flatMap { Store.shared.hotspot(serial: $0.serialNo) }
+    }
     /// Wi-Fi state read from the cube says it is not joined: uploads are acknowledged by the bar but never downloaded.
     var cubeOffline: Bool { vivoWiFiState.map { $0 != 3 } ?? false }
     /// Something was sent this session while the cube was offline → the glass still shows the previous package.

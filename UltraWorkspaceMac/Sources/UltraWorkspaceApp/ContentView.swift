@@ -284,9 +284,11 @@ struct ProgressRow: View {
                         if st.id != progress.steps.last?.id { Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.quaternary) }
                     }
                 }
-                if let f = progress.failure { Text(f).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
+                // No fixedSize(vertical:) here: this row sits beside a button in an HStack and would be
+                // measured at zero width (the window-jump bug of 2026-11-03). A flexible frame wraps instead.
+                if let f = progress.failure { Text(f).font(.callout).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .leading) }
             }
-        }
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private var recent: Bool { progress.finishedAt.map { Date().timeIntervalSince($0) < 20 } ?? false }
 }

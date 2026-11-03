@@ -18,7 +18,8 @@ struct UltraWorkspaceApp: App {
         WindowGroup("Deckhand") {
             ContentView()
                 .environmentObject(model)
-                .frame(minWidth: 820, minHeight: 540)
+                // Wider minimum when the Activity column is on, so page text never gets measured at a sliver.
+                .frame(minWidth: model.showActivity ? 1100 : 820, minHeight: 540)
         }
         .windowStyle(.titleBar)
         .commands {

@@ -197,14 +197,18 @@ struct VivoWiFiSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Join the cube to a Wi-Fi network").font(.title3).bold()
-            Text("2.4 GHz networks only — the cube has no 5 GHz radio, and a combined 2.4/5 GHz name may not work. The bar must be on the same network. The password goes to the cube only; it is not stored on this Mac.")
+            Text("2.4 GHz networks only — the cube has no 5 GHz radio, and a combined 2.4/5 GHz name may not work. The bar must be on the same network. The password is sent to the cube and kept only in Deckhand's settings so the cube can be switched back later; it is redacted from Deckhand's log.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Form {
                 TextField("Wi-Fi name", text: $draft.ssid)
                 SecureField("Password", text: $draft.password)
             }.formStyle(.grouped)
             HStack {
-                Button("Back to the CoreBar hotspot") { draft.ssid = AppModel.coreBarHotspot.ssid; draft.password = AppModel.coreBarHotspot.password }.buttonStyle(.link).font(.caption)
+                if let h = model.knownHotspot {
+                    Button("Back to the CoreBar hotspot (\(h.ssid))") { draft.ssid = h.ssid; draft.password = h.password }.buttonStyle(.link).font(.caption)
+                } else {
+                    Text("The bar's own hotspot (name “AndroidAP_…” and password) is printed on the bar; Deckhand remembers it once the cube has reported it.").font(.caption).foregroundStyle(.secondary)
+                }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Send to cube") { model.setVivoWiFi(serial: serial, ssid: draft.ssid, password: draft.password); dismiss() }

@@ -9,7 +9,10 @@ extension AppModel {
         Task {
             let w = await session.readModuleWiFi(serial: serial)
             self.vivoWiFi[serial] = w
-            if let w { WireLog.shared.event("cube wifi: \(w.ssid)\(w.isCoreBarHotspot ? " (CoreBar hotspot)" : "")") }
+            if let w {
+                WireLog.shared.event("cube wifi: \(w.ssid)\(w.isCoreBarHotspot ? " (CoreBar hotspot)" : "")")
+                if w.isCoreBarHotspot, !w.password.isEmpty { Store.shared.setHotspot(serial: bar.serialNo, ssid: w.ssid, password: w.password) }
+            }
             else { self.say("Could not read the cube's Wi-Fi setting.") }
             await self.refreshDeviceState()
         }
@@ -21,6 +24,7 @@ extension AppModel {
         guard let bar = selectedCoreBar, let session = session(for: bar) else { return }
         let w = CoreBarSession.ModuleWiFi(ssid: ssid.trimmingCharacters(in: .whitespaces), password: password)
         guard !w.ssid.isEmpty else { say("Enter the Wi-Fi name."); return }
+        if w.isCoreBarHotspot, !w.password.isEmpty { Store.shared.setHotspot(serial: bar.serialNo, ssid: w.ssid, password: w.password) }
         isWorking = true
         say("Sending Wi-Fi “\(w.ssid)” to the cube…")
         Task {

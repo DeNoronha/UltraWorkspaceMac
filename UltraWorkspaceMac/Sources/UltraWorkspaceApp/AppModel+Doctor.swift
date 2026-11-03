@@ -78,11 +78,15 @@ extension AppModel {
         return nil
     }
 
-    /// One click back to the network that is known to work.
+    /// One click back to the bar's own hotspot when Deckhand knows this bar's credentials;
+    /// otherwise open the Wi-Fi sheet so the user can type them (they are printed on the bar).
     func hotspotAction(serial: String) -> DoctorAction {
-        DoctorAction(title: "Use the CoreBar hotspot") { [weak self] in
-            self?.setVivoWiFi(serial: serial, ssid: Self.coreBarHotspot.ssid, password: Self.coreBarHotspot.password)
+        if let h = knownHotspot {
+            return DoctorAction(title: "Use the CoreBar hotspot") { [weak self] in
+                self?.setVivoWiFi(serial: serial, ssid: h.ssid, password: h.password)
+            }
         }
+        return DoctorAction(title: "Set cube Wi-Fi…") { [weak self] in self?.nav = .vivoCube; self?.showingVivoWiFi = true }
     }
 
     func setCubeScreen(on: Bool, serial: String) {

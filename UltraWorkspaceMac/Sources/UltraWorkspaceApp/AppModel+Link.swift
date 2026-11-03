@@ -106,15 +106,12 @@ extension AppModel {
             if let s = params["url"] as? String, let u = URL(string: s), ["http", "https"].contains(u.scheme ?? "") {
                 NSWorkspace.shared.open(u); say("Opened \(s) (from the CoreBar).")
             }
-        case "openFile":
-            if let s = params["path"] as? String { NSWorkspace.shared.open(URL(fileURLWithPath: s)); say("Opened \(s) (from the CoreBar).") }
-        case "startApp":
-            if let s = params["path"] as? String {
-                NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: s), configuration: .init()) { _, _ in }
-                say("Started \(s) (from the CoreBar).")
-            }
-        case "inputText", "execCmd":
-            say("CoreBar requested “\(action)” — not executed (Deckhand does not type or run commands on your behalf).")
+        case "openFile", "startApp", "inputText", "execCmd":
+            // Anything that can speak to :7431 (the vendor TLS key is shared across devices) could
+            // push these; opening an arbitrary path is code execution. Deckhand's own pages never
+            // emit them, so they are refused outright (SECURITY.md).
+            say("CoreBar requested “\(action)” — not executed (Deckhand does not open files, start apps, type or run commands on the bar's behalf).")
+            WireLog.shared.event("PC_CONTROL \(action) refused: \(params)")
         default:
             say("CoreBar sent PC_CONTROL \(p.keys.sorted().joined(separator: ",")) — ignored.")
         }

@@ -61,11 +61,10 @@ if let i = CommandLine.arguments.firstIndex(of: "switchpage"), CommandLine.argum
     exit(0)
 }
 
-// `kitcheck cubewifi <ip> <serial> <moduleSerial> hotspot|<ssid> [password]` — write the cube's Wi-Fi (property 7).
+// `kitcheck cubewifi <ip> <serial> <moduleSerial> <ssid> [password]` — write the cube's Wi-Fi (property 7).
 if let i = CommandLine.arguments.firstIndex(of: "cubewifi"), CommandLine.arguments.count > i + 4 {
     let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2], mod = CommandLine.arguments[i + 3]
-    var ssid = CommandLine.arguments[i + 4], pw = CommandLine.arguments.count > i + 5 ? CommandLine.arguments[i + 5] : ""
-    if ssid == "hotspot" { ssid = "AndroidAP_7757"; pw = "[redacted-hotspot-password]" }
+    let ssid = CommandLine.arguments[i + 4], pw = CommandLine.arguments.count > i + 5 ? CommandLine.arguments[i + 5] : ""
     guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token"); exit(2) }
     let s = CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
     let code = await s.writeModuleWiFi(serial: mod, CoreBarSession.ModuleWiFi(ssid: ssid, password: pw))

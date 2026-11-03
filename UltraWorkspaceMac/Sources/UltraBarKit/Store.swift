@@ -15,6 +15,9 @@ public final class Store: @unchecked Sendable {
         public var name: String
         public var lastIp: String
         public var certSHA256: String?
+        /// The bar's own hotspot as last reported by a module (property 7). Differs per unit.
+        public var hotspotSSID: String?
+        public var hotspotPassword: String?
         public var id: String { serialNo }
     }
 
@@ -55,6 +58,22 @@ public final class Store: @unchecked Sendable {
         }
     }
 
+    /// Remember a CoreBar's hotspot credentials (learned from a cube that reports them, or typed by the user).
+    public func setHotspot(serial: String, ssid: String, password: String) {
+        queue.sync {
+            guard let idx = state.coreBars.firstIndex(where: { $0.serialNo == serial }) else { return }
+            state.coreBars[idx].hotspotSSID = ssid
+            state.coreBars[idx].hotspotPassword = password
+            persist()
+        }
+    }
+    public func hotspot(serial: String) -> (ssid: String, password: String)? {
+        queue.sync {
+            guard let b = state.coreBars.first(where: { $0.serialNo == serial }), let s = b.hotspotSSID, let p = b.hotspotPassword, !s.isEmpty else { return nil }
+            return (s, p)
+        }
+    }
+
     public func remove(serial: String) {
         queue.sync {
             state.coreBars.removeAll { $0.serialNo == serial }
@@ -66,6 +85,8 @@ public final class Store: @unchecked Sendable {
     private func persist() {
         if let data = try? JSONEncoder().encode(state) {
             try? data.write(to: fileURL, options: .atomic)
+            // Holds hotspot passwords since 2026-11-03: user-only.
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         }
     }
 

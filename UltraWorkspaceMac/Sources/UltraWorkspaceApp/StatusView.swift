@@ -58,10 +58,9 @@ struct StatusView: View {
                 .accessibilityLabel(label(item.state))
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) { Text(item.name).fontWeight(.medium); Text(item.group).font(.caption2).foregroundStyle(.tertiary) }
-                Text(item.detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-            }
-            Spacer()
-            if let a = item.action { Button(a.title) { a.run() }.controlSize(.small) }
+                Text(item.detail).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            if let a = item.action { Button(a.title) { a.run() }.controlSize(.small).fixedSize() }
         }
     }
     private func color(_ s: DoctorItem.State) -> Color { switch s { case .ok: return .green; case .warn: return .orange; case .fail: return .red; case .info: return .secondary } }
