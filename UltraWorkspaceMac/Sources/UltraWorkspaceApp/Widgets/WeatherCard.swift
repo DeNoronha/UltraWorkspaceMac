@@ -60,11 +60,12 @@ enum WeatherCard {
             draw(place, H*0.12, .regular, dim, CGRect(x: W*0.63, y: H*0.08, width: W*0.35, height: H*0.18), align: .right)
         } else {
             // VivoCube 240×240: stacked.
-            draw(timeStr, W*0.30, .bold, white, CGRect(x: 0, y: H*0.63, width: W, height: H*0.3), align: .center)
-            draw(dateStr, W*0.095, .medium, dim, CGRect(x: 0, y: H*0.55, width: W, height: H*0.1), align: .center)
-            drawIcon(iconName, in: CGRect(x: W*0.5 - H*0.14, y: H*0.27, width: H*0.28, height: H*0.28), ctx: ctx)
-            draw(tempStr, W*0.16, .bold, white, CGRect(x: 0, y: H*0.14, width: W, height: H*0.15), align: .center)
-            draw(condStr, W*0.08, .regular, dim, CGRect(x: 0, y: H*0.05, width: W, height: H*0.09), align: .center)
+            // Rects are font-height (≈1.25×) so the time's descenders never reach the date line.
+            draw(timeStr, W*0.28, .bold, white, CGRect(x: 0, y: H*0.59, width: W, height: W*0.35), align: .center)
+            draw(dateStr, W*0.095, .medium, dim, CGRect(x: 0, y: H*0.50, width: W, height: W*0.12), align: .center)
+            drawIcon(iconName, in: CGRect(x: W*0.5 - H*0.115, y: H*0.275, width: H*0.23, height: H*0.23), ctx: ctx)
+            draw(tempStr, W*0.16, .bold, white, CGRect(x: 0, y: H*0.105, width: W, height: W*0.20), align: .center)
+            draw(condStr, W*0.08, .regular, dim, CGRect(x: 0, y: H*0.015, width: W, height: W*0.10), align: .center)
         }
 
         NSGraphicsContext.restoreGraphicsState()

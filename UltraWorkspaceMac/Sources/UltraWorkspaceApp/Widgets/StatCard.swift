@@ -10,7 +10,7 @@ enum StatCard {
     static func system(_ s: SystemStats.Sample, size: Int) -> [UInt8]? {
         draw(size: size, accent: (c(0.16, 0.44, 0.90), c(0.08, 0.12, 0.24)),
              title: "System", icon: "cpu") { g, W, H in
-            bigValue(g, "\(Int(s.cpuPercent.rounded()))%", sub: "CPU", W: W, yFrac: 0.60)
+            bigValue(g, "\(Int(s.cpuPercent.rounded()))%", sub: "CPU", W: W, yFrac: 0.47)
             bar(g, label: "CPU", frac: s.cpuPercent / 100, color: .systemBlue, W: W, y: H*0.30)
             bar(g, label: "MEM", frac: s.memPercent / 100, color: .systemGreen, W: W, y: H*0.17)
             smallRight(g, String(format: "%.1f/%.0f GB", s.memUsedGB, s.memTotalGB), W: W, y: H*0.065)
@@ -34,9 +34,9 @@ enum StatCard {
             // Big number sized so "16.1M" never touches its caption (rect height = font × 1.2).
             let big = W*0.20
             drawText(ClaudeUsage.shortTokens(s.todayTokens), big, .bold, .white,
-                     CGRect(x: 0, y: H*0.60, width: W, height: big*1.2), align: .center)
+                     CGRect(x: 0, y: H*0.595, width: W, height: big*1.25), align: .center)
             drawText("tokens today · \(plan)", W*0.065, .regular, NSColor.white.withAlphaComponent(0.75),
-                     CGRect(x: 0, y: H*0.53, width: W, height: W*0.08), align: .center)
+                     CGRect(x: 0, y: H*0.51, width: W, height: W*0.085), align: .center)
             if dailyBudget > 0 {
                 let frac = Double(s.todayTokens) / Double(dailyBudget)
                 let pct = Int((frac * 100).rounded())
@@ -77,10 +77,15 @@ enum StatCard {
         return Array(UnsafeBufferPointer(start: data.bindMemory(to: UInt8.self, capacity: count), count: count))
     }
 
+    /// Big value with a caption underneath. Text draws from the TOP of its rect, so the
+    /// rect must be at least the font's line height (≈1.25×) or descenders spill into the
+    /// caption's rect — that was the "9%" touching "CPU" overlap. `yFrac` = caption's centre.
     private static func bigValue(_ g: GC, _ value: String, sub: String, W: CGFloat, yFrac: CGFloat) {
-        drawText(value, W*0.26, .bold, .white, CGRect(x: 0, y: W*yFrac, width: W, height: W*0.24), align: .center)
-        drawText(sub, W*0.075, .regular, NSColor.white.withAlphaComponent(0.75),
-                 CGRect(x: 0, y: W*yFrac - W*0.085, width: W, height: W*0.08), align: .center)
+        let big = W*0.26, small = W*0.075
+        let subTop = W*yFrac + small*0.65
+        drawText(sub, small, .regular, NSColor.white.withAlphaComponent(0.75),
+                 CGRect(x: 0, y: subTop - small*1.3, width: W, height: small*1.3), align: .center)
+        drawText(value, big, .bold, .white, CGRect(x: 0, y: subTop, width: W, height: big*1.25), align: .center)
     }
 
     private static func center(_ g: GC, _ text: String, size: CGFloat, color: NSColor, W: CGFloat, y: CGFloat) {

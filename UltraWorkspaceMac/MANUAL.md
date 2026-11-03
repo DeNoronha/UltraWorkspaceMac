@@ -106,6 +106,11 @@ The cards Deckhand can draw for the cube, with a preview and settings: **Weather
 - **Weather & time** — location (**Same as this Mac** or **Manual**), units and the 24-hour clock. See section 6.
 - **Music** — play/pause, previous, next and volume for Apple Music.
 
+### Two very different screens
+
+- **VivoCube (240×240).** Deckhand draws every pixel: each card is a picture rendered on the Mac and sent as a package (up to 6 cards). The cube only shows what was last sent. Cards are **redrawn and re-sent every 5 minutes at most** (longer when the switch interval × number of cards exceeds that), so "live" numbers such as CPU, network or token counts are snapshots, not a live meter. Cards that change slowly (weather, calendar, crypto day chart, world clock, date) suit the cube; a per-second gauge does not.
+- **CoreBar (1424×280).** The bar draws its own fixed-size cards (clock, weather, world time, timer, CPU, memory, network, SenseCube, PC buttons, scenes) and updates them live from the data the bar pulls over the link (CPU every 3 s, network every 5 s). Deckhand cannot place its own pictures on the bar; the only picture it can inject is the **cover of the clock card** (a rounded square, with a blurred copy as the card background), which is where the "Clock picture" comes from. A cube card cannot be shown on the bar one-to-one, nor a bar card on the cube. Filling the whole bar screen is only possible through the bar's screensaver app, which Deckhand does not control.
+
 ### People
 Save contacts; each gets one-click **Teams chat / call**, **FaceTime**, **Mail**. Stored locally on your Mac.
 
