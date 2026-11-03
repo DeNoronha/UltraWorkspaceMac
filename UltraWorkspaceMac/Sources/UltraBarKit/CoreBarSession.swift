@@ -552,16 +552,18 @@ public struct CoreBarSession: Sendable {
         public let port: Int?, sessionToken: String?, iconUrl: String?
     }
 
-    /// GET_APP_LIST (1000). The launcher's `AppListRead` takes a plain string (`"ALL"` / `"SCREENSAVER"`)
-    /// as `data`; `{}` also answers but with fewer fields.
+    /// Installed apps. Uses GET_COREBAR_CONFIG (30740) `{type:"APP_LIST", value:"ALL"}` — the launcher's
+    /// `AppListRead`, which returns the full `AppDetail` *including screensavers*; GET_APP_LIST (1000)
+    /// leaves the screensavers out (and on launcher 1.0.3 returned only name + package).
     public func listApps() async throws -> [AppInfo] {
         let client = try await authedClient()
         defer { Task { await client.close() } }
-        guard let line = try await client.request(act: 1000, dataJSON: Data("\"ALL\"".utf8), timeout: 10),  // LineOS 1.0.9.9 answers {appName, packageName} only, "ALL" or {}
+        let req = try JSONSerialization.data(withJSONObject: ["type": "APP_LIST", "value": "ALL"])
+        guard let line = try await client.request(act: 30740, dataJSON: req, timeout: 10),
               let reply = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
-            throw UltraBarError.protocolError("no reply to GET_APP_LIST (1000)")
+            throw UltraBarError.protocolError("no reply to GET_COREBAR_CONFIG APP_LIST (30740)")
         }
-        guard code(reply) == 200 else { throw UltraBarError.protocolError("1000 failed: \(String(data: line, encoding: .utf8) ?? "")") }
+        guard code(reply) == 200 else { throw UltraBarError.protocolError("30740 APP_LIST failed: \(String(data: line, encoding: .utf8) ?? "")") }
         let arr = (reply["data"] as? [[String: Any]]) ?? []
         func b(_ d: [String: Any], _ k: String) -> Bool { (d[k] as? Bool) ?? ((d[k] as? NSNumber)?.boolValue ?? false) }
         return arr.compactMap { d in
@@ -570,7 +572,8 @@ public struct CoreBarSession: Sendable {
             let port = (cfg["port"] as? Int) ?? (d["port"] as? Int)
             return AppInfo(packageName: pkg, appName: (d["appName"] as? String) ?? pkg,
                            versionName: (d["versionName"] as? String) ?? "",
-                           systemApp: b(d, "systemApp"), allowProfile: b(d, "allowProfile"), isScreensaver: b(d, "isScreensaver"),
+                           // fastjson names Java `isXxx` booleans without the prefix: `screensaver`, `config`.
+                           systemApp: b(d, "systemApp"), allowProfile: b(d, "allowProfile"), isScreensaver: b(d, "isScreensaver") || b(d, "screensaver"),
                            port: (port ?? 0) > 0 ? port : nil,
                            sessionToken: (cfg["sessionToken"] as? String) ?? (d["sessionToken"] as? String),
                            iconUrl: (d["iconUrl"] as? String) ?? (d["icon"] as? String))

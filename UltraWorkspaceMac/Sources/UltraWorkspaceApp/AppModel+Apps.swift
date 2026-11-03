@@ -9,7 +9,8 @@ extension AppModel {
             do {
                 let apps = try await BarAppStore.fetch()
                 self.storeApps = apps
-                if let ss = try? await BarAppStore.fetch(appType: BarAppStore.screensaversType) { self.storeScreensavers = ss }
+                do { self.storeScreensavers = try await BarAppStore.fetch(appType: BarAppStore.screensaversType) }
+                catch { self.appStoreError = "The screensaver catalogue did not answer: \(error.localizedDescription)" }
                 self.appStoreError = nil
                 if let list = try? await session.listApps() { self.barApps = list }
                 if let c = try? await session.readScreensaver() { self.screensaver = c }

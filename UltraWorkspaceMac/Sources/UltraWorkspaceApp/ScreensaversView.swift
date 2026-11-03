@@ -21,7 +21,7 @@ struct ScreensaversView: View {
                 }.padding(20)
             }
         }
-        .onAppear { if model.storeScreensavers.isEmpty || model.screensaver == nil { model.refreshAppStore() } }
+        .onAppear { model.refreshAppStore() }
     }
 
     private var panel: some View {
