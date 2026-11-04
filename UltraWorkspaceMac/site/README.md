@@ -10,7 +10,7 @@ The public site for Deckhand and the OpenBarX marketplace: plain HTML and CSS, n
 - `assets/img/screens/bar-*.png` — 1424 × 280 renders of the bar apps. Make them with headless Chrome against a running Deckhand (`http://127.0.0.1:7432/<page>`); the Claude and Calendar renders use demo data, never a real session or calendar.
 - `assets/img/icons/*.png` — the bar apps' launcher icons (copied from the Android project's `mipmap-xxxhdpi`).
 
-Still to add: screenshots of the Mac app itself (`assets/img/screens/app-*.png`, 2× PNG of the CoreBar page, VivoCube page and Apps page). The section in `index.html` is in place, commented out, with the file names it expects.
+Mac-app screenshots (`assets/img/screens/app-*.png`): 2× captures of Deckhand's window with `screencapture -l <window id>` (the Activity panel hidden with its toolbar button, the status bar cropped off: 3022×1928). CoreBar and Apps are in; the VivoCube page is still to add once the cube accepts uploads again, so the page is free of its red error line.
 
 ## Publishing
 

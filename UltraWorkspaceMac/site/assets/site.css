@@ -152,3 +152,10 @@ a:hover .arrow, .btn:hover .arrow, .card:hover .arrow { transform:translateX(4px
   .apps { grid-template-columns:repeat(2,minmax(0,1fr)) }
 }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { transition:none !important; animation:none !important } }
+
+/* Mac-app screenshots: one per row, the window at its own proportions */
+.screens { display:grid; gap:2rem }
+.screens figure { margin:0; min-width:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden }
+.screens img { display:block; width:100%; height:auto }
+.screens figcaption { padding:.75rem 1rem; border-top:1px solid var(--border) }
+@media (min-width:64rem) { .screens { grid-template-columns:1fr 1fr } }
