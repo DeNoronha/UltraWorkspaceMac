@@ -11,7 +11,11 @@ A tiny full-screen kiosk app for the Sanytron UltraBar X CoreBar (Android 10, 14
 | music | nl.denoronha.deckhand.music | Music | /music |
 | calendar | nl.denoronha.deckhand.calendar | Calendar | /calendar |
 
-The flavors are declared in `app/build.gradle.kts` (one dimension, `page`); each sets `applicationId`, the `app_name` string and `BuildConfig.PAGE`. The shared code lives in `src/main`, the launcher icon foreground per flavor in `src/<flavor>/res/drawable/ic_launcher_foreground.xml` (the dark blue background is shared).
+The flavors are declared in `app/build.gradle.kts` (one dimension, `page`); each sets `applicationId`, the `app_name` string and `BuildConfig.PAGE`. The shared code lives in `src/main`; everything icon-related per flavor lives in `src/<flavor>/res/` and is generated (see below).
+
+## Launcher icons
+
+`tools/make-icons.swift` renders every flavor's icons with AppKit and must be run on a Mac (`cd android/DeckhandMonitor && swift tools/make-icons.swift`). Five flavors use a bold SF Symbol drawn white on a solid colour (monitor `waveform.path.ecg` on #1f3a8a, crypto `bitcoinsign.circle.fill` on #b45309, weather `cloud.sun.fill` on #0e7490, music `music.note` on #be123c, calendar `calendar` on #15803d); the Claude flavor draws a hand-made 12-ray starburst in #D97757 on #2b2522. Per flavor the script writes `mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher_foreground.png` (adaptive foreground, 108 dp canvas with the glyph inside the 72 dp safe zone), `mipmap-*/ic_launcher.png` (legacy 48 dp icon: 20 % rounded square plus glyph, for launchers that ignore adaptive icons), `values/ic_launcher_background.xml` (the background colour), and a 216 px preview of the composed icon to `dist/bar-apps/icons/<flavor>.png`. The shared `src/main/res/mipmap-anydpi-v26/ic_launcher.xml` is the adaptive icon that points at those; the manifest uses it for both `icon` and `roundIcon`. To change a glyph or colour, edit the `flavors` table at the top of the script and run it again; the PNGs are committed so a build does not need the script.
 
 ## How it finds Deckhand
 
