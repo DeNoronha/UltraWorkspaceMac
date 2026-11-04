@@ -488,7 +488,7 @@ final class BarPages {
             if(a.from||a.to){ const f=a.from?a.from.iata:'?', t=a.to?a.to.iata:'?'; txt(f+' → '+t,x+18,y+104,26,'#fff','left','700');
               txt(clip((a.from?a.from.city||a.from.name:'?')+' → '+(a.to?a.to.city||a.to.name:'?'),34),x+18,y+128,13,'#8b94a6'); }
             else txt('route unknown',x+18,y+104,18,'#6b7280');
-            const alt=a.ground?'on the ground':(a.alt!=null? a.alt.toLocaleString()+' m':'—'), vs=a.vs==null?'':(a.vs>1?' ↑':a.vs<-1?' ↓':' →');
+            const alt=a.ground?'on the ground':(a.alt!=null? Math.max(0,a.alt).toLocaleString()+' m':'—'), vs=a.vs==null?'':(a.vs>1?' ↑':a.vs<-1?' ↓':' →');
             txt(alt+vs+(a.speed!=null?'  ·  '+a.speed+' km/h':''),x+18,y+168,16,'#d6dbe6');
             if(a.airline) txt((a.type||'')+(a.reg?'  ·  '+a.reg:''),x+18,y+192,13,'#8b94a6');
             txt(a.km+' km '+a.dir+(a.inside?'':'  ·  outside the circle'),x+18,y+H-16,14,a.inside?col:'#6b7280','left','600');

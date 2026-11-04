@@ -10,7 +10,7 @@ import AppKit
 enum MapTiles {
     static let cacheDir: URL = {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        let d = base.appendingPathComponent("Deckhand/tiles", isDirectory: true)
+        let d = base.appendingPathComponent("Deckhand/tiles-v2", isDirectory: true)   // bump when the dark filter changes
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }()
