@@ -93,7 +93,7 @@ struct SidebarView: View {
             .contentShape(Rectangle())
             .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 6)
         }
-        .menuStyle(.borderlessButton).menuIndicator(.hidden)
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
         .background(.bar)
         .help(model.selectedCoreBar.map { "\($0.serialNo) · \(model.ipForSelected() ?? $0.lastIp)" } ?? "")
     }

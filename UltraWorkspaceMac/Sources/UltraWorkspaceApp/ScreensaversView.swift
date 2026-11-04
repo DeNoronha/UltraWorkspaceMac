@@ -50,7 +50,7 @@ struct ScreensaversView: View {
                                 AppIcon(url: t.icon, fallback: "sparkles.tv", size: 18)
                             }.tag(t.package)
                         }
-                    } header: { Text("Screensavers") } footer: { Text("Installed ones first, then the vendor's catalogue.").font(.caption).foregroundStyle(.secondary) }
+                    } header: { Text("Screensavers") }
                 }
                 .frame(minWidth: 240, maxWidth: 300)
 
@@ -62,9 +62,9 @@ struct ScreensaversView: View {
                         Divider()
                         timing
                         Spacer()
-                    }.padding(20).frame(minWidth: 360, alignment: .leading)
-                }
-            }
+                    }.padding(20).frame(minWidth: 360, maxWidth: .infinity, alignment: .leading)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity).layoutPriority(1)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
             model.refreshAppStore()

@@ -9,25 +9,12 @@ struct InstalledView: View {
     @State private var confirmRemove: (title: String, action: () -> Void)? = nil
     @State private var showConfirm = false
 
-    /// Installed marketplace or firmware apps (and screensavers) for which the catalogue has a higher versionCode.
-    private var marketUpdates: [(package: String, name: String)] {
-        model.barApps.compactMap { a in
-            guard let s = (model.storeApps + model.storeScreensavers).first(where: { $0.package == a.packageName }) else { return nil }
-            let code = model.appStatus[a.packageName]?.versionCode ?? 0
-            return (code > 0 && s.versionCode > code) ? (a.packageName, a.appName) : nil
-        }
-    }
-    private var deckhandUpdates: [String] { AppModel.barAppPages.map(\.page).filter { model.barAppNeedsUpdate($0) } }
-
     var body: some View {
         VStack(spacing: 0) {
             Header("Installed", "What is on the bar and on the screens right now.") {
                 HStack {
                     Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(!model.link.isConnected)
-                    let updates = marketUpdates, ours = deckhandUpdates, n = updates.count + ours.count
-                    Button { model.updateAll(updates); model.updateBarApps(ours) } label: { Label(n == 0 ? "Update all" : "Update all (\(n))", systemImage: "arrow.down.circle") }
-                        .buttonStyle(.borderedProminent).disabled(n == 0 || model.appBusy != nil || model.barAppBusy != nil)
-                        .help(n == 0 ? "Everything is up to date." : "Updates one after another: " + (updates.map(\.name) + ours.map { p in AppModel.barAppPages.first { $0.page == p }?.label ?? p }).joined(separator: ", "))
+                    UpdateAllButton()
                 }
             }
             Divider()
@@ -35,7 +22,7 @@ struct InstalledView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if let e = model.appStoreError { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
                     if let e = model.barAppError { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true).textSelection(.enabled) }
-                    let n = marketUpdates.count + deckhandUpdates.count
+                    let n = model.updatesAvailable
                     if n > 0 { Label(n == 1 ? "1 update available" : "\(n) updates available", systemImage: "arrow.down.circle.fill").foregroundStyle(.orange).fontWeight(.medium) }
 
                     let ours = AppModel.barAppPages.filter { model.barAppVersion($0.page) != nil }

@@ -17,7 +17,6 @@ struct ContentView: View {
                     ActivityLog().frame(width: 280)
                 }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { StatusBar() }
         }
         .environmentObject(contacts)
         .environmentObject(settings)
@@ -30,13 +29,18 @@ struct ContentView: View {
         }
         .toolbar {
             // The link to the bar, right of the window title: the same badge on every page.
-            ToolbarItem(placement: .navigation) {
+            ToolbarItem(placement: .status) {
                 HStack(spacing: 10) {
+                    // What Deckhand last did (the Activity panel has the whole list).
+                    if model.isScanning || model.isWorking { ProgressView().controlSize(.small) }
+                    Text(model.statusLine).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail).frame(maxWidth: 420, alignment: .trailing)
+                        .help(model.statusLine)
+                    Divider().frame(height: 14)
                     LinkBadge()
                     if model.link.isConnected, let age = model.lastPushAt.map({ Int(Date().timeIntervalSince($0)) }) {
                         Text("last request \(age) s ago").font(.caption).foregroundStyle(.tertiary)
                     }
-                }.padding(.leading, 6)
+                }
             }
             ToolbarItem { Button { model.showActivity.toggle() } label: { Label("Activity", systemImage: "sidebar.trailing") }
                 .help("Show or hide the activity list") }
@@ -339,16 +343,6 @@ struct ActivityLog: View {
     }
 }
 
-private struct StatusBar: View {
-    @EnvironmentObject var model: AppModel
-    var body: some View {
-        HStack(spacing: 8) {
-            if model.isScanning || model.isWorking { ProgressView().controlSize(.small) }
-            Text(model.statusLine).font(.caption).lineLimit(1).truncationMode(.tail)
-            Spacer()
-        }.padding(.horizontal, 12).padding(.vertical, 6).background(.bar)
-    }
-}
 
 /// "● Connected · answering the bar" — the same words everywhere.
 struct LinkBadge: View {

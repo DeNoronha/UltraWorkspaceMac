@@ -83,3 +83,14 @@ struct LibraryRow<Icon: View>: View {
         }
     }
 }
+
+/// "Update all (n)" — the same button on the Installed and Apps pages.
+struct UpdateAllButton: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        let n = model.updatesAvailable
+        Button { model.updateEverything() } label: { Label(n == 0 ? "Update all" : "Update all (\(n))", systemImage: "arrow.down.circle") }
+            .buttonStyle(.borderedProminent).disabled(n == 0 || model.appBusy != nil || model.barAppBusy != nil)
+            .help(model.updateAllHelp)
+    }
+}

@@ -39,6 +39,23 @@ extension AppModel {
         }
     }
 
+    /// Installed marketplace apps and screensavers for which the catalogue has a higher versionCode.
+    var marketUpdates: [(package: String, name: String)] {
+        barApps.compactMap { a in
+            guard let s = (storeApps + storeScreensavers).first(where: { $0.package == a.packageName }) else { return nil }
+            let code = appStatus[a.packageName]?.versionCode ?? 0
+            return (code > 0 && s.versionCode > code) ? (a.packageName, a.appName) : nil
+        }
+    }
+    /// Deckhand apps on the bar older than the APKs shipped with this build.
+    var deckhandUpdates: [String] { Self.barAppPages.map(\.page).filter { barAppNeedsUpdate($0) } }
+    var updatesAvailable: Int { marketUpdates.count + deckhandUpdates.count }
+    var updateAllHelp: String {
+        updatesAvailable == 0 ? "Everything is up to date." : "Updates one after another: " + (marketUpdates.map(\.name) + deckhandUpdates.map { p in Self.barAppPages.first { $0.page == p }?.label ?? p }).joined(separator: ", ")
+    }
+    /// Marketplace updates (the bar does them) and Deckhand's own (over ADB), one after another.
+    func updateEverything() { updateAll(marketUpdates); updateBarApps(deckhandUpdates) }
+
     /// One install/update; polls the status for up to a minute. Returns true when the bar reports it installed.
     @discardableResult
     func performInstall(_ package: String, name: String) async -> Bool {

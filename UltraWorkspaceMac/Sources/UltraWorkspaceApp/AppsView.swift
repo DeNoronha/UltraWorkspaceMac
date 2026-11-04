@@ -58,7 +58,10 @@ struct AppsView: View {
     var body: some View {
         VStack(spacing: 0) {
             Header("Apps", "Apps run on the bar itself. Switch one on to install it; its settings are here too.") {
-                Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(!model.link.isConnected)
+                HStack {
+                    Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(!model.link.isConnected)
+                    UpdateAllButton()
+                }
             }
             Divider()
             HSplitView {
@@ -70,7 +73,7 @@ struct AppsView: View {
                                 Image(systemName: Self.barAppIcon(app.page))
                             }.tag(BarPages.package(for: app.page))
                         }
-                    } header: { Text("Deckhand apps") } footer: { Text("Full-width live pages served by this Mac, one card each.").font(.caption).foregroundStyle(.secondary) }
+                    } header: { Text("Deckhand apps") }
                     let market = entries.filter { !$0.system }, firmware = entries.filter(\.system)
                     Section {
                         if market.isEmpty { Text(model.link.isConnected ? (model.storeApps.isEmpty ? "Press Refresh to load the catalogue." : "Nothing in the catalogue.") : "Connect to the bar to list them.").font(.caption).foregroundStyle(.secondary) }
@@ -79,7 +82,7 @@ struct AppsView: View {
                                 AppIcon(url: e.icon, fallback: "app", size: 18)
                             }.tag(e.package)
                         }
-                    } header: { Text("Marketplace") } footer: { Text("The vendor's catalogue; the bar downloads and installs these itself.").font(.caption).foregroundStyle(.secondary) }
+                    } header: { Text("Marketplace") }
                     if !firmware.isEmpty {
                         Section("Built into the firmware") {
                             ForEach(firmware) { e in
@@ -102,9 +105,9 @@ struct AppsView: View {
                             else { Text("Pick an app on the left.").foregroundStyle(.secondary) }
                         } else { Text("Pick an app on the left.").foregroundStyle(.secondary) }
                         Spacer()
-                    }.padding(20).frame(minWidth: 360, alignment: .leading)
-                }
-            }
+                    }.padding(20).frame(minWidth: 360, maxWidth: .infinity, alignment: .leading)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity).layoutPriority(1)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
             if model.storeApps.isEmpty { model.refreshAppStore() }
@@ -164,10 +167,10 @@ struct AppsView: View {
         switch page {
         case "flights":
             Panel("Flights settings") {
-                HStack { Stepper("Within \(settings.flightsRadiusKm) km", value: $settings.flightsRadiusKm, in: 1...25); Text("of the weather location.").font(.caption).foregroundStyle(.secondary) }
+                HStack { Stepper("Within \(settings.flightsRadiusKm) km", value: $settings.flightsRadiusKm, in: 1...25); Text("of the location below.").font(.caption).foregroundStyle(.secondary) }
                 Text("Positions every 10 s while the page is open on the bar, every 2 min otherwise.").font(.caption).foregroundStyle(.secondary)
             }
-            AddonSettingsPanel(t: .weather)
+            LocationPanel()
         case "news":
             Panel("Headlines settings") {
                 Picker("Source", selection: $settings.newsSource) { ForEach(NewsFeed.sources) { s in Text(s.name).tag(s.id) } }.frame(width: 260)
@@ -182,17 +185,17 @@ struct AppsView: View {
                 }
             }
         case "sky":
-            Panel("Sun & Moon settings", footer: "Computed on this Mac for the weather location; nothing is fetched.") { EmptyView() }
-            AddonSettingsPanel(t: .weather)
+            LocationPanel()
+            Text("Sun and moon are computed on this Mac for this location; nothing is fetched.").font(.caption).foregroundStyle(.secondary)
         case "weather": AddonSettingsPanel(t: .weather)
         case "crypto": AddonSettingsPanel(t: .crypto)
         case "calendar": AddonSettingsPanel(t: .calendar)
         case "claude": AddonSettingsPanel(t: .claude)
         case "music": AddonSettingsPanel(t: .music)
         case "verse":
-            Panel("Verse", footer: "One of 98 well-known passages, picked by the day of the year; the text comes from bible-api.com.") { EmptyView() }
+            Text("No settings. One of 98 well-known passages, picked by the day of the year; the text comes from bible-api.com.").font(.caption).foregroundStyle(.secondary)
         default:
-            Panel("Monitor", footer: "No settings: it shows this Mac as it is.") { EmptyView() }
+            Text("No settings: it shows this Mac as it is.").font(.caption).foregroundStyle(.secondary)
         }
     }
 

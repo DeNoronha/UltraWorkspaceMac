@@ -85,10 +85,10 @@ struct WidgetsView: View {
                         Divider()
                         AddonSettingsPanel(t: model.selectedAddon)
                         Spacer()
-                    }.padding(20).frame(minWidth: 360, alignment: .leading)
+                    }.padding(20).frame(minWidth: 360, maxWidth: .infinity, alignment: .leading)
                     }
-                }
-            }
+                }.frame(maxWidth: .infinity, maxHeight: .infinity).layoutPriority(1)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear { ui.selected = .cube(model.selectedAddon); reload() }
         .onChange(of: model.selectedAddon) { _ in reload() }
@@ -128,7 +128,7 @@ struct WidgetsView: View {
                 }
                 Button("Open CoreBar page") { model.nav = .coreBarPage }.buttonStyle(.borderless).font(.callout)
             }
-        }.padding(20).frame(minWidth: 360, alignment: .leading)
+        }.padding(20).frame(minWidth: 360, maxWidth: .infinity, alignment: .leading)
     }
 
     private func blurb(_ t: Theme) -> String {
@@ -155,17 +155,8 @@ struct AddonSettingsPanel: View {
     @ViewBuilder var body: some View {
         switch t {
         case .weather:
+            LocationPanel()
             Panel("Weather settings") {
-                Picker("Location", selection: $settings.locationMode) {
-                    Text("Same as this Mac").tag(AppSettings.LocationMode.auto)
-                    Text("Manual").tag(AppSettings.LocationMode.manual)
-                }.pickerStyle(.radioGroup)
-                if settings.locationMode == .manual {
-                    TextField("City (e.g. Amsterdam)", text: $settings.manualCity).frame(width: 220)
-                    HStack { TextField("Lat", text: $settings.manualLat).frame(width: 90); TextField("Lon", text: $settings.manualLon).frame(width: 90) }
-                } else {
-                    Text("Time zone: \(settings.macTimeZone)").font(.caption).foregroundStyle(.secondary)
-                }
                 Picker("Units", selection: $settings.units) { Text("°C").tag(AppSettings.Units.metric); Text("°F").tag(AppSettings.Units.imperial) }
                     .pickerStyle(.segmented).frame(width: 160)
                 Toggle("24-hour clock", isOn: $settings.clock24h).toggleStyle(.switch)
@@ -227,6 +218,25 @@ struct AddonSettingsPanel: View {
             }
         default:
             EmptyView()
+        }
+    }
+}
+
+/// Where "here" is — shared by Weather, Flights and Sun & Moon.
+struct LocationPanel: View {
+    @EnvironmentObject var settings: AppSettings
+    var body: some View {
+        Panel("Location", footer: "Used by the Weather widget and app, Flights and Sun & Moon.") {
+            Picker("Location", selection: $settings.locationMode) {
+                Text("Same as this Mac").tag(AppSettings.LocationMode.auto)
+                Text("Manual").tag(AppSettings.LocationMode.manual)
+            }.pickerStyle(.radioGroup)
+            if settings.locationMode == .manual {
+                TextField("City (e.g. Amsterdam)", text: $settings.manualCity).frame(width: 220)
+                HStack { TextField("Lat", text: $settings.manualLat).frame(width: 90); TextField("Lon", text: $settings.manualLon).frame(width: 90) }
+            } else {
+                Text("Time zone: \(settings.macTimeZone)").font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 }
