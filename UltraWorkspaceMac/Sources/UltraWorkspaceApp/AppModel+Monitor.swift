@@ -49,10 +49,10 @@ extension AppModel {
     <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1424,height=280,initial-scale=1">
     <title>Deckhand Monitor</title>
     <style>
-      html,body{margin:0;background:#000;color:#fff;font:18px -apple-system,Roboto,Helvetica,Arial,sans-serif;overflow:hidden;width:1424px;height:280px;-webkit-user-select:none}
+      html,body{margin:0;background:#1c2029;color:#fff;font:18px -apple-system,Roboto,Helvetica,Arial,sans-serif;overflow:hidden;width:1424px;height:280px;-webkit-user-select:none}
       canvas{display:block}
       #x{position:absolute;right:14px;top:10px;width:40px;height:40px;border-radius:20px;background:rgba(255,255,255,.16);color:#e5e9f0;font-size:22px;line-height:40px;text-align:center}
-      #wait{position:absolute;left:0;top:0;width:1424px;height:280px;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:20px;background:#000}
+      #wait{position:absolute;left:0;top:0;width:1424px;height:280px;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:20px;background:#1c2029}
     </style></head><body>
     <canvas id="c" width="1424" height="280"></canvas><div id="x">✕</div><div id="wait">Waiting for the Mac…</div>
     <script>
@@ -77,19 +77,19 @@ extension AppModel {
       g.strokeStyle=col; g.lineWidth=3.5; g.stroke();
     }
     function bar(x,y,w,h,pct,col,label,sub){
-      g.fillStyle='#2a3140'; g.fillRect(x,y,w,h);
+      g.fillStyle='#3a4253'; g.fillRect(x,y,w,h);
       g.fillStyle=col; g.fillRect(x,y,w*Math.min(1,pct/100),h);
       g.fillStyle='#d6dbe6'; g.font='600 17px sans-serif'; g.textAlign='left'; g.fillText(label,x,y-8);
       g.textAlign='right'; g.fillStyle='#fff'; g.fillText(sub,x+w,y-8);
     }
     function draw(){
-      g.clearRect(0,0,1424,280);
+      g.fillStyle='#1c2029'; g.fillRect(0,0,1424,280);
       if(last){ shown.cpu=lerp(shown.cpu,last.cpu,.15); shown.mem=lerp(shown.mem,last.mem,.15); shown.disk=lerp(shown.disk,last.disk,.15); shown.down=lerp(shown.down,last.down,.2); shown.up=lerp(shown.up,last.up,.2); }
       // CPU: big number + 2-minute area chart
       g.fillStyle='#d6dbe6'; g.font='600 20px sans-serif'; g.textAlign='left'; g.fillText('CPU',40,42);
       g.fillStyle='#fff'; g.font='700 76px sans-serif'; g.fillText(Math.round(shown.cpu)+'%',40,118);
       area(cpu,200,30,560,200,100,'#6aa6ff');
-      g.strokeStyle='#39414f'; g.lineWidth=1; for(const q of [.25,.5,.75]){ g.beginPath(); g.moveTo(200,30+200*q); g.lineTo(760,30+200*q); g.stroke(); }
+      g.strokeStyle='#4a5365'; g.lineWidth=1; for(const q of [.25,.5,.75]){ g.beginPath(); g.moveTo(200,30+200*q); g.lineTo(760,30+200*q); g.stroke(); }
       g.fillStyle='#8b94a6'; g.font='13px sans-serif'; g.textAlign='left'; g.fillText('2 min',200,250);
       // network sparkline
       const m=Math.max(1e5, ...down, ...up);
