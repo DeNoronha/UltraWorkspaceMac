@@ -80,7 +80,7 @@ struct KnobKeyView: View {
                     HStack(alignment: .top, spacing: 24) {
                         Image(systemName: "dial.medium").font(.system(size: 72)).foregroundStyle(.secondary).frame(width: 110)
                         Panel("What it does") {
-                            BindingRow(icon: "arrow.clockwise", control: "Turn", action: "Mac volume", note: "the bar asks this Mac for the level and sets it")
+                            BindingRow(icon: "arrow.clockwise", control: "Turn", action: "Nothing (for now)", note: "Mac volume was too laggy — to be debugged")
                             BindingRow(icon: "hand.tap", control: "Press", action: "Play / pause in Apple Music", note: "via this Mac")
                             if let v = model.lastKnobVolume { Text("Last level set from the knob: \(v) %").font(.caption).foregroundStyle(.secondary) }
                             BindingsFooter(lastUsed: model.lastVolumePushAt)

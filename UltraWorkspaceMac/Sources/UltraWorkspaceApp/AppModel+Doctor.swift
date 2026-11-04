@@ -212,7 +212,7 @@ extension AppModel {
         s += "CoreBar \(selectedCoreBar?.name ?? "-") \(selectedCoreBar?.serialNo ?? "") @ \(ipForSelected() ?? "-")\n"
         s += "Bar cards: \(settings.coreCards.joined(separator: ", ")) · published: \(settings.deckhandPagePublished)\n"
         s += "Cube cards: \(settings.vivoCards.map(\.rawValue).joined(separator: ", ")) · mode: \(settings.vivoSwitchMode.rawValue) · every \(settings.vivoSeconds) s\n"
-        s += "Bindings: knob turn → Mac volume, knob press → play/pause in Music; DotKey 1 → previous cube card, 2 → next card, hold 3 → Standard page\n"
+        s += "Bindings: knob turn → nothing for now (Mac volume lagged; to debug), knob press → play/pause in Music; DotKey 1 → previous cube card, 2 → next card, hold 3 → Standard page\n"
         for i in doctorItems {
             let mark: String = { switch i.state { case .ok: return "OK  "; case .warn: return "WARN"; case .fail: return "FAIL"; case .info: return "info" } }()
             s += "\(mark) [\(i.group)] \(i.name): \(i.detail)\n"
