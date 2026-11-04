@@ -185,7 +185,7 @@ function handleFrame(socket: tls.TLSSocket, req: RequestFrame): void {
       if (key in state.sensors) {
         result = state.sensors[key];
       } else if (d.propertyId === 7 && d.serialNo) {
-        // Default like a real cube: joined to the CoreBar hotspot AndroidAP_7757 / [redacted-hotspot-password].
+        // Default like a real cube: joined to the CoreBar's own hotspot (AndroidAP_xxxx, per-unit password).
         const hex = state.moduleWiFi.get(d.serialNo) ?? '0E416E64726F696441505F373735370C383139363534623335616234';
         sendFrame(socket, reply(Act.MODULE_PROPERTY_READ, id, { serialNo: d.serialNo, deviceId: d.deviceId, propertyId: d.propertyId, result: hex }));
         return;

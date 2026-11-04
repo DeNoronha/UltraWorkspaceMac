@@ -151,7 +151,7 @@ This is independent of the CoreBar's own built-in AccuWeather widget, which need
 
 ## 7. Troubleshooting
 
-- **Firmware matters.** The bar's launcher version is the `ver` in the sidebar/discovery (for example `1.0.9(9)`). Cards added in later releases do not exist on older launchers: on **1.0.3** the five SenseCube cards never appear, on **1.0.9** they do. Settings → About on the bar may show no update even when one exists; the release APKs are on the vendor's GitHub release page and can be installed over ADB (see `docs/vendor_docs/` and PROTOCOL.md).
+- **Firmware matters.** The bar's launcher version is the `ver` in the sidebar/discovery (for example `1.0.9(9)`). Cards added in later releases do not exist on older launchers: on **1.0.3** the five SenseCube cards never appear, on **1.0.9** they do. Settings → About on the bar may show no update even when one exists; the release APKs are on the vendor's GitHub release page and can be installed over ADB (see the vendor's support pages at https://hub.sanytron.com/support/ultrabarx and PROTOCOL.md).
 - **A hiss or click from the bar when you tap Next card or Play / pause** is the launcher's own tap sound (new in 1.0.9, played at 30 % of the bar's media volume). It ignores the bar's "Click sound" switch; lower the bar's media volume under Settings → Sound on the bar if it bothers you.
 - **SenseCube temperature reads several degrees too high** (and humidity too low): the cube warms up on the bar. SenseCube firmware V2 adds a calibration; the OTA file is in the vendor release.
 

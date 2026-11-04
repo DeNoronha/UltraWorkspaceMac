@@ -163,7 +163,7 @@ The local CoreBar protocol was recovered by decompiling the independent ClickOnc
 - [`docs/SECURITY.md`](docs/SECURITY.md) — security notes about the device and what Deckhand does about them.
 - [`docs/RELEASING.md`](docs/RELEASING.md) — building the DMG and cutting a GitHub release.
 - [`docs/COLLAB.md`](docs/COLLAB.md) — collaboration notes.
-- [`docs/vendor_docs/INDEX.md`](docs/vendor_docs/INDEX.md) — the vendor's own documents (ecosystem integration, hardware modules, OTA guide, troubleshooting), kept verbatim for reference; `docs/research/` holds our findings and `docs/reviews/` the code and UX reviews.
+- The vendor's own documents (ecosystem integration, hardware modules, OTA, troubleshooting) are at https://hub.sanytron.com/support/ultrabarx; they are not copied into this repository.
 - [`mock-corebar/README.md`](mock-corebar/README.md) — the hardware-free test setup.
 
 ## Roadmap

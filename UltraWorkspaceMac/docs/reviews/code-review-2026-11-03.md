@@ -20,7 +20,7 @@ Build: clean of errors. Warnings after a clean rebuild: 22 × "'weak' ownership 
 
 **C2. Wi-Fi password and AccuWeather key in `wire.log` and the Status report** — ✅ fixed in `36ae3a8` (act-aware redaction, 5 MB cap, old log scrubbed, docs corrected). Still to do: `VivoWiFiSheet` (VivoCubeView.swift:200) copy "not stored on this Mac" is only true now that the log is redacted; say "sent to the cube only; redacted from Deckhand's log".
 
-**C3. Hard-coded hotspot credentials of one physical unit** — `AppModel.swift:77` `coreBarHotspot = ("AndroidAP_7757", "[redacted-hotspot-password]")`, used by `hotspotAction` and "Back to the CoreBar hotspot". For any other CoreBar the one-click "fix" writes wrong credentials and takes the cube off the network; it is also a real password in a public MIT repo (and in `kitcheck/main.swift:68`). Fix: per-CoreBar setting (prompt once, store in `Store.PairedCoreBar`), prefilled from the cube's current config if it starts with `AndroidAP`; never ship a literal.
+**C3. Hard-coded hotspot credentials of one physical unit** — `AppModel.swift:77` `coreBarHotspot = ("AndroidAP_7757", "<password of that unit>")`, used by `hotspotAction` and "Back to the CoreBar hotspot". For any other CoreBar the one-click "fix" writes wrong credentials and takes the cube off the network; it is also a real password in a public MIT repo (and in `kitcheck/main.swift:68`). Fix: per-CoreBar setting (prompt once, store in `Store.PairedCoreBar`), prefilled from the cube's current config if it starts with `AndroidAP`; never ship a literal.
 
 ### High
 

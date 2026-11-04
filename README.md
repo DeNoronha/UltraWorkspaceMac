@@ -104,7 +104,7 @@ Visit the **[GitHub Releases](https://github.com/Qinkunex/UltraWorkspace/release
 
 ### 📟 Hardware Firmware (OTA)
 * **`VivoCube_V2_20260728_ota.bin`**: Binary firmware for VivoCube OTA updates via UltraWorkspace.
-  * 📖 **[View Step-by-Step Module OTA Flashing Guide](UltraWorkspaceMac/docs/vendor_docs/OTA-GUIDE.md)**
+  * 📖 **[View Step-by-Step Module OTA Flashing Guide](https://hub.sanytron.com/support/ultrabarx)**
 
 ### 📱 Android Companion Apps
 * **`LineOS_v1.0.8.apk`**: LineOS system application for CoreBAR.
@@ -127,12 +127,12 @@ Visit the **[GitHub Releases](https://github.com/Qinkunex/UltraWorkspace/release
 
 ## 📖 Documentation & Guides
 
-Visit our **[Documentation Hub](UltraWorkspaceMac/docs/vendor_docs/INDEX.md)** for detailed guides:
+Visit our **[Documentation Hub](https://hub.sanytron.com/support/ultrabarx)** for detailed guides:
 
-* 📟 **[Module OTA Flashing Guide](UltraWorkspaceMac/docs/vendor_docs/OTA-GUIDE.md)**
-* 🧩 **[QuantumLink™ Hardware Modules Guide](UltraWorkspaceMac/docs/vendor_docs/HARDWARE-MODULES.md)**
-* 🏡 **[Home Assistant & Sonos Integration Guide](UltraWorkspaceMac/docs/vendor_docs/ECOSYSTEM-INTEGRATION.md)**
-* 🛠️ **[Troubleshooting & FAQ](UltraWorkspaceMac/docs/vendor_docs/TROUBLESHOOTING.md)**
+* 📟 **[Module OTA Flashing Guide](https://hub.sanytron.com/support/ultrabarx)**
+* 🧩 **[QuantumLink™ Hardware Modules Guide](https://hub.sanytron.com/support/ultrabarx)**
+* 🏡 **[Home Assistant & Sonos Integration Guide](https://hub.sanytron.com/support/ultrabarx)**
+* 🛠️ **[Troubleshooting & FAQ](https://hub.sanytron.com/support/ultrabarx)**
 
 ## ❓ Frequently Asked Questions (FAQ)
 
