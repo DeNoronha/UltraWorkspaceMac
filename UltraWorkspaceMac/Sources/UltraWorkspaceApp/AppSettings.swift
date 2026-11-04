@@ -59,7 +59,11 @@ final class AppSettings: ObservableObject {
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows this many single cards without scrolling (the clock card takes two slots) — counted on the bar 2026-11-04.
     static let coreCardsThatFit = 5
-    struct CoreCard: Identifiable { let id: String; let title: String; let needsMac: Bool; let icon: String; let note: String }
+    struct CoreCard: Identifiable {
+        let id: String; let title: String; let needsMac: Bool; let icon: String; let note: String
+        /// The bar's own icon for an app card (from its app list); nil for Deckhand's fixed cards.
+        var imageURL: URL? = nil
+    }
     static let allCoreCards: [CoreCard] = [
         CoreCard(id: "TIME", title: "Clock", needsMac: false, icon: "clock", note: "The bar's clock card with Deckhand's picture (weather & date, free, updated hourly while Deckhand runs)."),
         CoreCard(id: "WEATHER", title: "Weather (bar's own)", needsMac: false, icon: "cloud.sun", note: "Drawn by the bar from AccuWeather — needs a key (14-day trial, paid afterwards)."),

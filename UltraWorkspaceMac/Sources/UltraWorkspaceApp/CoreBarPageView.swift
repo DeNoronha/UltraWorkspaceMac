@@ -95,7 +95,7 @@ struct CoreBarPageView: View {
                 Image(nsImage: cover).resizable().interpolation(.high).aspectRatio(contentMode: .fill).clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
                 VStack(spacing: 4) {
-                    Image(systemName: c.icon).font(.title2).foregroundStyle(.white.opacity(0.9))
+                    CardIcon(card: c, size: 28).font(.title2).foregroundStyle(.white.opacity(0.9))
                     Text(c.title).font(.caption2).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
                 }.padding(4)
             }
@@ -113,7 +113,7 @@ struct CoreBarPageView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 8) {
                             Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary)
-                            Label(c.title, systemImage: c.icon)
+                            Label { Text(c.title) } icon: { CardIcon(card: c) }
                             if c.needsMac { Image(systemName: "bolt.horizontal").font(.caption).foregroundStyle(.orange).help("Live from this Mac") }
                             if c.id == "WEATHER" {
                                 if settings.accuWeatherKey.isEmpty { Text("needs key").font(.caption2).foregroundStyle(.orange) }

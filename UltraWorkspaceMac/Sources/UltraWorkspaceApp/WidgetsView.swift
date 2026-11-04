@@ -34,7 +34,7 @@ struct WidgetsView: View {
                     Section {
                         ForEach(AppSettings.allCoreCards) { c in
                             HStack {
-                                Label(c.title, systemImage: c.icon)
+                                Label { Text(c.title) } icon: { CardIcon(card: c) }
                                 Spacer()
                                 if settings.coreCards.contains(c.id) { Image(systemName: "rectangle.on.rectangle").font(.caption).foregroundStyle(.secondary).help("On the CoreBar page") }
                             }.tag(Item.bar(c.id))
@@ -44,7 +44,7 @@ struct WidgetsView: View {
                         if model.appCards.isEmpty { Text(model.link.isConnected ? "No apps read from the bar yet." : "Connect to the bar to list its apps.").font(.caption).foregroundStyle(.secondary) }
                         ForEach(model.appCards) { c in
                             HStack {
-                                Label(c.title, systemImage: c.icon)
+                                Label { Text(c.title) } icon: { CardIcon(card: c) }
                                 Spacer()
                                 if settings.coreCards.contains(c.id) { Image(systemName: "rectangle.on.rectangle").font(.caption).foregroundStyle(.secondary).help("On the CoreBar page") }
                             }.tag(Item.bar(c.id))
@@ -124,7 +124,7 @@ struct WidgetsView: View {
         let hasSense = model.modules.contains { $0.type == "SENSE_CUBE" }
         let needsSense = c.id.hasPrefix("SENSE_") && !hasSense
         return VStack(alignment: .leading, spacing: 12) {
-            Label(c.title, systemImage: c.icon).font(.title3).bold()
+            Label { Text(c.title) } icon: { CardIcon(card: c, size: 22) }.font(.title3).bold()
             Text(c.note.isEmpty ? "Drawn by the bar itself from live data this Mac sends over the link." : c.note).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Text("The bar renders this card at its own size on the 1424 × 280 strip and updates it live. Deckhand cannot change how it looks; it only puts the card on the Deckhand page.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

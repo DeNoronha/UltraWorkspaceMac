@@ -369,3 +369,18 @@ struct LinkBadge: View {
         }
     }
 }
+
+
+/// A card's icon: the bar's own app icon when there is one, else the SF Symbol.
+struct CardIcon: View {
+    let card: AppSettings.CoreCard
+    var size: CGFloat = 18
+    var body: some View {
+        if let url = card.imageURL {
+            AsyncImage(url: url) { img in img.resizable() } placeholder: { Image(systemName: card.icon) }
+                .frame(width: size, height: size).clipShape(RoundedRectangle(cornerRadius: size * 0.22))
+        } else {
+            Image(systemName: card.icon).frame(width: size, height: size)
+        }
+    }
+}

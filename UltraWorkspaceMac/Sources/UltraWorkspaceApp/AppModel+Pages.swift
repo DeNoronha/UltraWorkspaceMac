@@ -21,9 +21,10 @@ extension AppModel {
     func coreCard(_ id: String) -> AppSettings.CoreCard? {
         if let c = AppSettings.coreCard(id) { return c }
         guard let pkg = Self.appPackage(id) else { return nil }
-        let name = barApps.first { $0.packageName == pkg }?.appName ?? pkg
-        return AppSettings.CoreCard(id: id, title: "Open \(name)", needsMac: false, icon: "app.badge",
-                                    note: "Opens \(name) on the bar when tapped; the bar draws the app's own icon.")
+        let app = barApps.first { $0.packageName == pkg }
+        let name = app?.appName ?? pkg
+        return AppSettings.CoreCard(id: id, title: name, needsMac: false, icon: "app.badge",
+                                    note: "Opens \(name) on the bar when tapped.", imageURL: app?.iconUrl.flatMap(URL.init))
     }
     /// Everything that can go on the Deckhand page right now.
     var allCoreCardsNow: [AppSettings.CoreCard] { AppSettings.allCoreCards + appCards }
