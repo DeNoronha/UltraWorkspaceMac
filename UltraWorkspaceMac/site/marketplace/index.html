@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>OpenBarX marketplace — apps and cards for the UltraBar X</title>
 <meta name="description" content="Apps for the CoreBar's screen and cards for the VivoCube, installed through Deckhand. A public, curated index.">
+<meta property="og:title" content="OpenBarX marketplace — apps and cards for the UltraBar X">
+<meta property="og:description" content="Eleven bar apps and seven cube cards today, curated through pull requests. Installed through Deckhand.">
+<meta property="og:image" content="https://denoronha.github.io/UltraWorkspaceMac/assets/img/screens/bar-monitor.png">
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +15,7 @@
 <link rel="stylesheet" href="../assets/site.css">
 <style>
   .filters { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:2rem }
-  .filters button { all:unset; cursor:pointer; min-height:44px; padding:.4rem 1rem; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); font:700 .875rem/1.5 var(--font-sans); color:var(--text) }
+  .filters button { all:unset; cursor:pointer; min-height:44px; padding:.4rem 1rem; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); font:700 .875rem/1.5 var(--font-sans); color:var(--text) }
   .filters button[aria-pressed="true"] { background:var(--ink-900); color:#fff; border-color:var(--ink-900) }
   .filters button:focus-visible { box-shadow:var(--shadow-ring) }
   .count { margin-bottom:1rem }
@@ -44,7 +47,7 @@
 </header>
 
 <main>
-  <section class="hero">
+  <section class="hero hero-compact">
     <div class="container">
       <p class="eyebrow">OpenBarX marketplace <span class="sep">·</span> <span id="updated">index</span></p>
       <h1>Apps and cards for the bar.</h1>
@@ -123,18 +126,20 @@
         <a href="https://denoronha.consulting">denoronha.consulting <span class="arrow">→</span></a>
       </div>
       <div>
-        <h4>Deckhand</h4>
+        <h3>Deckhand</h3>
         <ul>
           <li><a href="../download/Deckhand.dmg">Download the DMG</a></li>
           <li><a href="../manual/">Manual</a></li>
+          <li><a href="../deckhand/#security">Security and privacy</a></li>
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/docs/ROADMAP.md">Roadmap</a></li>
         </ul>
       </div>
       <div>
-        <h4>For builders</h4>
+        <h3>For builders</h3>
         <ul>
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac">Source on GitHub</a></li>
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/PROTOCOL.md">The CoreBar protocol</a></li>
+          <li><a href="../bar-apps/#build">Build a bar app</a></li>
           <li><a href="registry.json">Marketplace registry (JSON)</a></li>
         </ul>
       </div>

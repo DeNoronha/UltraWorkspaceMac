@@ -180,6 +180,6 @@ This is independent of the CoreBar's own built-in AccuWeather widget, which need
 
 ## 8. What's next (roadmap)
 
-Choosing your own KnobKey and DotKey bindings (today they are fixed), presence-based wake, module OTA firmware updates, installing apps on the bar from Deckhand (today only from the bar's own Marketplace or the `kitcheck app` tool), a notarized release, and a Stream-Deck-style widget marketplace. This section can lag behind the code; the current status is in `docs/ROADMAP.md` in the repository.
+Choosing your own KnobKey and DotKey bindings (today they are fixed), module OTA firmware updates, and the next phase of the OpenBarX marketplace: installing community apps straight from Deckhand, with version checks. This section can lag behind the code; the current status is in `docs/ROADMAP.md` in the repository.
 
 Support: this is community software — file issues at https://github.com/DeNoronha/UltraWorkspaceMac/issues.

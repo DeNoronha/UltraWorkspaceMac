@@ -13,7 +13,7 @@ struct InstalledView: View {
         VStack(spacing: 0) {
             Header("Installed", "What is on the bar and on the screens right now.") {
                 HStack {
-                    Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(!model.link.isConnected)
+                    RefreshButton()
                     UpdateAllButton()
                 }
             }
@@ -28,7 +28,7 @@ struct InstalledView: View {
                     let ours = AppModel.barAppPages.filter { model.barAppVersion($0.page) != nil }
                     let userApps = model.barApps.filter { !$0.isScreensaver && !$0.systemApp && !$0.packageName.hasPrefix(BarPages.packagePrefix) }
                     let firmware = model.barApps.filter { !$0.isScreensaver && $0.systemApp }
-                    Panel("Apps on the bar", footer: model.barApps.isEmpty ? (model.link.isConnected ? "Press Refresh." : "Connect to the bar first.") : "Deckhand's own apps go over ADB; the others are updated and removed by the bar itself. To install more: Apps.") {
+                    Panel("Apps on the bar", footer: model.barApps.isEmpty ? (model.link.isConnected ? "Press Refresh." : "Connect to the bar first.") : "Deckhand's own apps go over ADB; the others are updated and removed by the bar itself. To install more, go to Apps.") {
                         if ours.isEmpty && userApps.isEmpty && !model.barApps.isEmpty { Text("Only the firmware's apps.").foregroundStyle(.secondary) }
                         ForEach(ours, id: \.page) { app in deckhandRow(app); Divider() }
                         ForEach(userApps, id: \.packageName) { a in barRow(a); Divider() }
@@ -38,7 +38,7 @@ struct InstalledView: View {
                         if model.screensaverApps.isEmpty { Text(model.barApps.isEmpty ? "—" : "None installed.").foregroundStyle(.secondary) }
                         ForEach(model.screensaverApps, id: \.packageName) { a in barRow(a); Divider() }
                     }
-                    Panel("Cards on the VivoCube", footer: "Pictures this Mac draws and sends to the cube. Settings: Widgets.") {
+                    Panel("Cards on the VivoCube", footer: "Pictures this Mac draws and sends to the cube. Their settings are on the Widgets page.") {
                         if settings.vivoCards.isEmpty { Text("No cards yet.").foregroundStyle(.secondary) }
                         ForEach(settings.vivoCards, id: \.self) { t in
                             HStack(spacing: 12) {
@@ -50,7 +50,7 @@ struct InstalledView: View {
                             Divider()
                         }
                     }
-                    Panel("Cards on the CoreBar page", footer: settings.deckhandPagePublished ? "Published to the bar." : "Not published yet — CoreBar page → Publish page.") {
+                    Panel("Cards on the CoreBar page", footer: settings.deckhandPagePublished ? "Published to the bar. To add cards, go to the CoreBar page." : "Not published yet — open the CoreBar page and press Publish page.") {
                         if settings.coreCards.isEmpty { Text("No cards yet.").foregroundStyle(.secondary) }
                         ForEach(settings.coreCards, id: \.self) { id in
                             HStack(spacing: 12) {

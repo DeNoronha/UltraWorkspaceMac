@@ -21,17 +21,25 @@ import UltraBarKit
 
 struct LogsView: View {
     @StateObject private var watcher = LogWatcher()
+    @State private var copied = false
+    @State private var confirmClear = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Header("Logs", "Every message between this Mac and the bar; secrets redacted.") {
                 HStack {
                     Button { reveal() } label: { Label("Reveal in Finder", systemImage: "folder") }
-                    Button { copyAll() } label: { Label("Copy", systemImage: "doc.on.doc") }
-                    Button(role: .destructive) { WireLog.shared.clear(); watcher.lines = [] } label: { Label("Clear", systemImage: "trash") }
+                        .help("Show the log file in the Finder")
+                    Button { copyAll() } label: { Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") }
+                        .disabled(watcher.lines.isEmpty).help("Copy every line shown here as text")
+                    Button(role: .destructive) { confirmClear = true } label: { Label("Clear…", systemImage: "trash") }
+                        .disabled(watcher.lines.isEmpty).help("Empty the log file. Asks first.")
                 }
             }
             Divider()
+            if watcher.lines.isEmpty {
+                Text("Nothing logged yet.").foregroundStyle(.secondary).padding(20)
+            }
 
             ScrollViewReader { proxy in
                 ScrollView {
@@ -54,6 +62,10 @@ struct LogsView: View {
         }
         .onAppear { watcher.start() }
         .onDisappear { watcher.stop() }
+        .alert("Clear the log?", isPresented: $confirmClear) {
+            Button("Clear", role: .destructive) { WireLog.shared.clear(); watcher.lines = [] }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("The log file on this Mac is emptied. Nothing on the bar changes.") }
     }
 
     private func color(for line: String) -> Color {
@@ -69,5 +81,7 @@ struct LogsView: View {
     private func copyAll() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(watcher.lines.joined(separator: "\n"), forType: .string)
+        copied = true
+        Task { try? await Task.sleep(nanoseconds: 2_000_000_000); copied = false }
     }
 }

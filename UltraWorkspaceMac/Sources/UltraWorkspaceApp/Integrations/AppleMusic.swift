@@ -31,10 +31,14 @@ enum AppleMusic {
         run("tell application \"Music\" to set sound volume to (sound volume + \(delta))")
     }
 
+    /// Field separator in the script's reply; a plain "|" occurs in track titles ("Live | Remastered") and
+    /// shifted the artist and album into the wrong fields.
+    private static let sep = "<|>"
+
     static func nowPlaying() -> NowPlaying {
         let src = #"""
         tell application "Music"
-            if it is not running then return "stopped|||"
+            if it is not running then return "stopped<|><|><|>"
             set s to (player state as string)
             set t to ""
             set a to ""
@@ -44,13 +48,13 @@ enum AppleMusic {
                 set a to artist of current track
                 set al to album of current track
             end try
-            return s & "|" & t & "|" & a & "|" & al
+            return s & "<|>" & t & "<|>" & a & "<|>" & al
         end tell
         """#
         guard let desc = run(src), let str = desc.stringValue else {
             return NowPlaying(isPlaying: false, title: "", artist: "", album: "", hasTrack: false)
         }
-        let parts = str.components(separatedBy: "|")
+        let parts = str.components(separatedBy: sep)
         let state = parts.count > 0 ? parts[0] : "stopped"
         let title = parts.count > 1 ? parts[1] : ""
         let artist = parts.count > 2 ? parts[2] : ""

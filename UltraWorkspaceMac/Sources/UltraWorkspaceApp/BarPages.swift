@@ -37,7 +37,9 @@ final class BarPages {
                 // Low priority and incremental (ClaudeUsage.snapshot): this must never crowd out the link.
                 let s = await Task.detached(priority: .utility) { ClaudeUsage.sessions() }.value
                 let snap = await Task.detached(priority: .utility) { ClaudeUsage.snapshot() }.value
-                let np = AppleMusic.nowPlaying()
+                // Music's state comes from the model's own 3 s poll (and is refreshed at once by the page's
+                // play/next/previous): asking Music again here ran a second AppleScript on the main thread every 2 s.
+                let np = model.nowPlaying
                 guard let self else { return }
                 let now = Date()
                 self.claude = ["sessions": s.prefix(6).map { ["project": $0.project, "title": $0.title, "state": $0.state.rawValue, "ago": Int(now.timeIntervalSince($0.lastAt)), "last": $0.lastText] },
@@ -86,7 +88,7 @@ final class BarPages {
                 let events = await CalendarSource.upcoming(limit: 40, calendarIDs: settings.calendarIDs, days: 3)
                 guard let self else { return }
                 let cal = Calendar.current, today = cal.startOfDay(for: Date())
-                let df = DateFormatter(); df.dateFormat = "HH:mm"
+                let df = DateFormatter(); df.dateFormat = settings.clock24h ? "HH:mm" : "h:mm a"
                 var days: [[String: Any]] = []
                 for i in 0..<3 {
                     let d = cal.date(byAdding: .day, value: i, to: today)!, next = cal.date(byAdding: .day, value: 1, to: d)!
@@ -185,7 +187,6 @@ final class BarPages {
             }
         })
         tasks.append(Task { [weak self] in   // Linear: every 20 s while the page is open, else every 2 min
-            var lastKey = ""
             while !Task.isCancelled {
                 guard let self else { return }
                 let key = model.linearKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -209,9 +210,7 @@ final class BarPages {
                     if Task.isCancelled || model.linearKey != key { break }
                     if !open, let t = self.lastHit["tasks"], Date().timeIntervalSince(t) < 10 { break }
                 }
-                lastKey = key
             }
-            _ = lastKey
         })
     }
 
@@ -221,21 +220,10 @@ final class BarPages {
              "state": i.state, "stateType": i.stateType, "color": i.stateColor, "project": i.project.map { $0 as Any } ?? NSNull(), "team": i.team] }]
     }
 
-    /// Answer one request (called off the main actor by the server; reads a snapshot).
-    nonisolated func route(_ path: String, model: AppModel) -> MonitorServer.Response? {
+    /// Answer one POST with the `X-Deckhand: action` header: `/tasks/done/<uuid>`, `/music/cmd/<play|next|previous>`.
+    nonisolated func action(_ path: String, model: AppModel) -> MonitorServer.Response? {
         let parts = path.split(separator: "/").map(String.init)
-        guard let page = parts.first else { return .html(Self.html("monitor")) }
-        guard Self.pages.contains(page) else { return nil }
-        if parts.count == 1 { return .html(Self.html(page)) }
-        if parts[1] == "data.json" { return .json(DispatchQueue.main.sync { self.lastHit[page] = Date(); return self.data(page) }) }
-        if page == "music", parts[1] == "art.jpg" {
-            let jpeg = DispatchQueue.main.sync { self.art?.jpeg } ?? Data()
-            return jpeg.isEmpty ? nil : MonitorServer.Response(type: "image/jpeg", body: jpeg)
-        }
-        if page == "flights", parts.count == 5, parts[1] == "tile", let z = Int(parts[2]), let x = Int(parts[3]), let y = Int(parts[4].replacingOccurrences(of: ".png", with: "")) {
-            guard let png = MapTiles.tile(z: z, x: x, y: y) else { return MonitorServer.Response("404 Not Found", type: "text/plain", body: Data()) }
-            return MonitorServer.Response(type: "image/png", body: png)
-        }
+        guard let page = parts.first, Self.pages.contains(page) else { return nil }
         if page == "tasks", parts.count == 3, parts[1] == "done" {
             // The bar marks an issue done: Deckhand moves it to the team's Done state and drops it from the list.
             let uid = parts[2]
@@ -263,6 +251,24 @@ final class BarPages {
                 switch parts[2] { case "play": model.musicPlayPause(); case "next": model.musicNext(); case "previous": model.musicPrevious(); default: break }
             }
             return .json(["ok": true])
+        }
+        return nil
+    }
+
+    /// Answer one request (called off the main actor by the server; reads a snapshot).
+    nonisolated func route(_ path: String, model: AppModel) -> MonitorServer.Response? {
+        let parts = path.split(separator: "/").map(String.init)
+        guard let page = parts.first else { return .html(Self.html("monitor")) }
+        guard Self.pages.contains(page) else { return nil }
+        if parts.count == 1 { return .html(Self.html(page)) }
+        if parts[1] == "data.json" { return .json(DispatchQueue.main.sync { self.lastHit[page] = Date(); return self.data(page) }) }
+        if page == "music", parts[1] == "art.jpg" {
+            let jpeg = DispatchQueue.main.sync { self.art?.jpeg } ?? Data()
+            return jpeg.isEmpty ? nil : MonitorServer.Response(type: "image/jpeg", body: jpeg)
+        }
+        if page == "flights", parts.count == 5, parts[1] == "tile", let z = Int(parts[2]), let x = Int(parts[3]), let y = Int(parts[4].replacingOccurrences(of: ".png", with: "")) {
+            guard let png = MapTiles.tile(z: z, x: x, y: y) else { return MonitorServer.Response("404 Not Found", type: "text/plain", body: Data()) }
+            return MonitorServer.Response(type: "image/png", body: png)
         }
         return nil
     }
@@ -335,6 +341,7 @@ final class BarPages {
         document.getElementById('x').onclick=()=>{ if(window.Deckhand) Deckhand.close(); };
         async function poll(){ try{ const r=await fetch(location.pathname.replace(/\/$/,'')+'/data.json',{cache:'no-store'}); D=await r.json(); okAt=Date.now();
             document.getElementById('wait').style.display='none'; }catch(e){ if(Date.now()-okAt>8000) document.getElementById('wait').style.display='flex'; } }
+        function act(p){ return fetch(p,{method:'POST',headers:{'X-Deckhand':'action'}}).catch(()=>{}); }
         function bg(){ g.fillStyle='#1c2029'; g.fillRect(0,0,1424,280); }
         function txt(s,x,y,size,col,align,weight){ g.fillStyle=col||'#fff'; g.font=(weight||'400')+' '+size+'px -apple-system,Roboto,Helvetica,Arial,sans-serif'; g.textAlign=align||'left'; g.fillText(s,x,y); }
         function rr(x,y,w,h,r,col){ g.fillStyle=col; g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fill(); }
@@ -362,9 +369,10 @@ final class BarPages {
             if(wait){ g.strokeStyle='rgba(251,191,36,'+(0.6+0.4*pulse)+')'; g.lineWidth=3; g.strokeRect(x+1.5,y+1.5,W-3,H-3); }
             txt(clip(s.project,16),x+16,y+40,24,'#fff','left','700');
             txt(s.state==='question'?'asks a question': wait?'waiting for you':'working…', x+16,y+68,16, wait?'#fde68a':'#8b94a6','left','600');
-            txt(clip(s.title,26),x+16,y+100,15,'#c7cdd8');
-            const t2=clip(s.title,52).slice(25); if(t2) txt(t2,x+16,y+122,15,'#c7cdd8');
-            txt(clip(s.last,30),x+16,y+170,14,'#8b94a6'); const l2=clip(s.last,60).slice(29); if(l2) txt(l2,x+16,y+190,14,'#8b94a6');
+            // Two lines each: the first line is cut without an ellipsis (the text goes on below), the second is clipped.
+            const ti=s.title||'', la=s.last||'';
+            txt(ti.slice(0,25),x+16,y+100,15,'#c7cdd8'); const t2=clip(ti,52).slice(25); if(t2) txt(t2,x+16,y+122,15,'#c7cdd8');
+            txt(la.slice(0,29),x+16,y+170,14,'#8b94a6'); const l2=clip(la,60).slice(29); if(l2) txt(l2,x+16,y+190,14,'#8b94a6');
             txt(ago(s.ago)+' ago',x+16,y+H-16,14,'#6b7280');
           });
           if(!list.length) txt('No Claude Code session in the last hour.',470,150,20,'#6b7280');
@@ -378,7 +386,7 @@ final class BarPages {
           coins.slice(0,5).forEach((c,i)=>{ const x=40+i*(W+20), y=24, H=232; rr(x,y,W,H,16,'rgba(255,255,255,.07)');
             const up=(c.change||0)>=0, col=up?'#4ade80':'#f87171';
             txt(c.symbol,x+18,y+42,26,'#fff','left','700');
-            txt((c.change>=0?'+':'')+(c.change||0).toFixed(2)+'%',x+W-18,y+42,22,col,'right','700');
+            txt((up?'+':'')+(c.change||0).toFixed(2)+'%',x+W-18,y+42,22,col,'right','700');
             const p=c.price||0; txt(p.toLocaleString(undefined,{maximumFractionDigits:p<10?4:2})+' '+(d.suffix||''),x+18,y+84,34,'#fff','left','700');
             const pts=c.points||[]; if(pts.length>1){ const lo=Math.min(...pts,c.open||Infinity), hi=Math.max(...pts,c.open||-Infinity), gx=x+18, gy=y+104, gw=W-36, gh=100;
               const Y=v=> gy+gh-(hi>lo?(v-lo)/(hi-lo):0.5)*gh;
@@ -429,10 +437,11 @@ final class BarPages {
     nonisolated static let musicJS = #"""
         const POLL=2000; let artKey=null, img=null;
         document.body.insertAdjacentHTML('beforeend','<div class="btn" id="p" style="left:330px">⏮</div><div class="btn" id="pp" style="left:410px">⏯</div><div class="btn" id="n" style="left:490px">⏭</div>');
-        for(const [id,cmd] of [['p','previous'],['pp','play'],['n','next']]) document.getElementById(id).onclick=()=>fetch('/music/cmd/'+cmd).then(poll);
+        for(const [id,cmd] of [['p','previous'],['pp','play'],['n','next']]) document.getElementById(id).onclick=()=>act('/music/cmd/'+cmd).then(poll);
         function render(d){
           if(d.hasTrack && d.artKey!==artKey){ artKey=d.artKey; const i=new Image(); i.onload=()=>{img=i}; i.onerror=()=>{img=null}; i.src='/music/art.jpg?k='+encodeURIComponent(artKey); }
-          if(!d.hasTrack){ txt('Nothing playing in Music',330,140,30,'#8b94a6','left','600'); img=null; }
+          // Forget the art key too, so the same track coming back after a stop reloads its cover.
+          if(!d.hasTrack){ txt('Nothing playing in Music',330,140,30,'#8b94a6','left','600'); img=null; artKey=null; }
           if(img){ g.save(); rr(40,20,240,240,18,'#000'); g.clip(); g.drawImage(img,40,20,240,240); g.restore(); } else { rr(40,20,240,240,18,'rgba(255,255,255,.08)'); txt('♪',160,170,90,'#4b5363','center'); }
           if(d.hasTrack){ txt(clip(d.title,40),330,70,38,'#fff','left','700'); txt(clip(d.artist,50),330,112,26,'#d6dbe6'); txt(clip(d.album,60),330,146,20,'#8b94a6');
             txt(d.playing?'Playing':'Paused',330,182,17,d.playing?'#4ade80':'#fbbf24','left','600'); }
@@ -463,7 +472,9 @@ final class BarPages {
         // colour that also marks its plane and flight number on the radar.
         const COLS=['#4ade80','#fbbf24','#60a5fa','#f472b6'];
         const tiles={};
-        function tile(z,x,y){ const k=z+'/'+x+'/'+y; if(tiles[k]) return tiles[k]; const im=new Image(); im.src='/flights/tile/'+z+'/'+x+'/'+y+'.png'; tiles[k]=im; return im; }
+        // A tile that failed (OSM unreachable, Mac busy) is dropped from the cache after 30 s so it is asked for again,
+        // instead of staying a blank hole until the page is reopened.
+        function tile(z,x,y){ const k=z+'/'+x+'/'+y; if(tiles[k]) return tiles[k]; const im=new Image(); im.onerror=()=>setTimeout(()=>{ if(tiles[k]===im) delete tiles[k]; },30000); im.src='/flights/tile/'+z+'/'+x+'/'+y+'.png'; tiles[k]=im; return im; }
         // OpenStreetMap tiles, darkened and cached by the Mac (see MapTiles.swift), scaled so the circle is exactly R km across.
         function map(cx,cy,r,lat,lon,R){ if(lat==null||lon==null) return false;
           const mpp=R*1000/r, zf=Math.log2(156543.03*Math.cos(lat*Math.PI/180)/mpp), z=Math.max(2,Math.min(17,Math.floor(zf))), s=Math.pow(2,zf-z), n=Math.pow(2,z);
@@ -547,20 +558,21 @@ final class BarPages {
           txt(m.name,990,70,34,'#fff','left','700');
           txt(Math.round(m.illumination*100)+' % lit  ·  '+Math.round(m.age)+' days old',990,104,18,'#d6dbe6');
           txt('↑ '+hm(m.rise)+'   ↓ '+hm(m.set)+(m.elevation>0?'   ·  up now, '+Math.round(m.elevation)+'°':''),990,146,18,'#b4bccb');
-          const df=new Date(m.nextFull*1000), dn=new Date(m.nextNew*1000), fmt=x=>x.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
-          txt('full '+fmt(df)+'   ·   new '+fmt(dn),990,180,17,'#8b94a6');
+          const fmt=t=> t? new Date(t*1000).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}) : '—';
+          txt('full '+fmt(m.nextFull)+'   ·   new '+fmt(m.nextNew),990,180,17,'#8b94a6');
           txt(Math.round(m.distanceKm/1000)+' thousand km away',990,214,15,'#6b7280');
         }
         """#
 
     nonisolated static let newsJS = #"""
-        const POLL=60000; let start=0, tick=0;
-        function wrapText(s,max){ const words=(s||'').split(' '), lines=[]; let cur=''; for(const w of words){ const t=cur?cur+' '+w:w; if(t.length>max){ lines.push(cur); cur=w; } else cur=t; } if(cur) lines.push(cur); return lines; }
+        const POLL=60000; let start=0, tick=Math.floor(Date.now()/15000);   // tick starts "now", so the page opens on headline 1
+        function wrapText(s,max){ const words=(s||'').split(' '), lines=[]; let cur=''; for(const w of words){ const t=cur?cur+' '+w:w; if(t.length>max&&cur){ lines.push(cur); cur=w; } else cur=t; } if(cur) lines.push(cur); return lines; }
         function render(d){
           const items=d.items||[]; if(!items.length){ txt(d.error||'Loading '+(d.source||'headlines')+'…',40,150,22,'#8b94a6'); return; }
-          const t=Math.floor(Date.now()/15000); if(t!==tick){ tick=t; start=(start+4)%Math.max(1,items.length); }
+          const t=Math.floor(Date.now()/15000); if(t!==tick){ tick=t; start=(start+4)%items.length; }
+          if(start>=items.length) start=0;   // the list shrank since the last page turn
           txt(d.source||'',40,34,15,'#8b94a6','left','600'); txt(d.at? 'updated '+ago(Math.floor(Date.now()/1000-d.at))+' ago':'',1384,34,13,'#6b7280','right');
-          for(let i=0;i<4;i++){ const it=items[(start+i)%items.length]; const col=i%2, row=Math.floor(i/2); const x=40+col*700, y=70+row*105;
+          for(let i=0;i<Math.min(4,items.length);i++){ const it=items[(start+i)%items.length]; const col=i%2, row=Math.floor(i/2); const x=40+col*700, y=70+row*105;
             rr(x,y,660,90,12,'rgba(255,255,255,.06)');
             const lines=wrapText(it.title,52).slice(0,2); lines.forEach((l,j)=> txt(l,x+18,y+34+j*28,22,'#fff','left',j?'400':'600'));
             if(it.ago!=null) txt(ago(it.ago)+' ago',x+642,y+78,13,'#8b94a6','right'); else if(it.day) txt(it.day,x+642,y+78,13,'#8b94a6','right'); }
@@ -586,17 +598,19 @@ final class BarPages {
         const POLL=30000;
         // Tap an issue to get a Done button; tap Done to close it in Linear (Deckhand does the call).
         let hit=[], sel=null, selAt=0, pending={};
-        c.addEventListener('click',e=>{ const x=e.offsetX, y=e.offsetY;
-          for(const h of hit){ if(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h){
-            if(h.btn){ pending[h.uid]=Date.now(); sel=null; fetch('/tasks/done/'+h.uid).then(()=>setTimeout(poll,1500)); return; }
-            sel= sel===h.uid? null : h.uid; selAt=Date.now(); return; } }
+        // The Done button lies inside its issue's row, so buttons are tested before rows (the first hit wins).
+        c.addEventListener('click',e=>{ const x=e.offsetX, y=e.offsetY, inside=h=> x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h;
+          for(const h of hit){ if(h.btn&&inside(h)){ pending[h.uid]=Date.now(); sel=null; act('/tasks/done/'+h.uid).then(()=>setTimeout(poll,1500)); return; } }
+          for(const h of hit){ if(!h.btn&&inside(h)){ sel= sel===h.uid? null : h.uid; selAt=Date.now(); return; } }
           sel=null; });
         function bars(x,y,p,col){ for(let i=0;i<4;i++){ g.fillStyle= (p&&i<5-p)?col:'rgba(255,255,255,.14)'; g.fillRect(x+i*6,y+12-(i+1)*3,4,(i+1)*3); } }
+        // Local calendar date as YYYY-MM-DD (toISOString would give the UTC date, a day off in the evening east of Greenwich).
+        function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
         function render(d){
           hit=[]; if(sel&&Date.now()-selAt>8000) sel=null;
           if(!d.hasKey){ txt('Add your Linear API key in Deckhand',40,130,32,'#9aa3b2','left','700'); txt('Apps → Tasks. The key stays on the Mac.',40,172,19,'#6b7280'); return; }
           const items=(d.issues||[]).filter(i=>!(pending[i.uid]&&Date.now()-pending[i.uid]<20000)); if(d.error&&!items.length){ txt(d.error,40,150,22,'#f87171'); return; }
-          const today=new Date().toISOString().slice(0,10), week=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+          const today=ymd(new Date()), week=ymd(new Date(Date.now()+7*86400000));
           const due=items.filter(i=>i.due&&i.due<=week).length, over=items.filter(i=>i.due&&i.due<today).length;
           txt((d.me?d.me+' · ':'')+items.length+' open',40,34,15,'#8b94a6','left','600');
           txt((over? over+' overdue':'')+(over&&due?' · ':'')+(due? due+' due this week':''),1340,34,15,over?'#f87171':'#8b94a6','right','600');

@@ -17,7 +17,14 @@ public actor CoreBarClient {
     private var connection: NWConnection?
     private var buffer = Data()
     private var lineWaiters: [(id: UUID, cont: CheckedContinuation<Data?, Never>)] = []
+    /// The deadline task of each waiter, cancelled as soon as the waiter is resumed (so a link
+    /// reading with a 90 s timeout does not pile up a sleeping task per received line).
+    private var waiterTimers: [UUID: Task<Void, Never>] = [:]
     private var closed = false
+
+    /// A peer that never sends a newline must not grow `buffer` without bound: above this the
+    /// connection is closed (a real reply is a few KB; the biggest known one, APP_LIST, ~50 KB).
+    public static let maxLineBytes = 4 * 1024 * 1024
 
     /// Certificate facts captured *synchronously* inside the TLS verify block
     /// (which runs off the actor), so `connect()` can report a pin mismatch
@@ -146,22 +153,22 @@ public actor CoreBarClient {
         connection?.cancel()
         connection = nil
         let ws = lineWaiters; lineWaiters.removeAll()
-        for w in ws { w.cont.resume(returning: nil) }
+        for w in ws { resumeWaiter(w, with: nil) }
     }
 
     // MARK: Receiving line-delimited JSON
 
+    /// One task per receive callback does ingest → (EOF | next receive) in that order, so chunk N
+    /// is always parsed before chunk N+1 and before the EOF that follows it. (Separate tasks for
+    /// ingest and EOF could run in either order on the actor, and an EOF that overtook the last
+    /// chunk would resume the waiter with nil and drop a complete reply.)
     private func startReceiveLoop() {
         guard let conn = connection else { return }
         conn.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
             guard let self else { return }
-            if let data, !data.isEmpty {
-                Task { await self.ingest(data) }
-            }
-            if isComplete || error != nil {
-                Task { await self.handleEOF() }
-            } else {
-                Task { await self.startReceiveLoop() }
+            Task {
+                if let data, !data.isEmpty { await self.ingest(data) }
+                if isComplete || error != nil { await self.handleEOF() } else { await self.startReceiveLoop() }
             }
         }
     }
@@ -169,12 +176,21 @@ public actor CoreBarClient {
     private func ingest(_ data: Data) {
         buffer.append(data)
         drainLines()
+        if buffer.count > Self.maxLineBytes {
+            WireLog.shared.event("line from \(host):\(port) exceeds \(Self.maxLineBytes) B without a newline; closing")
+            close()
+        }
     }
 
     private func handleEOF() {
         closed = true
         let ws = lineWaiters; lineWaiters.removeAll()
-        for w in ws { w.cont.resume(returning: nil) }
+        for w in ws { resumeWaiter(w, with: nil) }
+    }
+
+    private func resumeWaiter(_ w: (id: UUID, cont: CheckedContinuation<Data?, Never>), with value: Data?) {
+        waiterTimers.removeValue(forKey: w.id)?.cancel()
+        w.cont.resume(returning: value)
     }
 
     private var pendingLines: [Data] = []
@@ -191,7 +207,7 @@ public actor CoreBarClient {
         }
         while !lineWaiters.isEmpty, !pendingLines.isEmpty {
             let w = lineWaiters.removeFirst()
-            w.cont.resume(returning: pendingLines.removeFirst())
+            resumeWaiter(w, with: pendingLines.removeFirst())
         }
     }
 
@@ -206,8 +222,9 @@ public actor CoreBarClient {
         let id = UUID()
         return await withCheckedContinuation { cont in
             lineWaiters.append((id, cont))
-            Task { [weak self] in
+            waiterTimers[id] = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                guard !Task.isCancelled else { return }
                 await self?.expireWaiter(id)
             }
         }
@@ -216,7 +233,7 @@ public actor CoreBarClient {
     private func expireWaiter(_ id: UUID) {
         guard let i = lineWaiters.firstIndex(where: { $0.id == id }) else { return }
         let w = lineWaiters.remove(at: i)
-        w.cont.resume(returning: nil)
+        resumeWaiter(w, with: nil)
     }
 
     // MARK: Sending

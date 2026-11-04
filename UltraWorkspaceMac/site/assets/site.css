@@ -27,7 +27,7 @@ a:hover { color:var(--viking-900) }
 :focus-visible { outline:none; box-shadow:var(--shadow-ring); border-radius:var(--radius-sm) }
 h1,h2,h3,h4 { margin:0; text-wrap:balance; letter-spacing:-0.01em }
 p { margin:0 }
-code { font-family:var(--font-mono); font-size:.875em; background:var(--ink-50); padding:.1em .35em; border-radius:2px }
+code { font-family:var(--font-mono); font-size:.875em; background:var(--ink-50); padding:.1em .35em; border-radius:2px; overflow-wrap:anywhere }
 pre { font-family:var(--font-mono); font-size:.875rem; line-height:1.5; background:var(--ink-900); color:var(--ink-100); padding:1.25rem; border-radius:var(--radius-md); overflow-x:auto; margin:0 }
 pre code { background:none; padding:0; color:inherit; font-size:inherit }
 
@@ -47,7 +47,7 @@ a:hover .arrow, .btn:hover .arrow, .card:hover .arrow { transform:translateX(4px
 .brand .name i { font-style:normal; color:var(--accent) }
 .brand .tag { font-family:var(--font-mono); font-size:.75rem; letter-spacing:.04em; color:var(--muted) }
 .nav { display:flex; flex-wrap:wrap; align-items:center; gap:1.5rem; font-size:.875rem }
-.nav a { color:var(--text); text-decoration:none; border-bottom:2px solid transparent; padding-bottom:2px; transition:border-color var(--dur) var(--ease) }
+.nav a { color:var(--text); text-decoration:none; border-bottom:2px solid transparent; padding:.5rem 0 2px; transition:border-color var(--dur) var(--ease) }
 .nav a:hover { border-color:var(--ink-300) }
 .nav a[aria-current="page"] { border-color:var(--accent) }
 
@@ -56,7 +56,7 @@ a:hover .arrow, .btn:hover .arrow, .card:hover .arrow { transform:translateX(4px
 .btn:hover { transform:translateY(-2px); box-shadow:var(--shadow-lift); color:var(--text) }
 .btn-primary { background:var(--ink-900); border-color:var(--ink-900); color:#fff }
 .btn-primary:hover { color:#fff }
-.btn small { font:400 .75rem/1 var(--font-mono); letter-spacing:.04em; color:var(--ink-300) }
+.btn small { font:400 .75rem/1 var(--font-mono); letter-spacing:.04em; color:var(--ink-400) }
 .btn-primary small { color:var(--ink-200) }
 
 /* Sections */
@@ -82,7 +82,7 @@ a:hover .arrow, .btn:hover .arrow, .card:hover .arrow { transform:translateX(4px
 .bar-screen img[hidden] { display:block !important; opacity:0 }
 .bar-screen::after { content:""; position:absolute; inset:0; background:linear-gradient(100deg,rgba(255,255,255,.06),transparent 40%); pointer-events:none }
 .bar-tabs { display:flex; flex-wrap:wrap; gap:.25rem 1.25rem; margin-top:1rem; justify-content:center }
-.bar-tabs button { all:unset; cursor:pointer; font-family:var(--font-mono); font-size:.75rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); padding:.25rem 0; border-bottom:2px solid transparent; transition:color var(--dur) var(--ease), border-color var(--dur) var(--ease) }
+.bar-tabs button { all:unset; cursor:pointer; font-family:var(--font-mono); font-size:.75rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); padding:.5rem .25rem; border-bottom:2px solid transparent; transition:color var(--dur) var(--ease), border-color var(--dur) var(--ease) }
 .bar-tabs button:hover { color:var(--text) }
 .bar-tabs button[aria-selected="true"] { color:var(--text); border-color:var(--accent) }
 .bar-tabs button:focus-visible { box-shadow:var(--shadow-ring) }
@@ -138,7 +138,7 @@ a:hover .arrow, .btn:hover .arrow, .card:hover .arrow { transform:translateX(4px
 .site-footer a { color:var(--ink-100); text-decoration-color:var(--accent) }
 .site-footer a:hover { color:#fff }
 .site-footer .cols { display:grid; gap:2rem; grid-template-columns:repeat(auto-fit,minmax(14rem,1fr)) }
-.site-footer h4 { font-size:.75rem; font-family:var(--font-mono); font-weight:400; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-300); margin-bottom:.75rem }
+.site-footer h3 { font-size:.75rem; font-family:var(--font-mono); font-weight:400; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-300); margin-bottom:.75rem }
 .site-footer ul { list-style:none; margin:0; padding:0; display:grid; gap:.4rem; font-size:.875rem }
 .dnc { display:grid; gap:.75rem; align-content:start }
 .dnc img { width:9rem }
@@ -170,6 +170,12 @@ a:hover .arrow, .btn:hover .arrow, .card:hover .arrow { transform:translateX(4px
 .kv th { width:11rem; font-family:var(--font-mono); font-weight:400; font-size:.75rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); padding-top:1.05rem }
 .kv td { color:var(--ink-500) }
 .apps-wide { grid-template-columns:1fr }
+@media (max-width:47.99rem) {
+  /* Phone: the key-value rows stack, so the value keeps a readable measure */
+  .kv th, .kv td { display:block; width:auto }
+  .kv th { border-bottom:0; padding-bottom:0 }
+  .kv td { padding-top:.35rem }
+}
 
 /* Manual: a contents column and long-form prose generated from MANUAL.md */
 .manual-grid { display:grid; gap:2.5rem; align-items:start }

@@ -23,12 +23,15 @@ extension AppModel {
                 guard let self else { return }
                 guard let ip = self.ipForSelected() else { self.presenceStatus = "No bar selected."; try? await Task.sleep(nanoseconds: 15_000_000_000); continue }
                 let bridge = AdbBridge(path: adb, ip: ip)
-                if connectedTo != ip || self.presenceLog == nil {
+                // (Re)start the log tail when the bar's address changed or the logcat process died (the bar
+                // rebooted, ADB dropped): a dead tail never reports presence again.
+                if connectedTo != ip || !(self.presenceLog?.isRunning ?? false) {
                     guard await bridge.connect() else {
                         self.presenceStatus = "Bar refuses ADB — turn Wi-Fi ADB on in the bar's Developer options."
                         connectedTo = nil; try? await Task.sleep(nanoseconds: 30_000_000_000); continue
                     }
                     connectedTo = ip
+                    self.presenceLog?.terminate()
                     self.presenceLog = bridge.tailLog(tag: Self.senseLogTag) { [weak self] line in
                         guard line.contains("onProximityTriggerSignalReport") else { return }
                         Task { @MainActor in self?.lastPresenceAt = Date() }

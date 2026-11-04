@@ -116,6 +116,9 @@ final class AppModel: ObservableObject {
     var vivoLayerIndex = 0
     @Published var currentPageId: String?
     var themeTask: Task<Void, Never>?
+    /// Last resolved "here" (AppModel+Weather): the bar pages ask every few seconds, CoreLocation and the
+    /// reverse geocoder must not be hit that often.
+    var locationCache: (key: String, at: Date, loc: (lat: Double, lon: Double, name: String))?
 
     struct LogEntry: Identifiable {
         let id = UUID()
@@ -255,10 +258,8 @@ final class AppModel: ObservableObject {
     // MARK: Modules
 
     func refreshModules() {
-        guard let bar = selectedCoreBar, let session = session(for: bar), !isWorking else {
-            if selectedCoreBar != nil { say("No stored token for this CoreBar — pair it again.") }
-            return
-        }
+        guard !isWorking, let bar = selectedCoreBar else { return }
+        guard let session = session(for: bar) else { say("No stored token for this CoreBar — pair it again."); return }
         isWorking = true
         say("Looking for modules on \(bar.name)… (press a DotKey key so it is awake)")
         Task {

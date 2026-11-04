@@ -43,7 +43,8 @@ struct ContentView: View {
                 }
             }
             ToolbarItem { Button { model.showActivity.toggle() } label: { Label("Activity", systemImage: "sidebar.trailing") }
-                .help("Show or hide the activity list") }
+                .help(model.showActivity ? "Hide the activity list" : "Show the activity list: what Deckhand did, newest last")
+                .accessibilityLabel(model.showActivity ? "Hide activity" : "Show activity") }
         }
         .sheet(isPresented: $model.showingConnect) { ConnectView(asSheet: true).environmentObject(model).frame(width: 520, height: 520) }
         .sheet(isPresented: $model.showingAddIP) { ConnectByAddressSheet().environmentObject(model) }
@@ -176,7 +177,7 @@ struct ConnectionHelp: View {
                         .foregroundStyle(.orange).font(.subheadline.bold())
                     Text("• **PC-LINK** (5 V only) → connect to your Mac / computer USB. Safe and correct.")
                     Text("• **USB-OTG** → charging only (a PD/QC or 12 V adapter).")
-                    Text("• ⚠️ Never plug a laptop/PD fast-charger into PC-LINK — it can permanently damage the mainboard.")
+                    Text("• Never plug a laptop/PD fast-charger into PC-LINK — it can permanently damage the mainboard.")
                         .foregroundStyle(.orange)
                 }.font(.caption).frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -366,7 +367,7 @@ struct LinkBadge: View {
     private var linkText: String {
         switch model.link {
         case .connected: return model.pushCount > 0 ? "Connected · \(model.pushCount) requests answered" : "Connected"
-        case .connecting: return "Linking…"
+        case .connecting: return "Connecting…"
         case .stopped: return model.selectedCoreBar == nil ? "No CoreBar" : "Not connected"
         case .reconnecting: return "Reconnecting…"
         }

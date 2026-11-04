@@ -21,6 +21,9 @@ public enum Discovery {
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else { return [] }
         defer { close(fd) }
+        // fdSet() writes bit `fd` into a 1024-bit fd_set (FD_SETSIZE); a larger descriptor would
+        // write past it. Only reachable with over a thousand open files, but it is memory corruption.
+        guard fd < 1024 else { return [] }
 
         var yes: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
@@ -108,6 +111,7 @@ public enum Discovery {
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else { return nil }
         defer { close(fd) }
+        guard fd < 1024 else { return nil } // see blockingListen
 
         var dst = sockaddr_in()
         dst.sin_family = sa_family_t(AF_INET)
@@ -148,7 +152,9 @@ public enum Discovery {
         return nil
     }
 
-    static func parse(_ data: Data, from: String) -> CoreBar? {
+    /// One discovery reply datagram → CoreBar (nil unless it carries `tcpPort`). `from` is the
+    /// sender's address, used when the reply has no `ip`.
+    public static func parse(_ data: Data, from: String) -> CoreBar? {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               obj["tcpPort"] != nil else { return nil }
         func s(_ k: String) -> String {

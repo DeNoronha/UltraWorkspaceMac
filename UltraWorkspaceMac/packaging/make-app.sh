@@ -35,7 +35,8 @@ if [ -n "$IDENTITY" ] && [ "$IDENTITY" != "-" ]; then
     codesign --force --deep --options runtime --timestamp \
         --entitlements "$ROOT/packaging/Deckhand.entitlements" \
         --sign "$IDENTITY" "$APP"
-    codesign --verify --strict --verbose=1 "$APP" && echo "   signature OK"
+    codesign --verify --strict --verbose=1 "$APP"
+    echo "   signature OK"
 else
     echo "==> ad-hoc codesign (no Developer ID identity found; Local Network permission still works)"
     codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || echo "   (codesign skipped)"

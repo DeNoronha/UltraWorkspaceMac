@@ -27,7 +27,7 @@ private struct BindingsFooter: View {
                 if let d = lastUsed { Text("Last used \(Int(Date().timeIntervalSince(d))) s ago").foregroundStyle(.tertiary) }
             } else {
                 Label("Not active yet — publish the CoreBar page once.", systemImage: "exclamationmark.circle").foregroundStyle(.orange)
-                Button("Go to CoreBar page") { model.nav = .coreBarPage }.buttonStyle(.link)
+                Button("Open CoreBar page") { model.nav = .coreBarPage }.buttonStyle(.link)
             }
         }.font(.caption)
     }
@@ -45,8 +45,9 @@ private struct PublishBindings: View {
             if model.publishNeedsConfirmation(settings: settings) { ui.confirm = true } else { model.publishDeckhandPage(settings: settings) }
         } label: { Label("Publish bindings", systemImage: "arrow.up.circle.fill").frame(minWidth: 120) }
         .buttonStyle(.borderedProminent).controlSize(.large)
+        .keyboardShortcut(.return, modifiers: .command)
         .disabled(model.isWorking || model.pageProgress.isRunning || settings.coreCards.isEmpty)
-        .help("Bindings are part of the CoreBar page — this publishes the page again with the bindings shown here")
+        .help("Bindings are part of the CoreBar page — this publishes the page again with the bindings shown here (⌘↩)")
         .alert("Replace the bar's pages?", isPresented: $ui.confirm) {
             Button("Replace pages", role: .destructive) { model.publishDeckhandPage(settings: settings) }
             Button("Cancel", role: .cancel) {}
@@ -66,6 +67,14 @@ private struct BindingsProgress: View {
     }
 }
 
+/// The same closing note on both Controls pages.
+private struct BindingsNote: View {
+    var body: some View {
+        Text("Changing these bindings is planned; today they are fixed. They reach the bar with the CoreBar page — after an update of Deckhand, press Publish bindings once.")
+            .font(.caption).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 struct KnobKeyView: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var model: AppModel
@@ -78,7 +87,7 @@ struct KnobKeyView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     BindingsProgress()
                     HStack(alignment: .top, spacing: 24) {
-                        Image(systemName: "dial.medium").font(.system(size: 72)).foregroundStyle(.secondary).frame(width: 110)
+                        Image(systemName: "dial.medium").font(.system(size: 72)).foregroundStyle(.secondary).frame(width: 110).accessibilityHidden(true)
                         Panel("What it does") {
                             BindingRow(icon: "arrow.clockwise", control: "Turn", action: "Mac volume",
                                        note: MacAudio.shared.hasControl ? "\(MacAudio.shared.name) · \(model.lastKnobVolume ?? MacAudio.shared.volume ?? 0) %"
@@ -88,7 +97,7 @@ struct KnobKeyView: View {
                             BindingsFooter(lastUsed: model.lastVolumePushAt)
                         }
                     }
-                    Text("Changing these bindings is planned; today they are fixed. They reach the bar with the CoreBar page — after an update of Deckhand, press Publish bindings once.").font(.caption).foregroundStyle(.tertiary)
+                    BindingsNote()
                 }.padding(20)
             }
         }
@@ -111,7 +120,7 @@ struct DotKeyView: View {
                         HStack(spacing: 8) {
                             VStack(spacing: 8) { Circle().fill(.quaternary).frame(width: 30, height: 30).overlay(Text("1").font(.caption)); Circle().fill(.quaternary).frame(width: 30, height: 30).overlay(Text("2").font(.caption)) }
                             Capsule().fill(.quaternary).frame(width: 26, height: 68).overlay(Text("3").font(.caption))
-                        }.frame(width: 110).padding(.top, 10)
+                        }.frame(width: 110).padding(.top, 10).accessibilityHidden(true)
                         Panel("What it does") {
                             BindingRow(icon: "1.circle", control: "Key 1", action: "Cube: previous card", note: "via this Mac")
                             BindingRow(icon: "2.circle", control: "Key 2", action: "Cube: next card", note: "via this Mac")
@@ -120,7 +129,7 @@ struct DotKeyView: View {
                             BindingsFooter(lastUsed: nil)
                         }
                     }
-                    Text("Changing these bindings is planned; today they are fixed. They reach the bar with the CoreBar page — after an update of Deckhand, press Publish bindings once.").font(.caption).foregroundStyle(.tertiary)
+                    BindingsNote()
                 }.padding(20)
             }
         }

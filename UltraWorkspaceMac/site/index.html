@@ -7,7 +7,7 @@
 <meta name="description" content="Deckhand is a native, open macOS app for the Sanytron UltraBar X: pages on the CoreBar, cards on the VivoCube, bindings for KnobKey and DotKey, and full-width live apps on the bar. Free download, MIT licensed.">
 <meta property="og:title" content="Deckhand — your UltraBar X, run from the Mac">
 <meta property="og:description" content="Native macOS client and marketplace for the UltraBar X. Free, open source.">
-<meta property="og:image" content="assets/img/screens/bar-monitor.png">
+<meta property="og:image" content="https://denoronha.github.io/UltraWorkspaceMac/assets/img/screens/bar-monitor.png">
 <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,9 +47,9 @@
           </div>
           <p class="meta hero-note">Signed with a Developer ID and notarized, so it opens without a Gatekeeper warning. MIT licensed. Independent software, not affiliated with Sanytron.</p>
         </div>
-        <div class="bar" aria-label="The CoreBar's 1424 by 280 screen showing Deckhand's bar apps">
+        <div class="bar" role="group" aria-label="The CoreBar's 1424 by 280 screen showing Deckhand's bar apps">
           <div class="bar-frame">
-            <div class="bar-screen" id="barScreen">
+            <div class="bar-screen" id="barScreen" role="tabpanel">
               <img src="assets/img/screens/bar-monitor.png" alt="Monitor app on the bar: CPU 25 %, network up and down, memory and disk bars, a clock" data-page="monitor">
               <img src="assets/img/screens/bar-claude.png" alt="Claude app: one terminal needs you, four session cards" data-page="claude" hidden>
               <img src="assets/img/screens/bar-crypto.png" alt="Crypto app: ETH and XRP in euro with a sparkline of the day" data-page="crypto" hidden>
@@ -59,12 +59,12 @@
             </div>
           </div>
           <div class="bar-tabs" role="tablist" aria-label="Bar app">
-            <button role="tab" aria-selected="true" data-page="monitor">Monitor</button>
-            <button role="tab" aria-selected="false" data-page="claude">Claude</button>
-            <button role="tab" aria-selected="false" data-page="crypto">Crypto</button>
-            <button role="tab" aria-selected="false" data-page="weather">Weather</button>
-            <button role="tab" aria-selected="false" data-page="music">Music</button>
-            <button role="tab" aria-selected="false" data-page="calendar">Calendar</button>
+            <button role="tab" aria-selected="true" aria-controls="barScreen" data-page="monitor">Monitor</button>
+            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="claude">Claude</button>
+            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="crypto">Crypto</button>
+            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="weather">Weather</button>
+            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="music">Music</button>
+            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="calendar">Calendar</button>
           </div>
           <p class="meta bar-caption">Actual size on the bar: 1424 × 280 px, 160 dpi.</p>
         </div>
@@ -117,7 +117,7 @@
   <section class="section" id="apps">
     <div class="container">
       <div class="section-head">
-        <p class="eyebrow">Bar apps <span class="sep">·</span> version 1.3</p>
+        <p class="eyebrow">Bar apps <span class="sep">·</span> version 1.5</p>
         <h2>Movement on the whole bar.</h2>
         <p class="lede">The bar's own cards are small and static. Deckhand ships eleven Android apps for the CoreBar that take the full 1424 × 280 screen and move in near real time. Six of them are below; flights overhead, sun and moon, headlines, a verse of the day and your Linear tasks are on the bar apps page. Each one is a thin kiosk window that finds Deckhand on your Mac by itself, so the Mac does the thinking and the bar only draws.</p>
       </div>
@@ -125,7 +125,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/monitor.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Monitor</h3><span class="badge">1.5</span></div>
+            <div class="title"><h3>Monitor</h3><span class="badge">1.6</span></div>
             <p>Your Mac, live: CPU with a two-minute history, network up and down, memory and disk bars, the time. Refreshed every second.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-monitor.png" alt="Monitor app on the bar" loading="lazy"></div>
@@ -133,7 +133,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/claude.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Claude</h3><span class="badge">1.5</span></div>
+            <div class="title"><h3>Claude</h3><span class="badge">1.6</span></div>
             <p>Which terminal needs you. Every Claude Code session on the Mac becomes a card; the ones waiting for an answer pulse orange, with the project, the question and how long ago.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-claude.png" alt="Claude app on the bar" loading="lazy"></div>
@@ -141,7 +141,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/crypto.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Crypto</h3><span class="badge">1.5</span></div>
+            <div class="title"><h3>Crypto</h3><span class="badge">1.6</span></div>
             <p>Up to five coins in your currency, each with a sparkline of the day and the change since midnight.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-crypto.png" alt="Crypto app on the bar" loading="lazy"></div>
@@ -149,7 +149,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/weather.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Weather</h3><span class="badge">1.5</span></div>
+            <div class="title"><h3>Weather</h3><span class="badge">1.6</span></div>
             <p>Now plus three days for the Mac's location: condition, temperature, humidity, wind and chance of rain.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-weather.png" alt="Weather app on the bar" loading="lazy"></div>
@@ -157,7 +157,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/music.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Music</h3><span class="badge">1.5</span></div>
+            <div class="title"><h3>Music</h3><span class="badge">1.6</span></div>
             <p>Apple Music with album art, title, artist and album. The transport buttons work from the bar's touch screen.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-music.png" alt="Music app on the bar" loading="lazy"></div>
@@ -165,7 +165,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/calendar.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Calendar</h3><span class="badge">1.5</span></div>
+            <div class="title"><h3>Calendar</h3><span class="badge">1.6</span></div>
             <p>Today, tomorrow and the day after from the Mac's calendars, in the colours you already know. Past events fade.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-calendar.png" alt="Calendar app on the bar" loading="lazy"></div>
@@ -178,7 +178,7 @@
     </div>
   </section>
 
-    <section class="section" id="screens">
+  <section class="section" id="screens">
     <div class="container">
       <div class="section-head">
         <p class="eyebrow">The Mac app</p>
@@ -186,8 +186,8 @@
         <p class="lede">A sidebar per device, a page per job. Everything the bar shows is drawn on the Mac first, so you see it before you publish it.</p>
       </div>
       <div class="screens">
-        <figure><img src="assets/img/screens/app-corebar.png" width="3022" height="1900" alt="Deckhand's CoreBar page: a preview of the bar's cards, the list of cards to publish, and the pages on the bar" loading="lazy"><figcaption class="meta">CoreBar page · cards and preview</figcaption></figure>
-        <figure><img src="assets/img/screens/app-apps.png" width="3022" height="1900" alt="Deckhand's Apps page: the eleven Deckhand bar apps, the marketplace and the firmware's built-in apps, with the chosen app's switch and settings" loading="lazy"><figcaption class="meta">Apps page · install and update the bar apps</figcaption></figure>
+        <figure><img src="assets/img/screens/app-corebar.png" width="1600" height="1006" alt="Deckhand's CoreBar page: a preview of the bar's cards, the list of cards to publish, and the pages on the bar" loading="lazy"><figcaption class="meta">CoreBar page · cards and preview</figcaption></figure>
+        <figure><img src="assets/img/screens/app-apps.png" width="1600" height="1006" alt="Deckhand's Apps page: the eleven Deckhand bar apps, the marketplace and the firmware's built-in apps, with the chosen app's switch and settings" loading="lazy"><figcaption class="meta">Apps page · install and update the bar apps</figcaption></figure>
       </div>
       <div class="hero-actions" style="margin-top:1.5rem">
         <a class="btn" href="deckhand/">Every page, requirements, security and privacy <span class="arrow">→</span></a>
@@ -262,7 +262,7 @@
         <a href="https://denoronha.consulting">denoronha.consulting <span class="arrow">→</span></a>
       </div>
       <div>
-        <h4>Deckhand</h4>
+        <h3>Deckhand</h3>
         <ul>
           <li><a href="download/Deckhand.dmg">Download the DMG</a></li>
           <li><a href="manual/">Manual</a></li>
@@ -271,7 +271,7 @@
         </ul>
       </div>
       <div>
-        <h4>For builders</h4>
+        <h3>For builders</h3>
         <ul>
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac">Source on GitHub</a></li>
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/PROTOCOL.md">The CoreBar protocol</a></li>

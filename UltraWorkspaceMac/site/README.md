@@ -4,9 +4,9 @@ The public site for Deckhand and the OpenBarX marketplace: plain HTML and CSS, n
 
 ## Layout
 
-- `index.html` — landing page: download, what Deckhand does, the six bar apps, the Mac-app screenshots, the port warning, how to get started.
+- `index.html` — landing page: download, what Deckhand does, the bar apps, the Mac-app screenshots, the port warning, how to get started.
 - `deckhand/index.html` — the Mac app: requirements, every page of the window, how it talks to the bar, security and privacy.
-- `bar-apps/index.html` — the six bar apps: how they work (beacon + pages on :7432), each app, install over Wi-Fi ADB, build your own.
+- `bar-apps/index.html` — the eleven bar apps: how they work (beacon + pages on :7432), each app, install over Wi-Fi ADB, build your own.
 - `marketplace/index.html` — the marketplace shell; it renders `marketplace/registry.json`.
 - `manual/index.html` — **generated** from `../MANUAL.md` by `tools/build-manual.py` (needs pandoc). Run it after every manual change and commit the result; do not edit the page by hand.
 - `404.html` — GitHub Pages serves it for unknown paths (its links are absolute under `/UltraWorkspaceMac/`; change them with the domain).
@@ -14,7 +14,7 @@ The public site for Deckhand and the OpenBarX marketplace: plain HTML and CSS, n
 - `assets/img/screens/bar-*.png` — 1424 × 280 renders of the bar apps. Make them with headless Chrome against a running Deckhand (`http://127.0.0.1:7432/<page>`); the Claude, Calendar and Tasks renders use demo data, never a real session, calendar or issue list.
 - `assets/img/icons/*.png` — the bar apps' launcher icons (copied from the Android project's `mipmap-xxxhdpi`).
 
-Mac-app screenshots (`assets/img/screens/app-*.png`): 2× captures of Deckhand's window with `screencapture -l <window id>` (the Activity panel hidden with its toolbar button, the status bar cropped off: 3022×1928). CoreBar and Apps are in; the VivoCube page is still to add once the cube accepts uploads again, so the page is free of its red error line.
+Mac-app screenshots (`assets/img/screens/app-*.png`): 2× captures, then scaled to 1600 px wide with `sips -Z 1600` so the landing page stays light of Deckhand's window with `screencapture -l <window id>` (the Activity panel hidden with its toolbar button, the status bar cropped off: 3022×1928). CoreBar and Apps are in; the VivoCube page is still to add once the cube accepts uploads again, so the page is free of its red error line.
 
 ## Publishing
 

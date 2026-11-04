@@ -172,8 +172,14 @@ final class AppSettings: ObservableObject {
             .appendingPathComponent("UltraWorkspaceMac", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         url = base.appendingPathComponent("settings.json")
-        if let data = try? Data(contentsOf: url),
-           let p = try? JSONDecoder().decode(Persisted.self, from: data) {
+        var loaded: Persisted?
+        if let data = try? Data(contentsOf: url) {
+            do { loaded = try JSONDecoder().decode(Persisted.self, from: data) }
+            // A settings file that no longer decodes would be silently replaced by defaults on the next save:
+            // at least say so in the log.
+            catch { NSLog("Deckhand: settings.json could not be read, using defaults: \(error)") }
+        }
+        if let p = loaded {
             locationMode = p.locationMode
             manualCity = p.manualCity
             manualLat = p.manualLat
@@ -188,7 +194,7 @@ final class AppSettings: ObservableObject {
             accuWeatherKey = p.accuWeatherKey ?? ""
             vivoRotationOn = p.vivoRotationOn ?? false
             vivoLayerCount = p.vivoLayerCount ?? 1
-            vivoSwitchMode = p.vivoSwitchMode ?? ((p.vivoRotationOn ?? false) ? .timed : .timed)
+            vivoSwitchMode = p.vivoSwitchMode ?? .timed
             vivoPicturePath = p.vivoPicturePath ?? ""
             dateStyle = p.dateStyle ?? .long
             dateShowWeekday = p.dateShowWeekday ?? true
@@ -219,7 +225,8 @@ final class AppSettings: ObservableObject {
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
                           claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, monitorServe: monitorServe, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes,
                           flightsRadiusKm: flightsRadiusKm, newsSource: newsSource)
-        if let data = try? JSONEncoder().encode(p) { try? data.write(to: url, options: .atomic) }
+        do { try JSONEncoder().encode(p).write(to: url, options: .atomic) }
+        catch { NSLog("Deckhand: settings.json could not be saved: \(error)") }
     }
 
     /// This Mac's timezone identifier (e.g. "Europe/Amsterdam").

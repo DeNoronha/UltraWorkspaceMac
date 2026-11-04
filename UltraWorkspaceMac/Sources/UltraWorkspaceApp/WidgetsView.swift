@@ -76,6 +76,7 @@ struct WidgetsView: View {
                                     }
                                 }
                                 Button { reload() } label: { Label("Redraw preview", systemImage: "arrow.clockwise") }.buttonStyle(.borderless).font(.callout)
+                                    .help("Draw the card again with the current settings")
                             }
                         }
                         if Self.snapshotCards.contains(model.selectedAddon) {
@@ -182,7 +183,7 @@ struct AddonSettingsPanel: View {
                             ForEach(CryptoStats.knownCoins, id: \.id) { k in Text("\(k.symbol) — \(k.name)").tag(k.id) }
                             let cur = slot < settings.cryptoCoins.count ? settings.cryptoCoins[slot] : ""
                             if !cur.isEmpty, !CryptoStats.knownCoins.contains(where: { $0.id == cur }) { Text(cur).tag(cur) }
-                        }.labelsHidden().frame(width: 200)
+                        }.labelsHidden().frame(width: 200).accessibilityLabel("Coin \(slot + 1)")
                         TextField("or a CoinGecko id", text: Binding(get: { slot < settings.cryptoCoins.count ? settings.cryptoCoins[slot] : "" },
                                                                    set: { v in var c = settings.cryptoCoins; while c.count < 5 { c.append("") }; c[slot] = v.lowercased(); settings.cryptoCoins = c })).frame(width: 160)
                     }
@@ -190,7 +191,7 @@ struct AddonSettingsPanel: View {
                 HStack {
                     Text("Currency").frame(width: 60, alignment: .leading)
                     Picker("", selection: $settings.cryptoCurrency) { ForEach(CryptoStats.currencies, id: \.self) { Text($0.uppercased()).tag($0) } }
-                        .labelsHidden().frame(width: 100)
+                        .labelsHidden().frame(width: 100).accessibilityLabel("Currency")
                 }
             }
         case .calendar:
@@ -199,7 +200,7 @@ struct AddonSettingsPanel: View {
             Panel("Claude Code") {
                 HStack {
                     Text("Plan").frame(width: 100, alignment: .leading)
-                    Picker("", selection: $settings.claudePlan) { ForEach(AppSettings.ClaudePlan.allCases, id: \.self) { Text($0.title).tag($0) } }.labelsHidden().frame(width: 160)
+                    Picker("", selection: $settings.claudePlan) { ForEach(AppSettings.ClaudePlan.allCases, id: \.self) { Text($0.title).tag($0) } }.labelsHidden().frame(width: 160).accessibilityLabel("Plan")
                 }
                 HStack {
                     Text("Daily budget").frame(width: 100, alignment: .leading)
@@ -213,7 +214,7 @@ struct AddonSettingsPanel: View {
             Panel("Picture") {
                 HStack {
                     Text(settings.vivoPicturePath.isEmpty ? "No picture chosen." : (settings.vivoPicturePath as NSString).lastPathComponent).foregroundStyle(.secondary)
-                    Button("Choose…") { WidgetsView.choosePicture(settings) }
+                    Button(settings.vivoPicturePath.isEmpty ? "Choose a picture…" : "Change picture…") { WidgetsView.choosePicture(settings) }
                 }
             }
         default:

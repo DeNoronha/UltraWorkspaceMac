@@ -97,7 +97,15 @@ public actor CoreBarLink {
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 guard let self else { return }
                 let n = await self.nextHeartbeatId()
-                try? await c.sendFrame(["act": 20, "id": String(n)])
+                do { try await c.sendFrame(["act": 20, "id": String(n)]) } catch {
+                    // The socket is gone (bar rebooted, Mac woke from sleep): closing the client ends
+                    // readLoop (nil line + isClosed) and runLoop reconnects with backoff. Before this
+                    // the failure was swallowed and the link stayed "connected" until the receive
+                    // side noticed by itself.
+                    WireLog.shared.event("link: heartbeat failed (\(error.localizedDescription)); reconnecting")
+                    await c.close()
+                    return
+                }
             }
         }
     }

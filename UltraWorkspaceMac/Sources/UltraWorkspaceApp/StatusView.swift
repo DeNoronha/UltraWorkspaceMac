@@ -22,7 +22,7 @@ struct StatusView: View {
                     } label: { Label(ui.copied ? "Copied" : "Copy report", systemImage: ui.copied ? "checkmark" : "doc.on.doc") }
                     .disabled(model.doctorItems.isEmpty).help("Everything on this page plus settings and the last log lines, as text")
                     Button { model.runDoctor(settings: settings) } label: { Label(model.doctorRunning ? "Checking…" : "Check again", systemImage: "arrow.clockwise") }
-                        .keyboardShortcut("r", modifiers: .command).disabled(model.doctorRunning)
+                        .keyboardShortcut("r", modifiers: .command).disabled(model.doctorRunning).help("Ask the bar and its modules again (⌘R)")
                 }
             }
             Divider()

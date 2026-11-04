@@ -84,13 +84,32 @@ struct LibraryRow<Icon: View>: View {
     }
 }
 
-/// "Update all (n)" — the same button on the Installed and Apps pages.
+/// "Refresh" (⌘R) — the same button on the Installed, Apps and Screensavers pages.
+struct RefreshButton: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+            .keyboardShortcut("r", modifiers: .command)
+            .disabled(!model.link.isConnected)
+            .help(model.link.isConnected ? "Read the apps on the bar and the marketplace catalogue again (⌘R)" : "Connect to the bar first.")
+    }
+}
+
+/// "Update all (n)" — the same button on the Installed, Apps and Screensavers pages.
 struct UpdateAllButton: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         let n = model.updatesAvailable
-        Button { model.updateEverything() } label: { Label(n == 0 ? "Update all" : "Update all (\(n))", systemImage: "arrow.down.circle") }
-            .buttonStyle(.borderedProminent).disabled(n == 0 || model.appBusy != nil || model.barAppBusy != nil)
-            .help(model.updateAllHelp)
+        let busyName: String? = model.barAppBusy.flatMap { p in AppModel.barAppPages.first { $0.page == p }?.label }
+            ?? model.appBusy.map { pkg in (model.barApps.first { $0.packageName == pkg }?.appName) ?? (model.storeApps + model.storeScreensavers).first { $0.package == pkg }?.name ?? pkg }
+        HStack(spacing: 8) {
+            if let busyName {
+                ProgressView().controlSize(.small)
+                Text("Installing \(busyName)…").font(.caption).foregroundStyle(.secondary)
+            }
+            Button { model.updateEverything() } label: { Label(n == 0 ? "Update all" : "Update all (\(n))", systemImage: "arrow.down.circle") }
+                .buttonStyle(.borderedProminent).disabled(n == 0 || busyName != nil)
+                .help(busyName.map { "Waiting for \($0) to finish installing." } ?? model.updateAllHelp)
+        }
     }
 }

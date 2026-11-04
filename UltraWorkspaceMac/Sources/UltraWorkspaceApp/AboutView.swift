@@ -38,7 +38,7 @@ struct AboutView: View {
                 Text(version).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
             }
 
-            Text("A native macOS client for the UltraBar X — discover and pair your CoreBar, control its modules, and publish live widgets to a VivoCube.")
+            Text("A native macOS app for the UltraBar X — find and pair your CoreBar, put cards on the bar and on the VivoCube, install apps and screensavers, and see what the hardware is doing.")
                 .font(.callout).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 360)
@@ -65,7 +65,7 @@ struct AboutView: View {
 
             Text("© 2026 Ramon de Noronha. Released under the MIT License.")
                 .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Text("Unofficial client — not affiliated with or endorsed by the UltraBar X hardware vendor.")
+            Text("Independent, community software — not affiliated with or endorsed by Sanytron, the maker of UltraBar X.")
                 .font(.caption2).foregroundStyle(.tertiary).multilineTextAlignment(.center).frame(maxWidth: 360)
 
             HStack {

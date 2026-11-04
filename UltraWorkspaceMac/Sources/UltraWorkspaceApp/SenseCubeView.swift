@@ -32,6 +32,7 @@ struct SenseCubeView: View {
         VStack(spacing: 0) {
             Header("SenseCube", "Temperature, humidity and light at your desk.") {
                 Button { reader.start(model: model, serial: module.serial) } label: { Label("Read now", systemImage: "arrow.clockwise") }.disabled(reader.busy)
+                    .keyboardShortcut("r", modifiers: .command).help("Ask the SenseCube for a fresh reading (⌘R)")
             }
             Divider()
             ScrollView {
@@ -50,7 +51,7 @@ struct SenseCubeView: View {
                             Text(onPage.isEmpty ? "Show these on the bar: Temperature, Humidity and Light, plus Presence and Sound level (bar only)."
                                  : "\(onPage.compactMap { AppSettings.coreCard($0)?.title }.joined(separator: ", ")) on the CoreBar page.")
                             Spacer()
-                            Button(onPage.count == ids.count ? "CoreBar page" : "Add all five") {
+                            Button(onPage.count == ids.count ? "Open CoreBar page" : "Add all five") {
                                 for id in ids where !settings.coreCards.contains(id) { settings.coreCards.append(id) }
                                 model.nav = .coreBarPage
                             }

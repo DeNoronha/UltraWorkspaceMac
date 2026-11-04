@@ -83,6 +83,12 @@ public final class PreviewServer: @unchecked Sendable {
         }
         conn.start(queue: DispatchQueue.global(qos: .userInitiated))
         readRequest(conn, buffer: Data())
+        // Same guard as MonitorServer: an unanswered connection is closed after the request timeout.
+        DispatchQueue.global().asyncAfter(deadline: .now() + MonitorServer.requestTimeout) { [weak self] in
+            guard let self else { return }
+            self.lock.lock(); let open = self.connections[ObjectIdentifier(conn)] != nil; self.lock.unlock()
+            if open { conn.cancel() }
+        }
     }
 
     private func drop(_ conn: NWConnection) {
@@ -107,11 +113,7 @@ public final class PreviewServer: @unchecked Sendable {
     }
 
     private func respond(_ conn: NWConnection, requestHead: String) {
-        let line = requestHead.split(separator: "\r\n", maxSplits: 1).first.map(String.init) ?? ""
-        let parts = line.split(separator: " ")
-        let method = parts.count > 0 ? String(parts[0]) : ""
-        var target = parts.count > 1 ? String(parts[1]) : "/"
-        if let q = target.firstIndex(of: "?") { target = String(target[..<q]) }
+        let (method, target) = MonitorServer.requestLine(requestHead)
         let name = String(target.drop(while: { $0 == "/" })).removingPercentEncoding ?? ""
 
         lock.lock(); let file = files[name]; lock.unlock()

@@ -26,7 +26,17 @@ SIGNED_DEVID=0
 SIGINFO="$(codesign -dvv "$ROOT/dist/Deckhand.app" 2>&1 || true)"
 case "$SIGINFO" in *"Authority=Developer ID Application"*) SIGNED_DEVID=1 ;; esac
 
-if [ "$SIGNED_DEVID" = 1 ]; then
+# Notarize + staple when a Developer ID signature and notary credentials exist.
+# One-time setup (interactive, needs an app-specific password from appleid.apple.com):
+#   xcrun notarytool store-credentials "deckhand-notary" --apple-id <apple-id> --team-id <TEAMID> --password <app-specific-password>
+# Decided here, before the Read Me is written, so the text never claims a notarization that did not happen.
+NOTARY_PROFILE="${DECKHAND_NOTARY_PROFILE:-deckhand-notary}"
+CAN_NOTARIZE=0
+if [ "$SIGNED_DEVID" = 1 ] && xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+    CAN_NOTARIZE=1
+fi
+
+if [ "$CAN_NOTARIZE" = 1 ]; then
 cat > "$STAGE/Read Me First.txt" <<'TXT'
 Deckhand for UltraBar X
 ======================
@@ -62,20 +72,21 @@ rm -f "$DMG"
 hdiutil create -volname "Deckhand" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 rm -rf "$STAGE"
 
-# Notarize + staple when a Developer ID signature and notary credentials exist.
-# One-time setup (interactive, needs an app-specific password from appleid.apple.com):
-#   xcrun notarytool store-credentials "deckhand-notary" --apple-id <apple-id> --team-id <TEAMID> --password <app-specific-password>
-NOTARY_PROFILE="${DECKHAND_NOTARY_PROFILE:-deckhand-notary}"
 if [ "$SIGNED_DEVID" = 1 ]; then
     IDENTITY="$(printf '%s\n' "$SIGINFO" | sed -n 's/^Authority=\(Developer ID Application: .*\)$/\1/p' | sed -n 1p)"
     echo "==> signing DMG with $IDENTITY"
     codesign --force --timestamp --sign "$IDENTITY" "$DMG"
-    if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+    if [ "$CAN_NOTARIZE" = 1 ]; then
         echo "==> notarizing (profile: $NOTARY_PROFILE) — this takes a few minutes…"
         xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
         echo "==> stapling ticket"
         xcrun stapler staple "$DMG"
-        spctl -a -t open --context context:primary-signature -v "$DMG" && echo "   Gatekeeper: accepted"
+        if spctl -a -t open --context context:primary-signature -v "$DMG"; then
+            echo "   Gatekeeper: accepted"
+        else
+            echo "   Gatekeeper REJECTED the DMG — do not ship it" >&2
+            exit 1
+        fi
     else
         echo "==> NOT notarized: no notary credentials under keychain profile '$NOTARY_PROFILE'."
         echo "    Run once:  xcrun notarytool store-credentials \"$NOTARY_PROFILE\" --apple-id <apple-id> --team-id <TEAMID> --password <app-specific-password>"

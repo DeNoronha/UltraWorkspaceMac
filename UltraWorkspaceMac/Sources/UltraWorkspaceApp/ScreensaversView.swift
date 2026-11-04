@@ -38,7 +38,10 @@ struct ScreensaversView: View {
     var body: some View {
         VStack(spacing: 0) {
             Header("Screensavers", "What the bar shows when nobody touches it. Switch one on to install it, then use it.") {
-                Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(!model.link.isConnected)
+                HStack {
+                    RefreshButton()
+                    UpdateAllButton()
+                }
             }
             Divider()
             HSplitView {
@@ -110,7 +113,7 @@ struct ScreensaversView: View {
                 Text("after").foregroundStyle(.secondary)
                 Picker("", selection: Binding(get: { c?.lockTime ?? "TIME_5MIN" }, set: { model.setScreensaver(lockTime: $0) })) {
                     ForEach(CoreBarSession.ScreensaverConfig.lockTimes, id: \.self) { Text(AppModel.lockTimeLabel($0)).tag($0) }
-                }.labelsHidden().frame(width: 110).disabled(c == nil)
+                }.labelsHidden().frame(width: 110).disabled(c == nil).accessibilityLabel("Start after")
                 if let active { Text("In use: \(active.name)").font(.caption).foregroundStyle(.secondary) }
             }
         }

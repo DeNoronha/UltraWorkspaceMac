@@ -16,6 +16,10 @@ extension AppModel {
         let page = Self.monitorPage
         barPages.start(model: self, settings: settings)
         let pages = barPages
+        MonitorServer.shared.setActionRoute { [weak self] path in
+            guard let self else { return nil }
+            return pages.action(path, model: self)
+        }
         MonitorServer.shared.setRoute { [weak self] path in
             switch path {
             case "/", "/monitor", "/monitor/": return .html(page)
@@ -63,7 +67,7 @@ extension AppModel {
 
     func barAppVersion(_ page: String) -> String? { barApps.first { $0.packageName == BarPages.package(for: page) }?.versionName }
     /// Version of the APKs shipped with this build — keep in step with android/DeckhandMonitor/app/build.gradle.kts.
-    nonisolated static let barAppsVersion = "1.5"
+    nonisolated static let barAppsVersion = "1.6"
     /// The bar's copy is older than the one shipped with Deckhand.
     func barAppNeedsUpdate(_ page: String) -> Bool {
         guard let v = barAppVersion(page) else { return false }

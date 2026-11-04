@@ -60,7 +60,7 @@ public enum OpenMeteo {
             .init(name: "language", value: "en"),
             .init(name: "format", value: "json"),
         ]
-        let (data, _) = try await URLSession.shared.data(from: c.url!)
+        let (data, _) = try await URLSession.shared.data(for: timed(c.url!))
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let results = obj["results"] as? [[String: Any]], let r = results.first,
               let lat = r["latitude"] as? Double, let lon = r["longitude"] as? Double else { return nil }
@@ -80,7 +80,7 @@ public enum OpenMeteo {
             .init(name: "timezone", value: "auto"),
         ]
         WireLog.shared.event("weather GET forecast lat=\(latitude) lon=\(longitude)")
-        let (data, _) = try await URLSession.shared.data(from: c.url!)
+        let (data, _) = try await URLSession.shared.data(for: timed(c.url!))
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let cur = obj["current"] as? [String: Any] else {
             WireLog.shared.event("weather: bad response (\(data.count) B)")
@@ -121,7 +121,7 @@ public enum OpenMeteo {
             .init(name: "temperature_unit", value: metric ? "celsius" : "fahrenheit"),
             .init(name: "forecast_days", value: String(days)), .init(name: "timezone", value: "auto"),
         ]
-        let (data, _) = try await URLSession.shared.data(from: c.url!)
+        let (data, _) = try await URLSession.shared.data(for: timed(c.url!))
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let d = obj["daily"] as? [String: Any],
               let dates = d["time"] as? [String] else { throw UltraBarError.protocolError("weather: bad daily response") }
         func nums(_ k: String) -> [Double?] { (d[k] as? [Any] ?? []).map { ($0 as? NSNumber)?.doubleValue } }
@@ -138,7 +138,7 @@ public enum OpenMeteo {
     public struct IPLoc: Sendable { public var lat: Double; public var lon: Double; public var city: String }
     public static func ipLocate() async -> IPLoc? {
         guard let url = URL(string: "https://ipwho.is/") else { return nil }
-        guard let (data, _) = try? await URLSession.shared.data(from: url),
+        guard let (data, _) = try? await URLSession.shared.data(for: timed(url)),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               (obj["success"] as? Bool) != false else { return nil }
         func dbl(_ k: String) -> Double? { (obj[k] as? Double) ?? (obj[k] as? NSNumber)?.doubleValue }
@@ -147,6 +147,10 @@ public enum OpenMeteo {
         WireLog.shared.event("weather: IP geolocation → \(city.isEmpty ? "?" : city) (\(lat),\(lon))")
         return IPLoc(lat: lat, lon: lon, city: city)
     }
+
+    /// Every call gets a 15 s timeout (URLSession's default is 60 s per idle gap, which on a flaky
+    /// link kept a weather refresh hanging for a minute).
+    static func timed(_ url: URL) -> URLRequest { var r = URLRequest(url: url); r.timeoutInterval = 15; return r }
 
     public static func sky(for code: Int) -> Sky {
         switch code {

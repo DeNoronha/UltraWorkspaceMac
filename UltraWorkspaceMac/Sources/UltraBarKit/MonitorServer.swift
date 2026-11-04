@@ -5,7 +5,7 @@ import Darwin
 #endif
 
 /// The small HTTP server behind the bar's Monitor app (2026-11-04): a fixed port on every
-/// interface, GET/HEAD only, routes answered by a closure. Nothing on disk is ever served.
+/// interface, GET/HEAD for pages and data, POST with a marker header for the few actions, routes answered by closures. Nothing on disk is ever served.
 /// The page is a live view of this Mac (CPU, memory, network, disk) — read-only, LAN-only, and
 /// only while the user has the Monitor switched on (see SECURITY.md).
 public final class MonitorServer: @unchecked Sendable {
@@ -22,17 +22,26 @@ public final class MonitorServer: @unchecked Sendable {
         }
     }
     public typealias Route = @Sendable (_ path: String) -> Response?
+    /// Routes that change something (play/next, mark a task done): called only for a POST that carries the
+    /// `X-Deckhand: action` header, which a cross-site <img> or form cannot send; the served pages set it.
+    public typealias ActionRoute = @Sendable (_ path: String) -> Response?
 
     private let lock = NSLock()
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: NWConnection] = [:]
     private var route: Route = { _ in nil }
+    private var actionRoute: ActionRoute = { _ in nil }
     public private(set) var port: UInt16 = 0
     public var isRunning: Bool { lock.lock(); defer { lock.unlock() }; return listener?.state == .ready }
+
+    /// A connection that has not been answered after this long is closed: a client that opens a
+    /// socket and never finishes its request head (or trickles it) must not hold a connection for ever.
+    nonisolated(unsafe) public static var requestTimeout: TimeInterval = 15
 
     private init() {}
 
     public func setRoute(_ r: @escaping Route) { lock.lock(); route = r; lock.unlock() }
+    public func setActionRoute(_ r: @escaping ActionRoute) { lock.lock(); actionRoute = r; lock.unlock() }
 
     /// Start on `port` (idempotent). Throws when the port is taken.
     public func start(port requested: UInt16 = MonitorServer.defaultPort) throws {
@@ -86,10 +95,27 @@ public final class MonitorServer: @unchecked Sendable {
         }
         conn.start(queue: DispatchQueue.global(qos: .userInitiated))
         readRequest(conn, buffer: Data())
+        DispatchQueue.global().asyncAfter(deadline: .now() + Self.requestTimeout) { [weak self] in
+            guard let self else { return }
+            self.lock.lock(); let open = self.connections[ObjectIdentifier(conn)] != nil; self.lock.unlock()
+            if open { conn.cancel() }
+        }
     }
 
     private func drop(_ conn: NWConnection) {
         lock.lock(); connections.removeValue(forKey: ObjectIdentifier(conn)); lock.unlock()
+    }
+
+    /// The request line, whatever the line ending; `target` with control characters removed (it is
+    /// logged, and a log line must not be forged by a request).
+    static func requestLine(_ head: String) -> (method: String, target: String) {
+        let line = head.split(whereSeparator: { $0 == "\r\n" || $0 == "\n" || $0 == "\r" }).first.map(String.init) ?? ""
+        let parts = line.split(separator: " ")
+        let method = parts.count > 0 ? String(parts[0]) : ""
+        var target = parts.count > 1 ? String(parts[1]) : "/"
+        if let q = target.firstIndex(of: "?") { target = String(target[..<q]) }
+        target = String(target.unicodeScalars.filter { $0.value >= 0x20 && $0.value != 0x7F })
+        return (method, target)
     }
 
     private func readRequest(_ conn: NWConnection, buffer: Data) {
@@ -105,17 +131,23 @@ public final class MonitorServer: @unchecked Sendable {
     }
 
     private func respond(_ conn: NWConnection, requestHead: String) {
-        let line = requestHead.split(separator: "\r\n", maxSplits: 1).first.map(String.init) ?? ""
-        let parts = line.split(separator: " ")
-        let method = parts.count > 0 ? String(parts[0]) : ""
-        var target = parts.count > 1 ? String(parts[1]) : "/"
-        if let q = target.firstIndex(of: "?") { target = String(target[..<q]) }
+        let (method, target) = Self.requestLine(requestHead)
         func header(_ status: String, _ type: String, _ length: Int) -> Data {
             Data("HTTP/1.1 \(status)\r\nContent-Type: \(type)\r\nContent-Length: \(length)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8)
         }
-        guard method == "GET" || method == "HEAD" else { send(conn, header("405 Method Not Allowed", "text/plain", 0)); return }
-        lock.lock(); let r = route; lock.unlock()
-        let resp = r(target.removingPercentEncoding ?? target) ?? Response("404 Not Found", type: "text/plain", body: Data("not found".utf8))
+        let path = target.removingPercentEncoding ?? target
+        let resp: Response
+        if method == "POST" {
+            // Actions: POST + a custom header, so a page on another origin cannot trigger them (no CORS preflight passes).
+            let marked = requestHead.lowercased().contains("x-deckhand: action")
+            lock.lock(); let a = actionRoute; lock.unlock()
+            resp = marked ? (a(path) ?? Response("404 Not Found", type: "text/plain", body: Data("not found".utf8)))
+                          : Response("403 Forbidden", type: "text/plain", body: Data("actions need the X-Deckhand header".utf8))
+        } else {
+            guard method == "GET" || method == "HEAD" else { send(conn, header("405 Method Not Allowed", "text/plain", 0)); return }
+            lock.lock(); let r = route; lock.unlock()
+            resp = r(path) ?? Response("404 Not Found", type: "text/plain", body: Data("not found".utf8))
+        }
         if !target.hasSuffix(".json") { WireLog.shared.http("monitor ← \(method) \(target) \(resp.status)") }
         var out = header(resp.status, resp.type, resp.body.count)
         if method == "GET" { out.append(resp.body) }

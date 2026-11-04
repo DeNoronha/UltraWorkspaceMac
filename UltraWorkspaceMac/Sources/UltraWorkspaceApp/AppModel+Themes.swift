@@ -68,7 +68,8 @@ extension AppModel {
                     if Task.isCancelled { break }
                 }
                 step += 1
-                let layer = (step % cards.count) + 1
+                // Step over the layers the cube actually has (a card that could not be drawn was skipped), not the list.
+                let layer = (step % max(1, self.lastPublishedVivoLayers)) + 1
                 _ = await self.showCubeCard(layer, session: session, serial: serial)
             }
         }
@@ -178,6 +179,9 @@ extension AppModel {
         }
         do {
             _ = try await session.upload(serial: serial, tgz: tgz)
+            // A newer Send replaced this task while the upload was in flight: its package is the one on the
+            // cube now, so this one's names and previews must not overwrite it.
+            if Task.isCancelled { return false }
             accepted()
             return true
         } catch {

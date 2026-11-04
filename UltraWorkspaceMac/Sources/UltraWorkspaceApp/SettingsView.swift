@@ -7,7 +7,7 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Header("Settings", "This bar, connection help and what is set on the bar itself.")
+            Header("Settings", "This bar, its screen, the debug bridge, connection help and what is set on the bar itself.")
             Divider()
 
             Form {
@@ -52,6 +52,7 @@ struct SettingsView: View {
                     if let m = st.message { Text(m).font(.callout).foregroundStyle(.orange) }
                     HStack {
                         Button { model.checkAdb() } label: { Label("Check", systemImage: "arrow.clockwise") }
+                            .disabled(model.adbBusy).help("Look for adb on this Mac and ask the bar whether Wi-Fi ADB answers")
                         Button { model.enableWifiAdbOverUSB() } label: { Label("Turn on over USB", systemImage: "cable.connector") }
                             .disabled(st.usbSerials.isEmpty || st.adbPath == nil)
                             .help("adb tcpip 5555 on the bar attached over USB: Wi-Fi ADB on until its next reboot")
@@ -74,11 +75,9 @@ struct SettingsView: View {
                     note("Bluetooth", "Managed on the CoreBar (module mesh and PC-wake).")
                 }
 
-                Section("About") {
-                    Text("Deckhand — independent, community software for UltraBar X. Not affiliated with Sanytron.")
-                        .font(.callout).foregroundStyle(.secondary)
-                    Text("Widgets and their settings live in the Widgets section; pick which ones show per device on the VivoCube / CoreBar pages.")
-                        .font(.callout).foregroundStyle(.secondary)
+                Section("Where to find things") {
+                    Text("Cards and their settings are on the Widgets page; which cards each screen shows is set on the CoreBar and VivoCube pages. Apps and screensavers have their own pages under Library. Version and license: About Deckhand.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .formStyle(.grouped)

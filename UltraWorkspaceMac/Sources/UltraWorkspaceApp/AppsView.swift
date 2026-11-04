@@ -59,7 +59,7 @@ struct AppsView: View {
         VStack(spacing: 0) {
             Header("Apps", "Apps run on the bar itself. Switch one on to install it; its settings are here too.") {
                 HStack {
-                    Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(!model.link.isConnected)
+                    RefreshButton()
                     UpdateAllButton()
                 }
             }
@@ -156,7 +156,7 @@ struct AppsView: View {
                 Toggle("Serve the pages from this Mac", isOn: $settings.monitorServe).toggleStyle(.switch)
                     .onChange(of: settings.monitorServe) { _ in model.startMonitor(settings: settings) }
                 if let url = model.monitorURL { Text(String(url.dropLast("/monitor".count))).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-                if let e = model.monitorError { Text(e).foregroundStyle(.red).font(.caption) }
+                if let e = model.monitorError { Label("The pages could not start: \(e)", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.caption) }
             }
         }
         appSettings(app.page)

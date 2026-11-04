@@ -69,7 +69,8 @@ public enum Flights {
     /// Airline and route for a callsign (nil when adsbdb does not know it). Cached for the app's lifetime.
     public static func route(callsign: String) async -> Route? {
         let cs = callsign.uppercased().trimmingCharacters(in: .whitespaces)
-        guard cs.count >= 3 else { return nil }
+        // The callsign comes from the ADS-B feed and goes into a URL path: letters and digits only.
+        guard cs.count >= 3, cs.count <= 10, cs.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { return nil }
         if let hit = await cache.get(cs) { return hit }
         var result: Route? = nil
         if let url = URL(string: "https://api.adsbdb.com/v0/callsign/\(cs)") {
@@ -91,6 +92,9 @@ public enum Flights {
     /// Compass point for a bearing in degrees ("NE").
     public static func compass(_ bearing: Double) -> String {
         let names = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-        return names[Int(((bearing + 22.5).truncatingRemainder(dividingBy: 360)) / 45)]
+        guard bearing.isFinite else { return "N" } // Int(nan) traps
+        var b = (bearing + 22.5).truncatingRemainder(dividingBy: 360)
+        if b < 0 { b += 360 }
+        return names[Int(b / 45) % 8]
     }
 }

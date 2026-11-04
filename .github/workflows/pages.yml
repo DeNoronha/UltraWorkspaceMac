@@ -34,9 +34,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName')
+          # Newest non-draft release (pre-releases included). Without one, or without a
+          # Deckhand.dmg on it, the site still deploys; only the download is missing.
+          tag=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 1 --json tagName --jq '.[0].tagName // empty')
+          if [ -z "$tag" ]; then
+            echo "::warning::No release found; deploying the site without a DMG"
+            exit 0
+          fi
           mkdir -p UltraWorkspaceMac/site/download
-          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern Deckhand.dmg --dir UltraWorkspaceMac/site/download
+          if ! gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern Deckhand.dmg --clobber --dir UltraWorkspaceMac/site/download; then
+            echo "::warning::Release $tag has no Deckhand.dmg asset; deploying the site without a DMG"
+            exit 0
+          fi
           size=$(stat -c %s UltraWorkspaceMac/site/download/Deckhand.dmg)
           published=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json publishedAt --jq .publishedAt)
           printf '{"tag":"%s","size":%s,"published":"%s"}\n' "$tag" "$size" "$published" > UltraWorkspaceMac/site/download/latest.json

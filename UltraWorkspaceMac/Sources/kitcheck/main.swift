@@ -331,5 +331,102 @@ do {
     check(Int(isize) == tar.count, "gzip ISIZE == uncompressed length")
 }
 
+// Redaction must not depend on key order or spacing (the bar's replies are not key-sorted), and must
+// cover the bar apps' web-UI session tokens (APP_LIST) and any "password" key.
+do {
+    let tail = WireLog.redact(#"{"act":30200,"code":200,"data":{"result":"0D486F7573650B50617373","propertyId":7}}"#)
+    check(!tail.contains("0D486F7573650B50617373"), "redact: property 7 result when propertyId is the last key")
+    let spaced = WireLog.redact(#"{"act": 100, "data": "SECRETTOKEN123", "id": "x"}"#)
+    check(!spaced.contains("SECRETTOKEN123"), "redact: AUTH frame with spaces after colons")
+    let p70 = WireLog.redact(#"{"data":{"propertyId":70,"result":"ABCDEF"}}"#)
+    check(p70.contains("ABCDEF"), "redact: propertyId 70 is not property 7")
+    let st = WireLog.redact(#"{"config":{"port":8090,"sessionToken":"deadbeef"},"password":"hunter2"}"#)
+    check(!st.contains("deadbeef") && !st.contains("hunter2"), "redact: sessionToken and password values", st)
+}
+
+// Module Wi-Fi wire format: hex([len]ssid[len]password), and malformed input is rejected, not trapped on.
+do {
+    typealias W = CoreBarSession.ModuleWiFi
+    let w = W(ssid: "Huis café", password: "p@ss wörd")
+    check(CoreBarSession.decodeWiFi(CoreBarSession.encodeWiFi(w)) == w, "wifi: encode/decode round trip (UTF-8)")
+    check(CoreBarSession.decodeWiFi("0D48") == nil, "wifi: length byte past the end → nil")
+    check(CoreBarSession.decodeWiFi("0D4") == nil, "wifi: odd hex length → nil")
+    check(CoreBarSession.decodeWiFi("ZZ") == nil, "wifi: non-hex → nil")
+    check(CoreBarSession.decodeWiFi("") == nil, "wifi: empty → nil")
+    check(CoreBarSession.decodeWiFi("0141") == W(ssid: "A", password: ""), "wifi: ssid only (open network)")
+    let long = W(ssid: String(repeating: "s", count: 300), password: "")
+    check(CoreBarSession.decodeWiFi(CoreBarSession.encodeWiFi(long))?.ssid.count == 255, "wifi: ssid capped at 255 bytes (length is one byte)")
+    check(CoreBarSession.layerWidgetValue(layer: 1, widget: 101) == 0x1_0065, "property 9 = (layer << 16) | widget")
+}
+
+// Compass never traps: NaN/negative/huge bearings (values come straight from the ADS-B feed).
+check(Flights.compass(.nan) == "N" && Flights.compass(-10) == "N" && Flights.compass(-100) == "W" && Flights.compass(1e9).count >= 1, "compass: non-finite and negative bearings")
+
+// Discovery reply parsing: tcpPort may be a number or a string, ip falls back to the sender.
+do {
+    let a = Discovery.parse(Data(#"{"serialNo":"S1","ver":"1.0.9(9)","ip":"192.168.1.9","name":"ultrabar","tcpPort":7431}"#.utf8), from: "10.0.0.1")
+    check(a?.ip == "192.168.1.9" && a?.tcpPort == 7431 && a?.serialNo == "S1", "discovery: full reply")
+    let b = Discovery.parse(Data(#"{"serialNo":"S2","tcpPort":"7431"}"#.utf8), from: "10.0.0.2")
+    check(b?.ip == "10.0.0.2" && b?.tcpPort == 7431, "discovery: string tcpPort, ip from sender")
+    check(Discovery.parse(Data(#"{"serialNo":"S3"}"#.utf8), from: "10.0.0.3") == nil, "discovery: no tcpPort → ignored")
+    check(Discovery.parse(Data("not json".utf8), from: "10.0.0.3") == nil, "discovery: garbage → ignored")
+    check(Discovery.parse(Data(#"{"serialNo":"S4","tcpPort":0}"#.utf8), from: "10.0.0.4")?.tcpPort == 7431, "discovery: tcpPort 0 → default 7431")
+}
+
+// MonitorServer on a loopback ephemeral port: routing, percent-decoding, 405, bare-LF request lines,
+// and a client that never finishes its request is dropped after `requestTimeout`.
+do {
+    MonitorServer.requestTimeout = 1
+    MonitorServer.shared.setRoute { path in
+        if path == "/a b" { return .text("hit") }
+        if path == "/j" { return .json(["ok": true]) }
+        return nil
+    }
+    func get(_ path: String, method: String = "GET") async -> (Int, String) {
+        var r = URLRequest(url: URL(string: "http://127.0.0.1:\(MonitorServer.shared.port)\(path)")!); r.httpMethod = method; r.timeoutInterval = 5
+        guard let (d, resp) = try? await URLSession.shared.data(for: r) else { return (-1, "") }
+        return ((resp as? HTTPURLResponse)?.statusCode ?? -1, String(decoding: d, as: UTF8.self))
+    }
+    /// Raw HTTP over a blocking socket: `send` bytes, then read until the server closes (or `timeout`).
+    func raw(_ send: String, timeout: Int) -> (closed: Bool, text: String) {
+        let fd = socket(AF_INET, SOCK_STREAM, 0); defer { close(fd) }
+        var tv = timeval(tv_sec: timeout, tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+        var a = sockaddr_in(); a.sin_family = sa_family_t(AF_INET); a.sin_port = MonitorServer.shared.port.bigEndian; inet_pton(AF_INET, "127.0.0.1", &a.sin_addr)
+        let rc = withUnsafePointer(to: &a) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
+        guard rc == 0 else { return (false, "connect failed") }
+        _ = send.withCString { write(fd, $0, strlen($0)) }
+        var out = Data(); var buf = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let n = read(fd, &buf, buf.count)
+            if n > 0 { out.append(contentsOf: buf[0..<n]); continue }
+            return (n == 0, String(decoding: out, as: UTF8.self))
+        }
+    }
+    do {
+        try MonitorServer.shared.start(port: 0)
+        check(MonitorServer.shared.isRunning && MonitorServer.shared.port != 0, "monitor server: started on an ephemeral port", "\(MonitorServer.shared.port)")
+        let hit = await get("/a%20b?x=1")
+        check(hit.0 == 200 && hit.1 == "hit", "monitor server: route gets the percent-decoded path without the query", "\(hit)")
+        let miss = await get("/nope")
+        check(miss.0 == 404, "monitor server: unknown path → 404", "\(miss.0)")
+        let post = await get("/a%20b", method: "POST")
+        check(post.0 == 403, "monitor server: POST without the X-Deckhand header → 403", "\(post.0)")
+        let put = await get("/a%20b", method: "PUT")
+        check(put.0 == 405, "monitor server: PUT → 405", "\(put.0)")
+        let head = await get("/j", method: "HEAD")
+        check(head.0 == 200 && head.1.isEmpty, "monitor server: HEAD has no body", "\(head)")
+        let lf = raw("GET /j\nHost: x\r\n\r\n", timeout: 5)
+        check(lf.closed && lf.text.hasPrefix("HTTP/1.1 200") && lf.text.hasSuffix("{\"ok\":true}"), "monitor server: bare-LF request line still parsed", lf.text.prefix(40).replacingOccurrences(of: "\r\n", with: " | "))
+        let t0 = Date()
+        let slow = raw("GET /j HTTP/1.1\r\nHost: x\r\n", timeout: 5) // head never completed
+        let dt = Date().timeIntervalSince(t0)
+        check(slow.closed && slow.text.isEmpty && dt < 4, "monitor server: incomplete request dropped after requestTimeout (1 s)", String(format: "closed after %.1f s", dt))
+        MonitorServer.shared.stop()
+        check(!MonitorServer.shared.isRunning, "monitor server: stopped")
+    } catch { check(false, "monitor server: start", "\(error)") }
+    MonitorServer.requestTimeout = 15
+}
+
 print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
 exit(failures == 0 ? 0 : 1)

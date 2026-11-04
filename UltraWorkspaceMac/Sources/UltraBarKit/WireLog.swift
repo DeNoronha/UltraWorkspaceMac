@@ -23,6 +23,9 @@ public final class WireLog: @unchecked Sendable {
         if !FileManager.default.fileExists(atPath: fileURL.path) {
             FileManager.default.createFile(atPath: fileURL.path, contents: nil)
         }
+        // The decrypted control channel (redacted, but still the bar's config, Wi-Fi SSIDs, page
+        // contents): user-only, like the token files.
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         handle = try? FileHandle(forWritingTo: fileURL)
         handle?.seekToEndOfFile()
         event("── session started \(Self.ts()) ──")
@@ -75,7 +78,11 @@ public final class WireLog: @unchecked Sendable {
     /// - `"token":"…"` values;
     /// - the AUTH frame (act 100), whose `data` IS the pairing token;
     /// - module Wi-Fi config (property 7): `value`/`result` is hex(len+ssid+len+password);
-    /// - `"apiKey":"…"` (AccuWeather key sent via act 1010).
+    /// - `"apiKey":"…"` (AccuWeather key sent via act 1010), `"sessionToken":"…"` (a bar app's web UI,
+    ///   in APP_LIST replies) and `"password":"…"`.
+    /// The act / propertyId tests do not depend on key order or spacing: our own frames are written
+    /// with sorted keys, but the bar's replies are not, and `"propertyId":7}` at the end of an object
+    /// used to slip through.
     public static func redact(_ s: String) -> String {
         var out = s
         func sub(_ pattern: String, _ template: String) {
@@ -83,12 +90,12 @@ public final class WireLog: @unchecked Sendable {
                 out = re.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out), withTemplate: template)
             }
         }
-        sub("(\"token\"\\s*:\\s*\")[^\"]*(\")", "$1<redacted>$2")
-        sub("(\"apiKey\"\\s*:\\s*\")[^\"]*(\")", "$1<redacted>$2")
-        if out.contains("\"act\":100,") || out.contains("\"act\": 100,") {
+        func has(_ pattern: String) -> Bool { out.range(of: pattern, options: .regularExpression) != nil }
+        sub("(\"(?:token|apiKey|sessionToken|password)\"\\s*:\\s*\")[^\"]*(\")", "$1<redacted>$2")
+        if has("\"act\"\\s*:\\s*100\\s*[,}]") {
             sub("(\"data\"\\s*:\\s*\")[^\"]*(\")", "$1<redacted>$2")
         }
-        if out.contains("\"propertyId\":7,") || out.contains("\"propertyId\": 7,") {
+        if has("\"propertyId\"\\s*:\\s*7\\s*[,}]") {
             sub("(\"(?:value|result)\"\\s*:\\s*\")[0-9A-Fa-f]+(\")", "$1<redacted>$2")
         }
         return out

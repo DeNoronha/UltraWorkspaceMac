@@ -46,19 +46,11 @@ extension AppModel {
         }
     }
 
-    /// Coordinates for the device's own WEATHER card (same chain as our weather:
-    /// manual lat/lon → manual city → Mac location → IP geolocation).
+    /// Coordinates for the device's own WEATHER card (the same chain as our weather: `resolveLocation`).
     func resolveCoordinates(settings: AppSettings) async -> (lat: String, lon: String, place: String)? {
+        guard let loc = try? await resolveLocation(settings: settings) else { return nil }
         func fmt(_ d: Double) -> String { String(format: "%.4f", d) }
-        if settings.locationMode == .manual {
-            if let lat = Double(settings.manualLat.replacingOccurrences(of: ",", with: ".")),
-               let lon = Double(settings.manualLon.replacingOccurrences(of: ",", with: ".")) { return (fmt(lat), fmt(lon), settings.manualCity) }
-            if !settings.manualCity.isEmpty, let p = try? await OpenMeteo.geocode(settings.manualCity) { return (fmt(p.latitude), fmt(p.longitude), p.name) }
-        }
-        if let loc = await MacLocation().once() { return (fmt(loc.lat), fmt(loc.lon), loc.place) }
-        if !settings.manualCity.isEmpty, let p = try? await OpenMeteo.geocode(settings.manualCity) { return (fmt(p.latitude), fmt(p.longitude), p.name) }
-        if let ip = await OpenMeteo.ipLocate() { return (fmt(ip.lat), fmt(ip.lon), ip.city) }
-        return nil
+        return (fmt(loc.lat), fmt(loc.lon), loc.name)
     }
 
     /// Render the square cover we put on the clock card.
@@ -152,7 +144,8 @@ extension AppModel {
                     }
                 }
                 let deckhand: [String: Any] = [
-                    "id": Self.deckhandPageId, "name": "Deckhand", "isDefault": true,   // the page the bar boots into "showName": true, "iconScale": 100,
+                    "id": Self.deckhandPageId, "name": "Deckhand", "isDefault": true,   // the page the bar boots into
+                    "showName": true, "iconScale": 100,
                     "icon": "deckhand/cover.png",
                     "module": self.moduleBindings(),
                     "widget": w,

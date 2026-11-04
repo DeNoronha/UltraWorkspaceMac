@@ -74,7 +74,7 @@ struct CoreBarPageView: View {
                         tile(c, cover: c.id == "TIME" ? cover.image : nil)
                             .frame(width: c.id == "TIME" ? 164 : 82, height: 82)
                     }
-                    if cards.isEmpty { Text("No cards yet — use Add a card… below.").foregroundStyle(.secondary).padding(.leading, 12) }
+                    if cards.isEmpty { Text("No cards yet.").foregroundStyle(.secondary).padding(.leading, 12) }
                 }.padding(8)
             }
             .frame(width: 8 + CGFloat(per) * 88 + 8, height: 98).clipped()
@@ -107,7 +107,7 @@ struct CoreBarPageView: View {
     private var onPage: some View {
         let cards = settings.coreCards.compactMap(model.coreCard)
         return Panel("Cards on the bar", footer: "Drag to reorder. \(cards.count) card\(cards.count == 1 ? "" : "s") · about \(AppSettings.coreCardsThatFit) fit without scrolling. ⌁ = live from this Mac, only while Deckhand runs.") {
-            if cards.isEmpty { Text("Nothing on the bar yet — add a card.").foregroundStyle(.secondary) }
+            if cards.isEmpty { Text("Nothing on the bar yet — add a card below.").foregroundStyle(.secondary) }
             List {
                 ForEach(Array(cards.enumerated()), id: \.element.id) { i, c in
                     VStack(alignment: .leading, spacing: 6) {
@@ -116,8 +116,9 @@ struct CoreBarPageView: View {
                             Label { Text(c.title) } icon: { CardIcon(card: c) }
                             if c.needsMac { Image(systemName: "bolt.horizontal").font(.caption).foregroundStyle(.orange).help("Live from this Mac") }
                             if c.id == "WEATHER" {
-                                if settings.accuWeatherKey.isEmpty { Text("needs key").font(.caption2).foregroundStyle(.orange) }
+                                if settings.accuWeatherKey.isEmpty { Tag("needs key", .orange).help("The bar's weather card needs an AccuWeather key — press Key… to paste one.") }
                                 Button(ui.keyOpen ? "Hide key" : "Key…") { ui.keyOpen.toggle() }.buttonStyle(.link).font(.caption)
+                                    .help(ui.keyOpen ? "Hide the AccuWeather key field" : "Show the AccuWeather key field")
                             }
                             if c.id == "TIME" {
                                 Button("Update picture") { model.refreshDeckhandCover(settings: settings); reloadCover() }.buttonStyle(.link).font(.caption)
@@ -181,7 +182,8 @@ struct CoreBarPageView: View {
                     Text(p.name)
                     if ![AppModel.defaultPageId, AppModel.deckhandPageId].contains(p.id) { Text("from the official app").font(.caption).foregroundStyle(.secondary) }
                     Spacer()
-                    Button("Show") { model.switchPage(id: p.id) }.buttonStyle(.link)
+                    Button("Show") { model.switchPage(id: p.id) }.buttonStyle(.link).disabled(model.currentPageId == p.id)
+                        .help("Switch the bar to the \(p.name) page").accessibilityLabel("Show the \(p.name) page")
                 }
             }
             Text("Publishing rewrites all pages (the bar cannot send them back). The official app's Deploy removes Deckhand's pictures — publish again afterwards.")
@@ -192,9 +194,12 @@ struct CoreBarPageView: View {
     private var advanced: some View {
         Group {
             HStack(spacing: 10) {
-                Button { model.refreshModules() } label: { Label(model.isWorking ? "Looking…" : "Find modules", systemImage: "magnifyingglass") }.disabled(model.isWorking)
+                Button { model.refreshModules() } label: { Label(model.isWorking ? "Looking for modules…" : "Find modules", systemImage: "magnifyingglass") }.disabled(model.isWorking)
+                    .help("Scan the bar for attached modules (about 16 s). Tap the bar's screen first so they are awake.")
                 Button { model.refreshPages() } label: { Label("Re-read pages", systemImage: "arrow.clockwise") }
+                    .help("Ask the bar which pages it has")
                 Button { reloadCover() } label: { Label("Redraw preview", systemImage: "photo") }
+                    .help("Draw the preview strip again from the card list")
             }
             Text("Knob and key bindings are published with the page — see Controls.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

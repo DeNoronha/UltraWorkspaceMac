@@ -48,7 +48,7 @@ HEAD = """<!doctype html>
 <main>
   <section class="hero hero-compact">
     <div class="container">
-      <p class="eyebrow">Manual <span class="sep">·</span> Deckhand 0.1</p>
+      <p class="eyebrow">Manual <span class="sep">·</span> Deckhand 0.2</p>
       <h1>How to use Deckhand.</h1>
       <p class="lede">The same text ships inside the repository as <a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/MANUAL.md">MANUAL.md</a>; this page is generated from it. Something missing or wrong? <a href="https://github.com/DeNoronha/UltraWorkspaceMac/issues">Open an issue</a>.</p>
     </div>
@@ -76,7 +76,7 @@ __BODY__
         <a href="https://denoronha.consulting">denoronha.consulting <span class="arrow">→</span></a>
       </div>
       <div>
-        <h4>Deckhand</h4>
+        <h3>Deckhand</h3>
         <ul>
           <li><a href="../download/Deckhand.dmg">Download the DMG</a></li>
           <li><a href="../deckhand/">The Mac app</a></li>
@@ -85,7 +85,7 @@ __BODY__
         </ul>
       </div>
       <div>
-        <h4>For builders</h4>
+        <h3>For builders</h3>
         <ul>
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac">Source on GitHub</a></li>
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/PROTOCOL.md">The CoreBar protocol</a></li>

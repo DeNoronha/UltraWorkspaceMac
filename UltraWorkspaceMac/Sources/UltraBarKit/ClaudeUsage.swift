@@ -18,7 +18,9 @@ public enum ClaudeUsage {
         let now = Date()
         var waiting = 0
         for case let url as URL in en {
-            guard url.pathExtension == "jsonl",
+            // A sub-agent transcript (`subagents/`) always ends with the agent's final report, an
+            // assistant turn without a tool call: it would count as "waiting for you" for 15 minutes.
+            guard url.pathExtension == "jsonl", !url.path.contains("/subagents/"),
                   let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
                   now.timeIntervalSince(mod) <= window else { continue }
             if isWaiting(url) { waiting += 1 }
@@ -83,7 +85,8 @@ public enum ClaudeUsage {
             anyFile = true
             let vals = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
             let mod = vals?.contentModificationDate ?? .distantPast
-            if now.timeIntervalSince(mod) <= activeWindow { active += 1 }
+            // Sub-agent transcripts count towards today's tokens (real usage) but are not sessions.
+            if !url.path.contains("/subagents/"), now.timeIntervalSince(mod) <= activeWindow { active += 1 }
             guard mod >= startOfDay else { continue }
             let size = UInt64(vals?.fileSize ?? 0)
             var t = box.tallies[url.path] ?? Tally(offset: 0, tokens: 0)

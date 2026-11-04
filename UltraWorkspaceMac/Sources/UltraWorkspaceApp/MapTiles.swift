@@ -20,11 +20,14 @@ enum MapTiles {
     nonisolated static func tile(z: Int, x: Int, y: Int) -> Data? {
         guard (0...19).contains(z), x >= 0, y >= 0, x < (1 << z), y < (1 << z) else { return nil }
         let file = cacheDir.appendingPathComponent("\(z)-\(x)-\(y).png")
-        if let d = try? Data(contentsOf: file), !d.isEmpty,
-           let mod = try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate, Date().timeIntervalSince(mod) < 30 * 86400 { return d }
+        var stale: Data?
+        if let d = try? Data(contentsOf: file), !d.isEmpty {
+            if let mod = try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate, Date().timeIntervalSince(mod) < 30 * 86400 { return d }
+            stale = d   // older than 30 days: try to refresh, but an old map beats no map when OSM is unreachable
+        }
         guard let url = URL(string: "https://tile.openstreetmap.org/\(z)/\(x)/\(y).png") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 8
-        req.setValue("Deckhand/1.3 (+https://denoronha.github.io/UltraWorkspaceMac/)", forHTTPHeaderField: "User-Agent")
+        req.setValue("Deckhand/0.2 (+https://denoronha.github.io/UltraWorkspaceMac/)", forHTTPHeaderField: "User-Agent")
         let sem = DispatchSemaphore(value: 0)
         final class Box: @unchecked Sendable { var data: Data? }
         let box = Box()
@@ -33,7 +36,7 @@ enum MapTiles {
             sem.signal()
         }.resume()
         _ = sem.wait(timeout: .now() + 9)
-        guard let raw = box.data, let dark = darken(raw) else { return nil }
+        guard let raw = box.data, let dark = darken(raw) else { return stale }
         try? dark.write(to: file)
         return dark
     }

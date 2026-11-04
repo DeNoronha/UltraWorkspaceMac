@@ -69,14 +69,14 @@ struct VivoCubeView: View {
             .frame(width: 220, height: 220)
             .accessibilityLabel("Picture the cube is showing")
             HStack {
-                Button { model.stepCube(-1) } label: { Image(systemName: "chevron.left") }.accessibilityLabel("Previous card")
+                Button { model.stepCube(-1) } label: { Image(systemName: "chevron.left") }.accessibilityLabel("Previous card").help("Previous card")
                 Spacer()
                 VStack(spacing: 2) {
                     Text(model.vivoLayerNames.isEmpty ? "—" : (model.cubePackageStale ? "Expected: card " : "Card ") + "\(showingLayer) of \(model.vivoLayerNames.count)").font(.callout).monospacedDigit()
                     Text((showingLayer - 1 < model.vivoLayerNames.count && showingLayer >= 1) ? model.vivoLayerNames[showingLayer - 1] : " ").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button { model.stepCube(1) } label: { Image(systemName: "chevron.right") }.accessibilityLabel("Next card")
+                Button { model.stepCube(1) } label: { Image(systemName: "chevron.right") }.accessibilityLabel("Next card").help("Next card")
             }.disabled(model.vivoLayerNames.count < 2)
             if model.cubeOffline {
                 Label(model.cubePackageStale ? "Attached, but not on Wi-Fi — the cards you sent never arrived; the cube shows what it had before." : "Attached, but not on Wi-Fi — new cards cannot be downloaded.", systemImage: "wifi.slash").font(.caption).foregroundStyle(.orange)
@@ -105,7 +105,7 @@ struct VivoCubeView: View {
                         }
                         Spacer()
                         if i + 1 == showingLayer, !model.vivoLayerNames.isEmpty, i < model.vivoLayerNames.count {
-                            Text("now").font(.caption2).padding(.horizontal, 6).padding(.vertical, 1).background(Color.green.opacity(0.2)).clipShape(Capsule())
+                            Tag("now", .green).help("The card the cube shows right now")
                         }
                         Button { settings.removeVivoCard(t) } label: {
                             Image(systemName: "xmark.circle").frame(width: 32, height: 24).contentShape(Rectangle())
@@ -148,13 +148,13 @@ struct VivoCubeView: View {
                 Text("Switch automatically").tag(AppSettings.SwitchMode.timed)
                 Text("Only with the DotKey or the bar's button").tag(AppSettings.SwitchMode.button)
             }
-            .pickerStyle(.radioGroup).labelsHidden()
+            .pickerStyle(.radioGroup).labelsHidden().accessibilityLabel("Switching")
             HStack(spacing: 8) {
                 Text("Every").foregroundStyle(settings.vivoSwitchMode == .timed ? .primary : .secondary)
                 Picker("", selection: Binding(get: { [15, 30, 60, 180].contains(settings.vivoSeconds) ? settings.vivoSeconds : 30 }, set: { settings.vivoSeconds = $0 })) {
                     Text("15 s").tag(15); Text("30 s").tag(30); Text("1 min").tag(60); Text("3 min").tag(180)
                 }
-                .pickerStyle(.segmented).labelsHidden().frame(width: 260).disabled(settings.vivoSwitchMode != .timed)
+                .pickerStyle(.segmented).labelsHidden().frame(width: 260).disabled(settings.vivoSwitchMode != .timed).accessibilityLabel("Switch every")
             }.padding(.leading, 22)
             .onChange(of: settings.vivoSwitchMode) { mode in
                 if mode != .timed, model.themeRunning { model.stopThemeRotation(settings: settings) }
@@ -172,24 +172,28 @@ struct VivoCubeView: View {
                 Text("Cube screen").frame(width: 100, alignment: .leading)
                 Picker("", selection: Binding(get: { model.vivoScreenOn ?? true }, set: { model.setCubeScreen(on: $0, serial: module.serial) })) {
                     Text("On").tag(true); Text("Off").tag(false)
-                }.pickerStyle(.segmented).labelsHidden().frame(width: 120)
-                Text(model.vivoScreenOn == nil ? "not read yet" : (model.vivoScreenOn == true ? "The display is on." : "The display is off and stays off until you switch it on here.")).font(.caption).foregroundStyle(.secondary)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 120).accessibilityLabel("Cube screen")
+                Text(model.vivoScreenOn == nil ? "Not read yet." : (model.vivoScreenOn == true ? "The screen is on." : "The screen is off and stays off until you switch it on here.")).font(.caption).foregroundStyle(.secondary)
             }
+            // Two rows, so the four buttons fit at the minimum window width: everyday fixes first, restarts (confirmed) second.
             HStack(spacing: 10) {
                 Button { model.recoverVivoDisplay(serial: module.serial) } label: { Label("Fix black screen", systemImage: "bandage") }
                     .help("Turns the screen on and points the cube at card 1.")
-                Button(role: .destructive) { ui.confirmRestart = true } label: { Label("Restart cube", systemImage: "arrow.counterclockwise") }
                 Button { model.sendPanelSizeTest(serial: module.serial, size: 240) } label: { Label("Send test picture", systemImage: "checkerboard.rectangle") }
-                    .help("Uploads a 240×240 test pattern — a quick way to see whether uploads reach the cube.")
-                Button(role: .destructive) { ui.confirmLauncher = true } label: { Label("Restart bar launcher", systemImage: "arrow.counterclockwise.circle") }
-                    .help("Over Wi-Fi ADB. The bar's firmware stops taking uploads after about 100 of them; Deckhand does this by itself when it can.")
+                    .help("Uploads a 240 × 240 test pattern — a quick way to see whether uploads reach the cube.")
+            }
+            HStack(spacing: 10) {
+                Button(role: .destructive) { ui.confirmRestart = true } label: { Label("Restart cube…", systemImage: "arrow.counterclockwise") }
+                    .help("The cube goes dark for about 20 seconds. Asks first.")
+                Button(role: .destructive) { ui.confirmLauncher = true } label: { Label("Restart bar launcher…", systemImage: "arrow.counterclockwise.circle") }
+                    .help("Over Wi-Fi ADB. The bar's firmware stops taking uploads after about 100 of them; Deckhand does this by itself when it can. Asks first.")
             }
             Divider()
             HStack(spacing: 10) {
                 let w = model.vivoWiFi[module.serial] ?? nil
                 Image(systemName: model.cubeOffline ? "wifi.exclamationmark" : "wifi").foregroundStyle(model.cubeOffline ? Color.orange : Color.green)
                 Text(w.map { ($0.isCoreBarHotspot ? "On the CoreBar's own hotspot (\($0.ssid))" : "On Wi-Fi “\($0.ssid)”") + " · " + model.cubeWiFiLabel } ?? "Wi-Fi: not read yet")
-                Button { model.refreshVivoWiFi(serial: module.serial) } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.borderless).accessibilityLabel("Read Wi-Fi again")
+                Button { model.refreshVivoWiFi(serial: module.serial) } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.borderless).accessibilityLabel("Read Wi-Fi again").help("Read the cube's Wi-Fi state again")
                 Spacer()
                 Button { model.showingVivoWiFi = true } label: { Label("Set cube Wi-Fi…", systemImage: "wifi.router") }.disabled(model.isWorking)
             }
