@@ -8,6 +8,22 @@ extension AppModel {
         return modules.first(where: { $0.isVivoCube })?.serial
     }
 
+    /// Where the weather is for (same rules as `resolveWeather`): manual lat/lon, manual city, Mac location, IP.
+    func resolveLocation(settings: AppSettings) async throws -> (lat: Double, lon: Double, name: String) {
+        if settings.locationMode == .manual {
+            if let lat = Double(settings.manualLat.replacingOccurrences(of: ",", with: ".")),
+               let lon = Double(settings.manualLon.replacingOccurrences(of: ",", with: ".")) { return (lat, lon, settings.manualCity) }
+            guard !settings.manualCity.isEmpty, let p = try await OpenMeteo.geocode(settings.manualCity) else {
+                throw UltraBarError.protocolError("Set a city (or lat/lon) in Widgets → Weather.")
+            }
+            return (p.latitude, p.longitude, p.name)
+        }
+        if let loc = await MacLocation().once() { return (loc.lat, loc.lon, loc.place) }
+        if !settings.manualCity.isEmpty, let p = try await OpenMeteo.geocode(settings.manualCity) { return (p.latitude, p.longitude, p.name) }
+        if let ip = await OpenMeteo.ipLocate() { return (ip.lat, ip.lon, ip.city) }
+        throw UltraBarError.protocolError("Allow Location access, or set a city in Widgets → Weather.")
+    }
+
     func resolveWeather(settings: AppSettings, metric: Bool) async throws -> OpenMeteo.Now {
         if settings.locationMode == .manual {
             if let lat = Double(settings.manualLat.replacingOccurrences(of: ",", with: ".")),

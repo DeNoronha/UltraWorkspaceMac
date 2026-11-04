@@ -102,6 +102,36 @@ public enum OpenMeteo {
         )
     }
 
+    /// One forecast day for the bar's Weather page (2026-11-04).
+    public struct Day: Sendable {
+        public var date: String        // "2026-11-04"
+        public var code: Int
+        public var sky: Sky
+        public var tmax: Double
+        public var tmin: Double
+        public var precipProb: Int?    // %
+    }
+
+    /// Daily forecast, today first.
+    public static func daily(latitude: Double, longitude: Double, metric: Bool, days: Int = 4) async throws -> [Day] {
+        var c = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
+        c.queryItems = [
+            .init(name: "latitude", value: String(latitude)), .init(name: "longitude", value: String(longitude)),
+            .init(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"),
+            .init(name: "temperature_unit", value: metric ? "celsius" : "fahrenheit"),
+            .init(name: "forecast_days", value: String(days)), .init(name: "timezone", value: "auto"),
+        ]
+        let (data, _) = try await URLSession.shared.data(from: c.url!)
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let d = obj["daily"] as? [String: Any],
+              let dates = d["time"] as? [String] else { throw UltraBarError.protocolError("weather: bad daily response") }
+        func nums(_ k: String) -> [Double?] { (d[k] as? [Any] ?? []).map { ($0 as? NSNumber)?.doubleValue } }
+        let codes = nums("weather_code"), tmax = nums("temperature_2m_max"), tmin = nums("temperature_2m_min"), pp = nums("precipitation_probability_max")
+        return dates.indices.map { i in
+            let code = Int(codes[safe: i] ?? 0)
+            return Day(date: dates[i], code: code, sky: sky(for: code), tmax: tmax[safe: i] ?? 0, tmin: tmin[safe: i] ?? 0, precipProb: (pp[safe: i]).map { Int($0) })
+        }
+    }
+
     /// Approximate location from this machine's public IP (no permission, no key).
     /// Used as a fallback when CoreLocation is unavailable (e.g. an ad-hoc-signed
     /// app that was never granted Location access).
@@ -133,4 +163,8 @@ public enum OpenMeteo {
         default: return .unknown
         }
     }
+}
+
+private extension Array where Element == Double? {
+    subscript(safe i: Int) -> Double? { i < count ? self[i] : nil }
 }

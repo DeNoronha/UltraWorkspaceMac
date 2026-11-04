@@ -82,12 +82,13 @@ final class CalendarSource {
 
     /// Events from now through the next 24 hours, sorted by start, mapped to
     /// `CalEvent`. `calendarIDs` empty = all calendars. Returns `[]` if not authorized.
-    static func upcoming(limit: Int = 3, calendarIDs: [String] = []) async -> [CalEvent] {
+    static func upcoming(limit: Int = 3, calendarIDs: [String] = [], days: Int = 1) async -> [CalEvent] {
         guard authStatus() == .authorized else { return [] }
 
         let store = EKEventStore()
         let now = Date()
-        let end = now.addingTimeInterval(24 * 60 * 60)
+        let end = days <= 1 ? now.addingTimeInterval(24 * 60 * 60)
+            : Calendar.current.date(byAdding: .day, value: days, to: Calendar.current.startOfDay(for: now)) ?? now
 
         let chosen = calendarIDs.isEmpty ? nil : store.calendars(for: .event).filter { calendarIDs.contains($0.calendarIdentifier) }
         if let chosen, chosen.isEmpty { return [] }

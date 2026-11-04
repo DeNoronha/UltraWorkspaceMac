@@ -134,8 +134,10 @@ public enum MonitorBeacon {
     /// One beacon: broadcast plus a unicast copy to `host` (the bar's IP) — the bar's Wi-Fi does not pass
     /// 255.255.255.255 broadcasts to it (checked 2026-11-04), the unicast always arrives.
     @discardableResult
-    public static func send(url: String, to host: String? = nil) -> Bool {
-        guard let payload = try? JSONSerialization.data(withJSONObject: ["deckhand": "monitor", "url": url, "v": 1]) else { return false }
+    public static func send(url: String, base: String? = nil, to host: String? = nil) -> Bool {
+        var obj: [String: Any] = ["deckhand": "monitor", "url": url, "v": base == nil ? 1 : 2]
+        if let base { obj["base"] = base }   // v2: each bar app opens base + "/" + its page
+        guard let payload = try? JSONSerialization.data(withJSONObject: obj) else { return false }
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else { return false }
         defer { close(fd) }

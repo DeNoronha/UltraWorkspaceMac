@@ -5,16 +5,18 @@ import UltraBarKit
 /// `GET /monitor` (the page) and `GET /monitor/stats.json` (one sample per second). The app finds
 /// the page through a UDP beacon this Mac sends every 5 s while the Monitor is on (2026-11-04).
 extension AppModel {
-    static let monitorPackage = "nl.denoronha.deckhand.monitor"
+    nonisolated static let monitorPackage = "nl.denoronha.deckhand.monitor"
 
     func startMonitor(settings: AppSettings) {
         monitorTask?.cancel(); monitorTask = nil
-        guard settings.monitorServe else { if MonitorServer.shared.isRunning { MonitorServer.shared.stop() }; monitorURL = nil; return }
+        guard settings.monitorServe else { if MonitorServer.shared.isRunning { MonitorServer.shared.stop() }; barPages.stop(); monitorURL = nil; return }
         let sys = SystemStats(), net = NetworkStats()
         _ = sys.sample(); _ = net.sample()
         let host = Host.current().localizedName ?? "Mac"
         let page = Self.monitorPage
-        MonitorServer.shared.setRoute { path in
+        barPages.start(model: self, settings: settings)
+        let pages = barPages
+        MonitorServer.shared.setRoute { [weak self] path in
             switch path {
             case "/", "/monitor", "/monitor/": return .html(page)
             case "/monitor/stats.json":
@@ -23,7 +25,9 @@ extension AppModel {
                               "memUsedGB": (s.memUsedGB * 10).rounded() / 10, "memTotalGB": (s.memTotalGB * 10).rounded() / 10,
                               "down": Int(n.downBytesPerSec), "up": Int(n.upBytesPerSec),
                               "disk": Self.diskUsedPercent(), "host": host, "t": Int(Date().timeIntervalSince1970)])
-            default: return nil
+            default:
+                guard let self else { return nil }
+                return pages.route(path, model: self)
             }
         }
         do { try MonitorServer.shared.start() } catch { monitorError = "\(error)"; say("Monitor page could not start: \(error)"); return }
@@ -34,7 +38,7 @@ extension AppModel {
                 let peer = self.ipForSelected()
                 let url = MonitorServer.shared.url(reachableFrom: peer ?? "192.168.255.255")
                 if url != self.monitorURL { self.monitorURL = url }
-                if let url { MonitorBeacon.send(url: url, to: peer) }
+                if let url { MonitorBeacon.send(url: url, base: String(url.dropLast("/monitor".count)), to: peer) }
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
@@ -43,9 +47,39 @@ extension AppModel {
 
     var monitorInstalled: Bool { barApps.contains { $0.packageName == Self.monitorPackage } }
 
+    /// The six bar apps (android/DeckhandMonitor flavors): page id, label, bundled APK name.
+    static let barAppPages: [(page: String, label: String, apk: String)] = [
+        ("monitor", "Monitor", "DeckhandMonitor"), ("claude", "Claude", "DeckhandClaude"), ("crypto", "Crypto", "DeckhandCrypto"),
+        ("weather", "Weather", "DeckhandWeather"), ("music", "Music", "DeckhandMusic"), ("calendar", "Calendar", "DeckhandCalendar")]
+
+    /// APKs shipped inside Deckhand.app (packaging/make-app.sh copies dist/bar-apps) or next to the dev build.
+    static func bundledAPK(_ name: String) -> URL? {
+        let candidates = [Bundle.main.resourceURL?.appendingPathComponent("bar-apps/\(name).apk"),
+                          URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("dist/bar-apps/\(name).apk")]
+        return candidates.compactMap { $0 }.first { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    func barAppVersion(_ page: String) -> String? { barApps.first { $0.packageName == BarPages.package(for: page) }?.versionName }
+
+    /// Install (or update) one bar app over ADB — Deckhand's own `adb install -r` of the bundled APK.
+    func installBarApp(_ page: String) {
+        guard let entry = Self.barAppPages.first(where: { $0.page == page }), let apk = Self.bundledAPK(entry.apk) else { say("No APK for \(page) in this build."); return }
+        guard let adb = AdbBridge.find() else { say("adb not found — brew install --cask android-platform-tools."); return }
+        guard let ip = ipForSelected() else { return }
+        barAppBusy = page
+        Task {
+            let bridge = AdbBridge(path: adb, ip: ip)
+            guard await bridge.connect() else { say("The bar refuses ADB — turn Wi-Fi ADB on in its Developer options."); barAppBusy = nil; return }
+            let out = await bridge.install(apkPath: apk.path)
+            say(out.contains("Success") ? "\(entry.label) installed on the bar — add its card on the CoreBar page." : "Install of \(entry.label) failed: \(out.trimmingCharacters(in: .whitespacesAndNewlines))")
+            barAppBusy = nil
+            refreshAppStore()
+        }
+    }
+
     /// Full-screen page for the 1424×280 bar: a moving CPU area chart, memory and disk bars, network
     /// up/down sparkline, clock. Plain canvas, no libraries; polls stats.json once a second.
-    static let monitorPage = #"""
+    nonisolated static let monitorPage = #"""
     <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1424,height=280,initial-scale=1">
     <title>Deckhand Monitor</title>
     <style>

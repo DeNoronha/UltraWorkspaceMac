@@ -7,11 +7,36 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "nl.denoronha.deckhand.monitor"
         minSdk = 29
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+    }
+
+    buildFeatures {
+        buildConfig = true
+        resValues = true
+    }
+
+    // One card per page on the CoreBar launcher: each flavor is its own package.
+    flavorDimensions += "page"
+    productFlavors {
+        val pages = listOf(
+            Triple("monitor", "nl.denoronha.deckhand.monitor", "Monitor"),
+            Triple("claude", "nl.denoronha.deckhand.claude", "Claude"),
+            Triple("crypto", "nl.denoronha.deckhand.crypto", "Crypto"),
+            Triple("weather", "nl.denoronha.deckhand.weather", "Weather"),
+            Triple("music", "nl.denoronha.deckhand.music", "Music"),
+            Triple("calendar", "nl.denoronha.deckhand.calendar", "Calendar"),
+        )
+        for ((flavor, appId, label) in pages) {
+            create(flavor) {
+                dimension = "page"
+                applicationId = appId
+                resValue("string", "app_name", label)
+                buildConfigField("String", "PAGE", "\"$flavor\"")
+            }
+        }
     }
 
     buildTypes {
@@ -25,4 +50,3 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
-

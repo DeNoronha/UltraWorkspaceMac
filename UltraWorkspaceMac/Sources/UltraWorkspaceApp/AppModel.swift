@@ -93,6 +93,8 @@ final class AppModel: ObservableObject {
     var monitorTask: Task<Void, Never>?
     @Published var monitorURL: String?
     @Published var monitorError: String?
+    let barPages = BarPages()
+    @Published var barAppBusy: String?
     var presenceTask: Task<Void, Never>?
     var presenceLog: Process?
     @Published var lastPresenceAt: Date?

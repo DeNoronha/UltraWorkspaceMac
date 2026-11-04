@@ -84,6 +84,10 @@ struct AdbBridge {
         return out.contains("connected to")
     }
 
+    func install(apkPath: String) async -> String {
+        await run(["-s", device, "install", "-r", apkPath], timeout: 120)
+    }
+
     func shell(_ cmd: String) async -> String {
         await run(["-s", device, "shell", cmd], timeout: 10)
     }

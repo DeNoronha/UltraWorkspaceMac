@@ -19,6 +19,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/UltraWorkspaceApp"
 cp "$ROOT/packaging/Info.plist" "$APP/Contents/Info.plist"
 [ -f "$ROOT/packaging/AppIcon.icns" ] && cp "$ROOT/packaging/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns" || true
+# The bar's Deckhand apps (android/DeckhandMonitor flavors), installed from Settings over ADB.
+if ls "$ROOT"/dist/bar-apps/*.apk >/dev/null 2>&1; then mkdir -p "$APP/Contents/Resources/bar-apps"; cp "$ROOT"/dist/bar-apps/*.apk "$APP/Contents/Resources/bar-apps/"; fi
 
 # Signing: use a Developer ID Application identity when one is in the keychain
 # (override with DECKHAND_SIGN_IDENTITY="Developer ID Application: …" or

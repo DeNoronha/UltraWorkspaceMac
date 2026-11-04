@@ -227,8 +227,7 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
         }
 
         @JavascriptInterface
-        fun version(): String =
-            try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (_: Exception) { "" }
+        fun version(): String = BuildConfig.VERSION_NAME
     }
 
     // ---- long press anywhere finishes -------------------------------------------------------
@@ -316,11 +315,21 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
         beaconThread = null
     }
 
+    /**
+     * v2 beacons carry `base` (Deckhand's http root): open base + "/" + [BuildConfig.PAGE].
+     * v1 beacons only carry `url`: open that as-is.
+     */
     private fun parseBeacon(text: String): String? = try {
         val json = JSONObject(text.trim())
         if (json.optString("deckhand") != "monitor") null
-        else json.optString("url").takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        else {
+            val base = json.optString("base").trimEnd('/')
+            val url = if (base.isHttp()) "$base/${BuildConfig.PAGE}" else json.optString("url")
+            url.takeIf { it.isHttp() }
+        }
     } catch (_: Exception) {
         null
     }
+
+    private fun String.isHttp() = startsWith("http://") || startsWith("https://")
 }

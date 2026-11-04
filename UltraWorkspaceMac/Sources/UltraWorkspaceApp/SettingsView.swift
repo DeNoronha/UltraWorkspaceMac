@@ -37,15 +37,25 @@ struct SettingsView: View {
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
 
-                Section("Monitor app on the bar") {
-                    Toggle("Serve the live Monitor page", isOn: $settings.monitorServe)
+                Section("Full-width pages on the bar") {
+                    Toggle("Serve the pages", isOn: $settings.monitorServe)
                         .onChange(of: settings.monitorServe) { _ in model.startMonitor(settings: settings) }
-                    if let url = model.monitorURL { LabeledContent("Page") { Text(url).textSelection(.enabled).font(.callout) } }
+                    if let url = model.monitorURL { LabeledContent("Address") { Text(String(url.dropLast("/monitor".count))).textSelection(.enabled).font(.callout) } }
                     if let e = model.monitorError { Text(e).foregroundStyle(.red).font(.callout) }
-                    LabeledContent("App on the bar") {
-                        Text(model.monitorInstalled ? "Installed — tap its card on the bar" : "Not installed (see Apps)").font(.callout).foregroundStyle(model.monitorInstalled ? .primary : .secondary)
+                    ForEach(AppModel.barAppPages, id: \.page) { app in
+                        LabeledContent(app.label) {
+                            HStack(spacing: 10) {
+                                if let v = model.barAppVersion(app.page) { Text("on the bar (\(v))").font(.callout).foregroundStyle(.secondary) }
+                                else { Text("not on the bar").font(.callout).foregroundStyle(.secondary) }
+                                if model.barAppBusy == app.page { ProgressView().controlSize(.small) }
+                                else {
+                                    Button(model.barAppVersion(app.page) == nil ? "Install on the bar" : "Update") { model.installBarApp(app.page) }
+                                        .disabled(model.barAppBusy != nil || AppModel.bundledAPK(AppModel.barAppPages.first { $0.page == app.page }!.apk) == nil)
+                                }
+                            }
+                        }
                     }
-                    Text("A full-screen, moving view of this Mac (CPU, memory, network, disk) for the bar's Monitor app (android/DeckhandMonitor). The page is plain HTTP on this network, read-only, and only exists while this is on. Tap the card on the bar to open it; ✕ or a long press closes it.")
+                    Text("Six small apps for the bar, one card each: Monitor (this Mac live), Claude (which terminal needs you), Crypto, Weather (3 days), Music (album art + transport) and Calendar (3 days). Installing goes over ADB (Wi-Fi ADB on the bar, adb on this Mac); after installing, add the card on the CoreBar page and publish. The pages are plain HTTP on this network and only exist while the switch is on; Music accepts play/next/previous from the bar. ✕ or a long press on the bar returns to the cards.")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
 
