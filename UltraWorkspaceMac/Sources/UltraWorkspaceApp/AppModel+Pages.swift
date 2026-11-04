@@ -193,9 +193,10 @@ extension AppModel {
             out.append([
                 "productId": "KNOB_KEY", "serialNo": knob.serial,
                 "config": [
-                    "button": ["keyCode": 0, "singleClick": ["show": false, "name": "Mute", "icon": "",
-                        "actions": [["type": "PC_CONTROL", "id": "1", "name": "Mute",
-                                     "values": [["id": "1", "value": ["output": 10, "payload": ["deckhand": "mute"]]]]]]]],
+                    // Press = play/pause in Apple Music (was mute until 2026-11-04; mute is one twist away anyway).
+                "button": ["keyCode": 0, "singleClick": ["show": false, "name": "Play / pause", "icon": "",
+                        "actions": [["type": "PC_CONTROL", "id": "1", "name": "Play / pause",
+                                     "values": [["id": "1", "value": ["output": 10, "payload": ["deckhand": "music.playpause"]]]]]]]],
                     "clockwise": ["id": "pc:volume", "type": "PC_VOLUME"],
                     "counterclockwise": ["id": "pc:volume", "type": "PC_VOLUME"],
                 ],
