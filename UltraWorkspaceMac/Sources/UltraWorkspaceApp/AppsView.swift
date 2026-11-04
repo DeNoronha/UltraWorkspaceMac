@@ -15,9 +15,9 @@ struct AppsView: View {
             Header("Apps", "Apps run on the bar itself; Deckhand installs, updates and removes them. Screensavers have their own page.") {
                 HStack {
                     Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(!model.link.isConnected)
-                    let updates = pendingUpdates
-                    Button { model.updateAll(updates) } label: { Label(updates.isEmpty ? "Update all" : "Update all (\(updates.count))", systemImage: "arrow.down.circle") }
-                        .buttonStyle(.borderedProminent).disabled(updates.isEmpty || model.appBusy != nil)
+                    let updates = pendingUpdates, ours = deckhandUpdates
+                    Button { model.updateAll(updates); model.updateBarApps(ours) } label: { Label(updates.isEmpty && ours.isEmpty ? "Update all" : "Update all (\(updates.count + ours.count))", systemImage: "arrow.down.circle") }
+                        .buttonStyle(.borderedProminent).disabled((updates.isEmpty && ours.isEmpty) || model.appBusy != nil || model.barAppBusy != nil)
                         .help(updates.isEmpty ? "Everything is up to date." : "Updates one app after another: " + updates.map(\.name).joined(separator: ", "))
                 }
             }
@@ -27,42 +27,38 @@ struct AppsView: View {
                     if let e = model.appStoreError {
                         Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                     }
-                    Panel("Deckhand apps", footer: "Six small apps for the bar, one card each, showing full-width live pages served by this Mac: Monitor (this Mac live), Claude (which terminal needs you), Crypto, Weather (3 days), Music (album art + transport) and Calendar (3 days). Installing goes over ADB (Wi-Fi ADB on in the bar's Developer options). After installing: CoreBar page → Add a card → Publish page. ✕ or a long press on the bar returns to the cards. The pages are plain HTTP on this network and only exist while the switch is on.") {
+                    let updates = pendingUpdates.count + deckhandUpdates.count
+                    if updates > 0 {
+                        Label(updates == 1 ? "1 update available" : "\(updates) updates available", systemImage: "arrow.down.circle.fill").foregroundStyle(.orange).fontWeight(.medium)
+                    }
+                    let isOurs: (CoreBarSession.AppInfo) -> Bool = { $0.packageName.hasPrefix(BarPages.packagePrefix) }
+                    let userApps = model.barApps.filter { !$0.isScreensaver && !$0.systemApp && !isOurs($0) }
+                    let firmwareApps = model.barApps.filter { !$0.isScreensaver && $0.systemApp }
+                    Panel("Installed", footer: "Apps you installed from the marketplace. Deckhand asks the bar to update or remove them; the bar does the work itself.") {
+                        if model.barApps.isEmpty { Text(model.link.isConnected ? "Press Refresh." : "Connect to the bar first.").foregroundStyle(.secondary) }
+                        else if userApps.isEmpty { Text("Nothing installed beyond the firmware and Deckhand's own apps.").foregroundStyle(.secondary) }
+                        ForEach(userApps, id: \.packageName) { a in installedRow(a); Divider() }
+                    }
+                    Panel("Deckhand apps", footer: "Six small apps for the bar, one card each, showing full-width live pages served by this Mac. Installing and updating goes over ADB (Wi-Fi ADB on in the bar's Developer options). After installing: CoreBar page → Add a card → Publish page. ✕ or a long press on the bar returns to the cards. The pages are plain HTTP on this network and only exist while the switch is on.") {
                         HStack(spacing: 12) {
                             Toggle("Serve the pages from this Mac", isOn: $settings.monitorServe)
                                 .onChange(of: settings.monitorServe) { _ in model.startMonitor(settings: settings) }
                             if let url = model.monitorURL { Text(String(url.dropLast("/monitor".count))).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
                             if let e = model.monitorError { Text(e).foregroundStyle(.red).font(.caption) }
+                            Spacer()
+                            Text("Deckhand ships version \(AppModel.barAppsVersion)").font(.caption).foregroundStyle(.secondary)
                         }
-                        ForEach(AppModel.barAppPages, id: \.page) { app in
-                            HStack(spacing: 10) {
-                                icon(url: model.barAppIconURL(app.page), fallback: Self.barAppIcon(app.page))
-                                Text(app.label).fontWeight(.medium).frame(width: 90, alignment: .leading)
-                                let installed = model.barAppVersion(app.page), stale = model.barAppNeedsUpdate(app.page)
-                                if let v = installed {
-                                    Text("on the bar · \(v)").font(.caption).foregroundStyle(.secondary)
-                                    if stale { tag("update to \(AppModel.barAppsVersion)", .orange) } else { Label("up to date", systemImage: "checkmark").font(.caption).foregroundStyle(.green) }
-                                } else { Text("not on the bar · \(AppModel.barAppsVersion) available").font(.caption).foregroundStyle(.secondary) }
-                                Spacer()
-                                if model.barAppBusy == app.page { ProgressView().controlSize(.small) }
-                                else if installed == nil || stale {
-                                    Button(installed == nil ? "Install" : "Update") { model.installBarApp(app.page) }
-                                        .buttonStyle(.bordered).tint(.blue)
-                                        .disabled(model.barAppBusy != nil || AppModel.bundledAPK(app.apk) == nil)
-                                }
-                            }
-                            Divider()
-                        }
-                    }
-                    Panel("Installed", footer: "Everything the bar reports as installed. Apps the bar offers as a page card appear under Widgets → Apps on the bar; add them to the page from there or from the CoreBar page.") {
-                        if model.barApps.isEmpty { Text(model.link.isConnected ? "Press Refresh." : "Connect to the bar first.").foregroundStyle(.secondary) }
-                        ForEach(model.barApps.filter { !$0.isScreensaver }, id: \.packageName) { a in installedRow(a); Divider() }
+                        Divider()
+                        ForEach(AppModel.barAppPages, id: \.page) { app in deckhandRow(app); Divider() }
                     }
                     Panel("Marketplace", footer: "The vendor's catalogue. The bar downloads and installs the app itself (it needs internet), one at a time, in about ten seconds.") {
                         let available = model.storeApps.filter { s in !model.barApps.contains { $0.packageName == s.package } && !(model.appStatus[s.package]?.installed ?? false) }
                         if model.storeApps.isEmpty { Text(model.link.isConnected ? "Press Refresh to load the catalogue." : "Connect to the bar first.").foregroundStyle(.secondary) }
                         else if available.isEmpty { Text("Everything in the marketplace is installed.").foregroundStyle(.secondary) }
                         ForEach(available) { a in storeRow(a); Divider() }
+                    }
+                    Panel("Built into the firmware", footer: "Part of the bar's system image: they can be updated from the marketplace but not removed.") {
+                        ForEach(firmwareApps, id: \.packageName) { a in installedRow(a); Divider() }
                     }
                 }.padding(20)
             }
@@ -77,6 +73,33 @@ struct AppsView: View {
             let code = model.appStatus[a.packageName]?.versionCode ?? 0
             return (code > 0 && s.versionCode > code) ? (a.packageName, a.appName) : nil
         }
+    }
+
+    /// Deckhand apps on the bar that are older than the bundled APKs.
+    private var deckhandUpdates: [String] { AppModel.barAppPages.map(\.page).filter { model.barAppNeedsUpdate($0) } }
+
+    private func deckhandRow(_ app: (page: String, label: String, apk: String)) -> some View {
+        let installed = model.barAppVersion(app.page), stale = model.barAppNeedsUpdate(app.page)
+        return HStack(spacing: 12) {
+            icon(url: model.barAppIconURL(app.page), fallback: Self.barAppIcon(app.page))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(app.label).fontWeight(.medium)
+                    if let v = installed { Text(v).font(.caption).foregroundStyle(.secondary) }
+                    if stale { tag("update \(AppModel.barAppsVersion)", .orange) }
+                    else if installed != nil { tag("up to date", .green) }
+                    else { tag("not installed", .secondary) }
+                }
+                Text(BarPages.package(for: app.page)).font(.caption2).foregroundStyle(.tertiary)
+            }
+            Spacer()
+            if model.barAppBusy == app.page { ProgressView().controlSize(.small) }
+            else if installed == nil || stale {
+                Button { model.installBarApp(app.page) } label: { Label(installed == nil ? "Install" : "Update", systemImage: "arrow.down.circle") }
+                    .buttonStyle(.borderedProminent).disabled(model.barAppBusy != nil || AppModel.bundledAPK(app.apk) == nil)
+                    .help(installed == nil ? "Install version \(AppModel.barAppsVersion) over ADB" : "Update to \(AppModel.barAppsVersion) over ADB")
+            }
+        }.padding(.vertical, 4)
     }
 
     private func installedRow(_ a: CoreBarSession.AppInfo) -> some View {
