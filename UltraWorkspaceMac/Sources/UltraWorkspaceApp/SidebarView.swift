@@ -32,10 +32,11 @@ struct SidebarView: View {
                 }
             }
             Section("Library") {
+                Label("Installed", systemImage: "checkmark.circle").tag(NavItem.installed)
                 Label("Widgets", systemImage: "puzzlepiece.extension").tag(NavItem.widgets)
-                Label("People", systemImage: "person.2").tag(NavItem.people)
                 Label("Apps", systemImage: "bag").tag(NavItem.apps)
                 Label("Screensavers", systemImage: "sparkles.tv").tag(NavItem.screensavers)
+                Label("People", systemImage: "person.2").tag(NavItem.people)
             }
             Section("Health") {
                 Label("Status", systemImage: "stethoscope").tag(NavItem.status)

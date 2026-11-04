@@ -55,6 +55,7 @@ private struct DetailRouter: View {
             case .knobKey: moduleView("KNOB_KEY", "KnobKey") { KnobKeyView(module: $0) }
             case .dotKey: moduleView("DOT_KEY", "DotKey") { DotKeyView(module: $0) }
             case .senseCube: moduleView("SENSE_CUBE", "SenseCube") { SenseCubeView(module: $0) }
+            case .installed: InstalledView()
             case .widgets: WidgetsView()
             case .people: PeopleView()
             case .apps: AppsView()

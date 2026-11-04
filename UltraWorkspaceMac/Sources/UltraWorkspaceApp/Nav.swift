@@ -8,7 +8,8 @@ enum NavItem: Hashable {
     case knobKey          // Controls
     case dotKey
     case senseCube        // Sensors
-    case widgets          // Library
+    case installed        // Library
+    case widgets
     case people
     case apps
     case screensavers

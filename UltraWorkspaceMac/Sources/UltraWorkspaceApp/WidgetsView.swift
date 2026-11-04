@@ -17,7 +17,7 @@ struct WidgetsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Header("Widgets", "What each screen can show.")
+            Header("Widgets", "Cards for the cube and the bar. Switch one on to show it; its settings are here too.")
             Divider()
             HSplitView {
                 List(selection: Binding(get: { ui.selected as Item? }, set: { if let v = $0 { ui.selected = v; if case .cube(let t) = v { model.selectedAddon = t } } })) {
@@ -39,17 +39,7 @@ struct WidgetsView: View {
                                 if settings.coreCards.contains(c.id) { Image(systemName: "rectangle.on.rectangle").font(.caption).foregroundStyle(.secondary).help("On the CoreBar page") }
                             }.tag(Item.bar(c.id))
                         }
-                    } header: { Text("For the CoreBar") } footer: { Text("Cards the bar draws itself and updates live (CPU every 3 s, network every 5 s).").font(.caption).foregroundStyle(.secondary) }
-                    Section {
-                        if model.appCards.isEmpty { Text(model.link.isConnected ? "No apps read from the bar yet." : "Connect to the bar to list its apps.").font(.caption).foregroundStyle(.secondary) }
-                        ForEach(model.appCards) { c in
-                            HStack {
-                                Label { Text(c.title) } icon: { CardIcon(card: c) }
-                                Spacer()
-                                if settings.coreCards.contains(c.id) { Image(systemName: "rectangle.on.rectangle").font(.caption).foregroundStyle(.secondary).help("On the CoreBar page") }
-                            }.tag(Item.bar(c.id))
-                        }
-                    } header: { Text("Apps on the bar") } footer: { Text("One card per app installed on the bar (Settings → Marketplace on the bar, or kitcheck app). Tapping the card opens the app on the bar.").font(.caption).foregroundStyle(.secondary) }
+                    } header: { Text("For the CoreBar") } footer: { Text("Cards the bar draws itself and updates live (CPU every 3 s, network every 5 s). Apps have their own cards: see Apps.").font(.caption).foregroundStyle(.secondary) }
                 }
                 .frame(minWidth: 220, maxWidth: 280)
 
@@ -70,21 +60,22 @@ struct WidgetsView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 Label(model.selectedAddon.title, systemImage: model.selectedAddon.icon).font(.title3).bold()
                                 Text(blurb(model.selectedAddon)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                                HStack {
-                                    if settings.vivoCards.contains(model.selectedAddon) {
-                                        if model.lastCubeSentAt != nil, !model.cubeOffline, CoreBarSession.UploadDiag.shared.last.hasPrefix("accepted") {
-                                            Label("On the cube", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                                        } else {
-                                            Label(model.lastCubeSentAt == nil ? "In the cube's list — not sent yet" : "In the cube's list — the last send did not arrive", systemImage: "circle.circle").foregroundStyle(.orange)
-                                        }
-                                        Button("Remove") { settings.removeVivoCard(model.selectedAddon) }
-                                    } else {
-                                        Button { if model.selectedAddon == .picture, settings.vivoPicturePath.isEmpty { Self.choosePicture(settings) }; settings.addVivoCard(model.selectedAddon); model.requestCardPermissions(model.selectedAddon) } label: { Label("Add to the cube", systemImage: "plus") }
-                                            .buttonStyle(.bordered).disabled(settings.vivoSlotsLeft == 0)
-                                        if settings.vivoSlotsLeft == 0 { Text("The cube is full (\(AppModel.maxVivoLayers) cards).").font(.caption).foregroundStyle(.secondary) }
-                                    }
-                                    Button { reload() } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.borderless).accessibilityLabel("Redraw preview")
+                                let t = model.selectedAddon, onCube = settings.vivoCards.contains(t)
+                                InstalledToggle(title: "On the cube", isOn: onCube, disabled: !onCube && settings.vivoSlotsLeft == 0,
+                                                note: !onCube && settings.vivoSlotsLeft == 0 ? "The cube is full (\(AppModel.maxVivoLayers) cards)." : nil) { on in
+                                    if on {
+                                        if t == .picture, settings.vivoPicturePath.isEmpty { Self.choosePicture(settings) }
+                                        settings.addVivoCard(t); model.requestCardPermissions(t)
+                                    } else { settings.removeVivoCard(t) }
                                 }
+                                if onCube {
+                                    if model.lastCubeSentAt != nil, !model.cubeOffline, CoreBarSession.UploadDiag.shared.last.hasPrefix("accepted") {
+                                        Label("On the cube", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.callout)
+                                    } else {
+                                        Label(model.lastCubeSentAt == nil ? "In the cube's list — not sent yet" : "In the cube's list — the last send did not arrive", systemImage: "circle.circle").foregroundStyle(.orange).font(.callout)
+                                    }
+                                }
+                                Button { reload() } label: { Label("Redraw preview", systemImage: "arrow.clockwise") }.buttonStyle(.borderless).font(.callout)
                             }
                         }
                         if Self.snapshotCards.contains(model.selectedAddon) {
@@ -92,7 +83,7 @@ struct WidgetsView: View {
                                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         }
                         Divider()
-                        addonSettings(model.selectedAddon)
+                        AddonSettingsPanel(t: model.selectedAddon)
                         Spacer()
                     }.padding(20).frame(minWidth: 360, alignment: .leading)
                     }
@@ -128,16 +119,14 @@ struct WidgetsView: View {
             Text(c.note.isEmpty ? "Drawn by the bar itself from live data this Mac sends over the link." : c.note).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Text("The bar renders this card at its own size on the 1424 × 280 strip and updates it live. Deckhand cannot change how it looks; it only puts the card on the Deckhand page.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            InstalledToggle(title: "On the CoreBar page", isOn: onPage, disabled: !onPage && needsSense, note: needsSense ? "No SenseCube found." : nil) { on in
+                if on { settings.coreCards.append(c.id) } else { settings.coreCards.removeAll { $0 == c.id } }
+            }
             HStack {
                 if onPage {
-                    Label(settings.deckhandPagePublished ? "On the CoreBar page" : "On the CoreBar page — not published yet", systemImage: "rectangle.on.rectangle").foregroundStyle(settings.deckhandPagePublished ? .green : .orange)
-                    Button("Remove") { settings.coreCards.removeAll { $0 == c.id } }
-                } else {
-                    Button { settings.coreCards.append(c.id) } label: { Label("Add to the CoreBar page", systemImage: "plus") }
-                        .buttonStyle(.bordered).disabled(needsSense)
-                    if needsSense { Text("No SenseCube found.").font(.caption).foregroundStyle(.secondary) }
+                    Label(settings.deckhandPagePublished ? "On the CoreBar page" : "On the CoreBar page — not published yet", systemImage: "rectangle.on.rectangle").foregroundStyle(settings.deckhandPagePublished ? .green : .orange).font(.callout)
                 }
-                Button("Open CoreBar page") { model.nav = .coreBarPage }
+                Button("Open CoreBar page") { model.nav = .coreBarPage }.buttonStyle(.borderless).font(.callout)
             }
         }.padding(20).frame(minWidth: 360, alignment: .leading)
     }
@@ -155,7 +144,15 @@ struct WidgetsView: View {
         }
     }
 
-    @ViewBuilder private func addonSettings(_ t: Theme) -> some View {
+}
+
+/// The settings of one Mac-drawn card — shared by the Widgets page and the Apps page (a bar app
+/// such as Weather or Crypto shows the same data as its cube card, so it has the same settings).
+struct AddonSettingsPanel: View {
+    let t: Theme
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var settings: AppSettings
+    @ViewBuilder var body: some View {
         switch t {
         case .weather:
             Panel("Weather settings") {
@@ -225,7 +222,7 @@ struct WidgetsView: View {
             Panel("Picture") {
                 HStack {
                     Text(settings.vivoPicturePath.isEmpty ? "No picture chosen." : (settings.vivoPicturePath as NSString).lastPathComponent).foregroundStyle(.secondary)
-                    Button("Choose…") { Self.choosePicture(settings) }
+                    Button("Choose…") { WidgetsView.choosePicture(settings) }
                 }
             }
         default:

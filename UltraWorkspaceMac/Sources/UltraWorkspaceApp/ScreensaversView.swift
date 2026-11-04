@@ -1,13 +1,15 @@
 import SwiftUI
 import UltraBarKit
 
-/// Screensavers, laid out like macOS: the active one large at the top with the idle time, then a grid of
-/// every screensaver — installed ones select on click, catalogue ones install on click.
+/// Screensavers, laid out like Widgets and Apps: the list on the left (installed first), the chosen one on
+/// the right with "Installed on the bar", "Use this screensaver" and the bar's screensaver settings.
 /// Setting = GET/SET_COREBAR_CONFIG BASE_SET; installs = APP_MANAGER with the screensaver app type.
 struct ScreensaversView: View {
     @EnvironmentObject var model: AppModel
+    @MainActor final class UI: ObservableObject { @Published var selected: String? }
+    @StateObject private var ui = UI()
 
-    /// One tile: catalogue entry and/or installed app, merged by package.
+    /// One entry: catalogue entry and/or installed app, merged by package.
     private struct Tile: Identifiable {
         let package: String, name: String, version: String, icon: URL?
         let installed: CoreBarSession.AppInfo?, store: BarAppStore.StoreApp?
@@ -24,94 +26,94 @@ struct ScreensaversView: View {
             out[a.packageName] = Tile(package: a.packageName, name: s?.name ?? a.appName, version: a.versionName,
                                       icon: s?.iconURL ?? a.iconUrl.flatMap(URL.init), installed: a, store: s)
         }
-        // installed first, then by name
         return out.values.sorted { ($0.installed == nil ? 1 : 0, $0.name) < ($1.installed == nil ? 1 : 0, $1.name) }
     }
-    private var active: Tile? { tiles.first { t in t.installed.map(model.isActiveScreensaver) ?? false } }
+    private func isActive(_ t: Tile) -> Bool { t.installed.map(model.isActiveScreensaver) ?? false }
+    private func updateAvailable(_ t: Tile) -> Bool {
+        guard let s = t.store, t.installed != nil else { return false }
+        let code = model.appStatus[t.package]?.versionCode ?? 0
+        return code > 0 && s.versionCode > code
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            Header("Screensavers", "What the bar shows when nobody touches it.") {
+            Header("Screensavers", "What the bar shows when nobody touches it. Switch one on to install it, then use it.") {
                 Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.disabled(!model.link.isConnected)
             }
             Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    if let e = model.appStoreError {
-                        Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
-                    }
-                    hero
-                    Panel("All screensavers", footer: "Click a screensaver to use it. Ones with a download badge are in the vendor's catalogue and install on click (about ten seconds, the bar fetches them itself). Right-click an installed one to remove it.") {
-                        if tiles.isEmpty { Text(model.link.isConnected ? "Nothing yet — press Refresh." : "Connect to the bar first.").foregroundStyle(.secondary) }
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 14)], alignment: .leading, spacing: 16) {
-                            ForEach(tiles) { t in tile(t) }
+            HSplitView {
+                List(selection: $ui.selected) {
+                    Section {
+                        if tiles.isEmpty { Text(model.link.isConnected ? "Nothing yet — press Refresh." : "Connect to the bar first.").font(.caption).foregroundStyle(.secondary) }
+                        ForEach(tiles) { t in
+                            LibraryRow(title: t.name, caption: t.installed == nil ? nil : (isActive(t) ? "\(t.version) · in use" : t.version), inUse: t.installed != nil, busy: model.appBusy == t.package, updateAvailable: updateAvailable(t)) {
+                                AppIcon(url: t.icon, fallback: "sparkles.tv", size: 18)
+                            }.tag(t.package)
                         }
-                    }
-                }.padding(20)
-            }
-        }
-        .onAppear { model.refreshAppStore() }
-    }
-
-    // MARK: hero
-
-    private var hero: some View {
-        let c = model.screensaver
-        return Panel(nil) {
-            HStack(alignment: .top, spacing: 20) {
-                thumb(active?.icon, width: 240, height: 135)
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(active?.name ?? (c == nil ? "Not read yet" : "No screensaver chosen")).font(.title3).bold()
-                    HStack(spacing: 14) {
-                        Toggle("Start screensaver", isOn: Binding(get: { c?.featureEnabled ?? false }, set: { model.setScreensaver(enabled: $0) }))
-                            .toggleStyle(.switch).disabled(c == nil || active == nil)
-                        Text("after").foregroundStyle(.secondary)
-                        Picker("", selection: Binding(get: { c?.lockTime ?? "TIME_5MIN" }, set: { model.setScreensaver(lockTime: $0) })) {
-                            ForEach(CoreBarSession.ScreensaverConfig.lockTimes, id: \.self) { Text(AppModel.lockTimeLabel($0)).tag($0) }
-                        }.labelsHidden().frame(width: 110).disabled(c == nil)
-                    }
-                    Text(c?.featureEnabled == true
-                         ? "The bar starts \(active?.name ?? "the screensaver") after \(AppModel.lockTimeLabel(c?.lockTime ?? "")) without a touch."
-                         : "Off — the bar keeps showing its page. Pick a screensaver below and switch it on.")
-                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    } header: { Text("Screensavers") } footer: { Text("Installed ones first, then the vendor's catalogue.").font(.caption).foregroundStyle(.secondary) }
                 }
-                Spacer()
+                .frame(minWidth: 240, maxWidth: 300)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if let e = model.appStoreError { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
+                        if let sel = ui.selected, let t = tiles.first(where: { $0.package == sel }) { detail(t) }
+                        else { Text("Pick a screensaver on the left.").foregroundStyle(.secondary) }
+                        Divider()
+                        timing
+                        Spacer()
+                    }.padding(20).frame(minWidth: 360, alignment: .leading)
+                }
+            }
+        }
+        .onAppear {
+            model.refreshAppStore()
+            if ui.selected == nil { ui.selected = tiles.first(where: isActive)?.package ?? tiles.first?.package }
+        }
+    }
+
+    @ViewBuilder private func detail(_ t: Tile) -> some View {
+        let active = isActive(t), busy = model.appBusy == t.package, update = updateAvailable(t)
+        let tag: (String, Color) = active ? ("in use", .green) : (update ? ("update \(t.store?.versionName ?? "")", .orange) : (t.installed == nil ? ("not installed", .secondary) : ("installed", .green)))
+        HStack(alignment: .top, spacing: 20) {
+            thumb(t.icon, width: 240, height: 135)
+            VStack(alignment: .leading, spacing: 12) {
+                DetailTitle(title: t.name, version: t.installed == nil ? t.store?.versionName : t.version, tag: tag, subtitle: t.package + (t.store == nil ? " · not in the marketplace" : "")) { EmptyView() }
+                if let s = t.store, !s.summary.isEmpty { Text(s.summary).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                InstalledToggle(title: "Installed on the bar", isOn: t.installed != nil, busy: busy,
+                                disabled: model.appBusy != nil || !model.link.isConnected || (t.installed?.systemApp ?? false) || active || (t.installed == nil && t.store == nil),
+                                note: (t.installed?.systemApp ?? false) ? "Part of the firmware." : (active ? "In use — pick another one first to remove it." : nil),
+                                confirmOff: "Remove \(t.name) from the bar?") { on in
+                    if on { model.installApp(t.package, name: t.name) } else if let a = t.installed { model.uninstallApp(a.packageName, name: a.appName) }
+                }
+                HStack(spacing: 12) {
+                    if let a = t.installed, !active {
+                        Button { model.setScreensaver(app: a) } label: { Label("Use this screensaver", systemImage: "sparkles.tv") }.buttonStyle(.borderedProminent).disabled(model.appBusy != nil)
+                    }
+                    if update, let s = t.store, !busy {
+                        Button { model.installApp(t.package, name: t.name) } label: { Label("Update to \(s.versionName)", systemImage: "arrow.down.circle") }.buttonStyle(.bordered).disabled(model.appBusy != nil)
+                    }
+                }
             }
         }
     }
 
-    // MARK: grid
-
-    private func tile(_ t: Tile) -> some View {
-        let isActive = t.installed.map(model.isActiveScreensaver) ?? false
-        let busy = model.appBusy == t.package
-        return VStack(spacing: 6) {
-            ZStack(alignment: .bottomTrailing) {
-                thumb(t.icon, width: 160, height: 90)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(isActive ? Color.accentColor : Color.clear, lineWidth: 3))
-                if busy { ProgressView().controlSize(.small).padding(6) }
-                else if t.installed == nil { Image(systemName: "arrow.down.circle.fill").font(.title3).foregroundStyle(.white, .blue).padding(6).help("Install from the catalogue") }
-                else if isActive { Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(.white, Color.accentColor).padding(6) }
-            }
-            VStack(spacing: 1) {
-                Text(t.name).font(.callout).lineLimit(1)
-                Text(t.installed == nil ? "not installed" : t.version).font(.caption2).foregroundStyle(.secondary)
+    /// The bar's screensaver settings: on/off and the idle time (one setting for whichever screensaver is in use).
+    private var timing: some View {
+        let c = model.screensaver, active = tiles.first(where: isActive)
+        return Panel("Screensaver settings", footer: c?.featureEnabled == true
+                     ? "The bar starts \(active?.name ?? "the screensaver") after \(AppModel.lockTimeLabel(c?.lockTime ?? "")) without a touch."
+                     : "Off — the bar keeps showing its page. Pick a screensaver, press Use this screensaver and switch it on.") {
+            HStack(spacing: 14) {
+                Toggle("Start screensaver", isOn: Binding(get: { c?.featureEnabled ?? false }, set: { model.setScreensaver(enabled: $0) }))
+                    .toggleStyle(.switch).disabled(c == nil || active == nil)
+                Text("after").foregroundStyle(.secondary)
+                Picker("", selection: Binding(get: { c?.lockTime ?? "TIME_5MIN" }, set: { model.setScreensaver(lockTime: $0) })) {
+                    ForEach(CoreBarSession.ScreensaverConfig.lockTimes, id: \.self) { Text(AppModel.lockTimeLabel($0)).tag($0) }
+                }.labelsHidden().frame(width: 110).disabled(c == nil)
+                if let active { Text("In use: \(active.name)").font(.caption).foregroundStyle(.secondary) }
             }
         }
-        .frame(width: 160)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard model.appBusy == nil else { return }
-            if let a = t.installed { model.setScreensaver(app: a) } else { model.installApp(t.package, name: t.name) }
-        }
-        .contextMenu {
-            if let a = t.installed {
-                Button("Use \(t.name)") { model.setScreensaver(app: a) }
-                if !a.systemApp { Button("Remove from the bar", role: .destructive) { model.uninstallApp(a.packageName, name: a.appName) }.disabled(isActive) }
-            } else { Button("Install") { model.installApp(t.package, name: t.name) } }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(t.installed == nil ? "Install \(t.name)" : (isActive ? "\(t.name), active" : "Use \(t.name)"))
     }
 
     private func thumb(_ url: URL?, width: CGFloat, height: CGFloat) -> some View {

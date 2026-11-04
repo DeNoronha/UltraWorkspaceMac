@@ -103,6 +103,23 @@ extension AppModel {
         return ok
     }
 
+    /// Remove one of Deckhand's apps from the bar (`adb uninstall`). Its card disappears from the bar's page.
+    func uninstallBarApp(_ page: String) {
+        guard barAppBusy == nil, let entry = Self.barAppPages.first(where: { $0.page == page }) else { return }
+        guard let adb = AdbBridge.find() else { barAppError = "adb not found — brew install --cask android-platform-tools."; return }
+        guard let ip = ipForSelected() else { return }
+        barAppBusy = page
+        Task {
+            defer { barAppBusy = nil }
+            let bridge = AdbBridge(path: adb, ip: ip)
+            guard await bridge.connect() else { barAppError = "The bar refuses ADB on \(ip):5555 — Settings → Debug bridge."; say(barAppError!); return }
+            let out = await bridge.uninstall(package: BarPages.package(for: page))
+            if out.contains("Success") { barAppError = nil; say("\(entry.label) removed from the bar.") }
+            else { barAppError = "Could not remove \(entry.label): \(out.trimmingCharacters(in: .whitespacesAndNewlines))"; say(barAppError!) }
+            refreshAppStore()
+        }
+    }
+
     /// Full-screen page for the 1424×280 bar: a moving CPU area chart, memory and disk bars, network
     /// up/down sparkline, clock. Plain canvas, no libraries; polls stats.json once a second.
     nonisolated static let monitorPage = #"""

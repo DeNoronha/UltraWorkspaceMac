@@ -88,6 +88,10 @@ struct AdbBridge {
         await run(["-s", device, "install", "-r", apkPath], timeout: 120)
     }
 
+    func uninstall(package: String) async -> String {
+        await run(["-s", device, "uninstall", package], timeout: 60)
+    }
+
     func shell(_ cmd: String) async -> String {
         await run(["-s", device, "shell", cmd], timeout: 10)
     }
