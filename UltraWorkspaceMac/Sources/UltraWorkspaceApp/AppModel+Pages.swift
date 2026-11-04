@@ -207,15 +207,14 @@ extension AppModel {
             out.append(["productId": "SENSE_CUBE", "serialNo": sense.serial, "config": []])
         }
         if let dot = modules.first(where: { $0.type == "DOT_KEY" }) {
-            var buttons: [[String: Any]] = []
-            if let vivo = modules.first(where: { $0.isVivoCube }) {
-                let uid = vivo.deviceId.isEmpty ? vivo.serial : vivo.deviceId
-                for (keyCode, layer) in [(2, 1), (1, 2)] {
-                    buttons.append(["keyCode": keyCode, "singleClick": ["show": false, "name": "Widget \(layer)", "icon": "",
-                        "actions": [["type": "VIVO_CUBE_TOGGLE", "id": uid, "name": "Widget \(layer)",
-                                     "values": [["id": "1", "value": "\(layer)"], ["id": "2", "value": "\(Self.widgetId(forLayer: layer))"]]]]]])
-                }
+            // Round keys step through the cube's cards (previous / next) via this Mac — until 2026-11-04 they
+            // jumped to card 1 and card 2 on the bar itself, which read as "always the first card" on the desk.
+            func step(_ keyCode: Int, _ name: String, _ cmd: String) -> [String: Any] {
+                ["keyCode": keyCode, "singleClick": ["show": false, "name": name, "icon": "",
+                    "actions": [["type": "PC_CONTROL", "id": "1", "name": name,
+                                 "values": [["id": "1", "value": ["output": 10, "payload": ["deckhand": cmd]]]]]]]]
             }
+            var buttons: [[String: Any]] = [step(2, "Previous", "previous"), step(1, "Next", "next")]
             buttons.append(["keyCode": 0,
                 "singleClick": ["show": false, "name": "Next", "icon": "",
                     "actions": [["type": "PC_CONTROL", "id": "1", "name": "Next",

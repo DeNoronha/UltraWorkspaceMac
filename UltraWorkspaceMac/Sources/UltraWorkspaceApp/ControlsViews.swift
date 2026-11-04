@@ -62,7 +62,6 @@ struct DotKeyView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
     let module: AttachedModule
-    private func card(_ n: Int) -> String { n - 1 < settings.vivoCards.count ? settings.vivoCards[n - 1].title : "cube card \(n)" }
     var body: some View {
         VStack(spacing: 0) {
             Header("DotKey", "Three keys: two round, one long.")
@@ -76,11 +75,11 @@ struct DotKeyView: View {
                             Capsule().fill(.quaternary).frame(width: 26, height: 68).overlay(Text("3").font(.caption))
                         }.frame(width: 110).padding(.top, 10)
                         Panel("What it does") {
-                            BindingRow(icon: "1.circle", control: "Key 1", action: "Cube: \(card(1))", note: "switches on the bar itself")
-                            BindingRow(icon: "2.circle", control: "Key 2", action: "Cube: \(card(2))", note: "")
+                            BindingRow(icon: "1.circle", control: "Key 1", action: "Cube: previous card", note: "via this Mac")
+                            BindingRow(icon: "2.circle", control: "Key 2", action: "Cube: next card", note: "via this Mac")
                             BindingRow(icon: "3.circle", control: "Key 3", action: "Cube: next card", note: "via this Mac")
                             BindingRow(icon: "3.circle.fill", control: "Hold key 3", action: "Bar: Standard page", note: "")
-                            if !model.modules.contains(where: { $0.isVivoCube }) { Text("No VivoCube found — keys 1 and 2 do nothing until one is attached.").font(.caption).foregroundStyle(.orange) }
+                            if !model.modules.contains(where: { $0.isVivoCube }) { Text("No VivoCube found — keys 1, 2 and 3 do nothing until one is attached.").font(.caption).foregroundStyle(.orange) }
                             BindingsFooter(lastUsed: nil)
                         }
                     }
