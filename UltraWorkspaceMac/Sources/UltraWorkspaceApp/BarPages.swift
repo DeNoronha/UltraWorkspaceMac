@@ -26,8 +26,9 @@ final class BarPages {
         stop()
         tasks.append(Task { [weak self] in   // Claude sessions + Music: 2 s
             while !Task.isCancelled {
-                let s = await Task.detached { ClaudeUsage.sessions() }.value
-                let snap = await Task.detached { ClaudeUsage.snapshot() }.value
+                // Low priority and incremental (ClaudeUsage.snapshot): this must never crowd out the link.
+                let s = await Task.detached(priority: .utility) { ClaudeUsage.sessions() }.value
+                let snap = await Task.detached(priority: .utility) { ClaudeUsage.snapshot() }.value
                 let np = AppleMusic.nowPlaying()
                 guard let self else { return }
                 let now = Date()

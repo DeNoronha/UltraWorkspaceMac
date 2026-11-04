@@ -8,7 +8,7 @@ struct VivoCubeView: View {
     @EnvironmentObject var settings: AppSettings
     let module: AttachedModule
     @StateObject private var ui = UI()
-    private final class UI: ObservableObject { @Published var confirmRestart = false }
+    private final class UI: ObservableObject { @Published var confirmRestart = false; @Published var confirmLauncher = false }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,6 +39,10 @@ struct VivoCubeView: View {
             Button("Restart", role: .destructive) { model.restartCube(serial: module.serial) }
             Button("Cancel", role: .cancel) {}
         } message: { Text("The cube goes dark for about 20 seconds and comes back on its current card.") }
+        .alert("Restart the bar's launcher?", isPresented: $ui.confirmLauncher) {
+            Button("Restart", role: .destructive) { Task { await model.restartBarLauncher(reason: "requested under Maintenance") } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("The bar's screen reloads for a few seconds; the cube and the other modules stay as they are. Fixes uploads that fail after about 100 sends (a leak in the bar's firmware). Needs Wi-Fi ADB.") }
     }
 
     // MARK: Twin — the card the device says it is on
@@ -177,6 +181,8 @@ struct VivoCubeView: View {
                 Button(role: .destructive) { ui.confirmRestart = true } label: { Label("Restart cube", systemImage: "arrow.counterclockwise") }
                 Button { model.sendPanelSizeTest(serial: module.serial, size: 240) } label: { Label("Send test picture", systemImage: "checkerboard.rectangle") }
                     .help("Uploads a 240×240 test pattern — a quick way to see whether uploads reach the cube.")
+                Button(role: .destructive) { ui.confirmLauncher = true } label: { Label("Restart bar launcher", systemImage: "arrow.counterclockwise.circle") }
+                    .help("Over Wi-Fi ADB. The bar's firmware stops taking uploads after about 100 of them; Deckhand does this by itself when it can.")
             }
             Divider()
             HStack(spacing: 10) {

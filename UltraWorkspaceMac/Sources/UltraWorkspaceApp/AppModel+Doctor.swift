@@ -99,6 +99,34 @@ extension AppModel {
         Task { await session.reboot(serial: serial); self.say("Restarting the cube — back in about 20 s.") }
     }
 
+    /// The bar's launcher (its home app) — the process behind :7431, :8080 and the module bus.
+    static let launcherPackage = "com.ultrabar.launch"
+    static let launcherActivity = "com.ultrabar.launch/.ui.activity.MainActivity"
+
+    /// Restart the bar's launcher over ADB: the home app comes straight back, the bar's screen reloads
+    /// for a few seconds, the modules re-enumerate and the link reconnects. Needed when its upload
+    /// handler has used up Android's 100 network callbacks (one leaks per `/upload`, hardware
+    /// 2026-11-04 — see `CoreBarSession.UploadReply.launcherExhausted`); milder than a reboot.
+    @discardableResult
+    func restartBarLauncher(reason: String) async -> Bool {
+        guard let adb = AdbBridge.find() else {
+            say("The bar's launcher needs a restart (\(reason)). Install android-platform-tools and turn on Wi-Fi ADB so Deckhand can do that, or restart the bar."); return false
+        }
+        guard let ip = ipForSelected() else { return false }
+        let bridge = AdbBridge(path: adb, ip: ip)
+        guard await bridge.connect() else {
+            say("The bar's launcher needs a restart (\(reason)), but the bar refuses ADB — turn Wi-Fi ADB on in its Developer options, or restart the bar."); return false
+        }
+        say("Restarting the bar's launcher — \(reason). The bar's screen reloads; back in about 20 s.")
+        WireLog.shared.event("adb: restarting the launcher (\(reason))")
+        _ = await bridge.shell("am force-stop \(Self.launcherPackage)")
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        let out = await bridge.shell("am start -n \(Self.launcherActivity)")
+        let ok = out.contains("Starting")
+        if !ok { say("The launcher did not start again: \(out.trimmingCharacters(in: .whitespacesAndNewlines)). Restart the bar.") }
+        return ok
+    }
+
     // MARK: Full check (Status page)
 
     func runDoctor(settings: AppSettings) {
@@ -184,7 +212,7 @@ extension AppModel {
             if modules.contains(where: { $0.type == "KNOB_KEY" }) {
                 let vAge = lastVolumePushAt.map { Int(Date().timeIntervalSince($0)) }
                 add("KnobKey", "Volume link", vAge == nil ? .info : .ok,
-                    vAge.map { "The bar asked or set the volume \($0) s ago · Mac volume \(Self.macVolume().map { "\($0) %" } ?? "?")" }
+                    vAge.map { "The bar asked or set the volume \($0) s ago · \(MacAudio.shared.name) \(Self.macVolume().map { "\($0) %" } ?? "has no volume control")" }
                     ?? (settings.deckhandPagePublished ? "No volume requests yet — the bar polls only while the Deckhand page is on screen." : "Publish the CoreBar page once to bind the knob to the Mac's volume."),
                     settings.deckhandPagePublished ? nil : DoctorAction(title: "Publish page") { [weak self] in self?.nav = .coreBarPage })
             }
@@ -212,7 +240,7 @@ extension AppModel {
         s += "CoreBar \(selectedCoreBar?.name ?? "-") \(selectedCoreBar?.serialNo ?? "") @ \(ipForSelected() ?? "-")\n"
         s += "Bar cards: \(settings.coreCards.joined(separator: ", ")) · published: \(settings.deckhandPagePublished)\n"
         s += "Cube cards: \(settings.vivoCards.map(\.rawValue).joined(separator: ", ")) · mode: \(settings.vivoSwitchMode.rawValue) · every \(settings.vivoSeconds) s\n"
-        s += "Bindings: knob turn → nothing for now (Mac volume lagged; to debug), knob press → play/pause in Music; DotKey 1 → previous cube card, 2 → next card, hold 3 → Standard page\n"
+        s += "Bindings: knob turn → Mac volume (\(MacAudio.shared.name), CoreAudio), knob press → play/pause in Music; DotKey 1 → previous cube card, 2 → next card, hold 3 → Standard page\n"
         for i in doctorItems {
             let mark: String = { switch i.state { case .ok: return "OK  "; case .warn: return "WARN"; case .fail: return "FAIL"; case .info: return "info" } }()
             s += "\(mark) [\(i.group)] \(i.name): \(i.detail)\n"

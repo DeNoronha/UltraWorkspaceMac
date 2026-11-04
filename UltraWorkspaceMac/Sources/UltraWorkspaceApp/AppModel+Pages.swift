@@ -197,8 +197,11 @@ extension AppModel {
                 "button": ["keyCode": 0, "singleClick": ["show": false, "name": "Play / pause", "icon": "",
                         "actions": [["type": "PC_CONTROL", "id": "1", "name": "Play / pause",
                                      "values": [["id": "1", "value": ["output": 10, "payload": ["deckhand": "music.playpause"]]]]]]]],
-                    // Turn: unbound since 2026-11-04 — PC_VOLUME lagged too much to be usable (the bar asks this Mac
-                    // for the level and sets it back through osascript, several round trips per click). To debug first.
+                    // Turn = Mac volume: the bar asks this Mac for the level (GET_VOLUME) and sets it back (SET_VOLUME)
+                    // over the link. Unbound for a day on 2026-11-04 because the osascript answers were too slow for
+                    // the bar's timeout; answered from the CoreAudio cache since (MacAudio).
+                    "clockwise": ["id": "pc:volume", "type": "PC_VOLUME"],
+                    "counterclockwise": ["id": "pc:volume", "type": "PC_VOLUME"],
                 ],
             ])
         }

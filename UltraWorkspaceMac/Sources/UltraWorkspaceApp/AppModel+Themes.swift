@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import CryptoKit
 import UltraBarKit
 
 @MainActor
@@ -32,7 +33,7 @@ extension AppModel {
         themeTask = Task {
             defer { if timed { self.themeRunning = false } }
             self.cubeProgress.run("render")
-            guard await self.uploadPackage(cards, settings: settings, session: session, serial: serial) else { return }
+            guard await self.uploadPackage(cards, settings: settings, session: session, serial: serial, force: true) else { return }
             if Task.isCancelled { return }
             self.cubeProgress.run("apply", note: "about \(Self.vivoSettleSeconds) s")
             try? await Task.sleep(nanoseconds: Self.vivoSettleSeconds * 1_000_000_000)
@@ -58,8 +59,10 @@ extension AppModel {
                 try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
                 if Task.isCancelled { break }
                 if Date().timeIntervalSince(lastRefresh) >= refreshEvery {
-                    if await self.uploadPackage(cards, settings: settings, session: session, serial: serial) {
-                        lastRefresh = Date()
+                    // One attempt per refresh interval, whatever the outcome: a failing upload is not something to
+                    // hammer every tick (2026-11-04: 259 retries in two hours, a failure line in Activity each time).
+                    lastRefresh = Date()
+                    if await self.uploadPackage(cards, settings: settings, session: session, serial: serial, force: false) {
                         try? await Task.sleep(nanoseconds: Self.vivoSettleSeconds * 1_000_000_000)
                     }
                     if Task.isCancelled { break }
@@ -126,7 +129,11 @@ extension AppModel {
         return false
     }
 
-    private func uploadPackage(_ themes: [Theme], settings: AppSettings, session: CoreBarSession, serial: String) async -> Bool {
+    /// `force: false` (the timed refresh) skips the upload when the pictures are the same as last time: every
+    /// accepted upload rewrites the cube's flash and uses one of the launcher's upload slots (see
+    /// `CoreBarSession.UploadReply.launcherExhausted`). When the launcher is out of slots, Deckhand restarts it
+    /// over ADB and sends once more.
+    private func uploadPackage(_ themes: [Theme], settings: AppSettings, session: CoreBarSession, serial: String, force: Bool) async -> Bool {
         var layers: [DeployPackager.Layer] = []
         var names: [String] = []
         var previews: [Int: NSImage] = [:]
@@ -141,6 +148,14 @@ extension AppModel {
         }
         guard !layers.isEmpty else { cubeProgress.fail("render", "None of the cards could be drawn."); return false }
         cubeProgress.done("render")
+        var hasher = SHA256()
+        for l in layers { hasher.update(data: Data(l.defaultBin)) }
+        let digest = Data(hasher.finalize())
+        if !force, digest == lastCubeDigest {
+            WireLog.shared.event("cube: pictures unchanged — not uploaded again")
+            vivoLayerNames = names; vivoLayerImages = previews
+            return true
+        }
         let tgz = DeployPackager.buildTgz(layers: layers, defaultLayer: 1)
         cubeProgress.run("upload", note: "\(max(1, tgz.count / 1024)) KB")
         // The cube downloads the package itself over Wi-Fi, and the bar only forwards
@@ -151,17 +166,29 @@ extension AppModel {
             cubeProgress.fail("upload", "The cube's Wi-Fi is \(cubeWiFiLabel), so it cannot download cards. Set its Wi-Fi under Maintenance, wait for “connected”, then send again.")
             return false
         }
-        do {
-            _ = try await session.upload(serial: serial, tgz: tgz)
+        func accepted() {
             lastPublishedVivoLayers = layers.count
             settings.vivoLayerCount = layers.count
             vivoLayerNames = names
             vivoLayerImages = previews
             vivoLayerIndex = 0
             lastCubeSentAt = Date()
+            lastCubeDigest = digest
             cubeProgress.done("upload")
+        }
+        do {
+            _ = try await session.upload(serial: serial, tgz: tgz)
+            accepted()
             return true
         } catch {
+            if case UltraBarError.uploadRejected(let why) = error, why == CoreBarSession.launcherExhaustedText,
+               await restartBarLauncher(reason: "it is out of upload slots") {
+                // The launcher takes ~15 s to come back and re-enumerate its modules; then once more.
+                cubeProgress.run("upload", note: "launcher restarted — sending again")
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+                if Task.isCancelled { return false }
+                if (try? await session.upload(serial: serial, tgz: tgz)) == true { accepted(); return true }
+            }
             let msg = FriendlyError.text(error)
             cubeProgress.fail("upload", msg)
             say("Sending to the cube did not complete: \(msg)")

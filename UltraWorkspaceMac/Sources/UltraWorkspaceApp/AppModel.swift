@@ -88,6 +88,8 @@ final class AppModel: ObservableObject {
     @Published var cubeProgress = StepProgress()
     @Published var pageProgress = StepProgress()
     @Published var lastCubeSentAt: Date?
+    /// SHA-256 over the layer images of the last accepted cube package — an unchanged package is not sent again.
+    var lastCubeDigest: Data?
     var claudeWatchTask: Task<Void, Never>?
     // Monitor page (AppModel+Monitor) and presence-aware screen (AppModel+Presence).
     var monitorTask: Task<Void, Never>?

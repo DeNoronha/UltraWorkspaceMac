@@ -425,11 +425,19 @@ public struct CoreBarSession: Sendable {
         /// "reply error:4" / "reply error:2": the cube is not on Wi-Fi. Waiting cannot clear it;
         /// the user has to (re)send the cube's Wi-Fi settings.
         case cubeOffline(code: Int)
-        /// Anything else ("state":-1 busy, HTTP 5xx, empty body…).
+        /// A bare `{"state":-1}` (no `msg`): the launcher's upload handler threw before it talked to the
+        /// module. CONFIRMED on hardware 2026-11-04 from the bar's log: `ConnectivityManager$TooManyRequestsException`
+        /// in `UploadServiceIns.getServerIp` — the launcher registers a network callback per upload and never
+        /// releases it, and Android allows 100 per app. From then on every `/upload` fails the same way until
+        /// the launcher process is restarted (`am force-stop com.ultrabar.launch` + start, or a reboot).
+        /// `/upload/zip` does not go through that code and keeps working.
+        case launcherExhausted
+        /// Anything else (module busy, module timeout, HTTP 5xx, empty body…).
         case other(String)
 
         public init(accepted: Bool, text: String) {
             if accepted { self = .accepted; return }
+            if text.contains("\"state\":-1"), !text.contains("\"msg\"") { self = .launcherExhausted; return }
             if text.contains("hotspotIp") { self = .hotspotNoIp; return }
             if text.contains("module not found") { self = .moduleNotFound; return }
             if let r = text.range(of: "reply error:"),
@@ -439,6 +447,9 @@ public struct CoreBarSession: Sendable {
             self = .other(text)
         }
     }
+
+    /// Error text for `UploadReply.launcherExhausted`; the app matches on it to restart the launcher.
+    public static let launcherExhaustedText = "the bar's launcher is out of upload slots"
 
     /// Upload a layer package (tgz) to a module over HTTP. Retries only what can clear on
     /// its own: a module link without an IP (3 × 6 s) and an unregistered module (provision
@@ -472,6 +483,9 @@ public struct CoreBarSession: Sendable {
         case .cubeOffline(let code):
             WireLog.shared.event("upload: cube is off Wi-Fi (reply error:\(code)) — not retrying")
             throw UltraBarError.uploadRejected(text)
+        case .launcherExhausted:
+            WireLog.shared.event("upload: bare state:-1 — the launcher is out of upload slots (network-callback leak); it needs a restart")
+            throw UltraBarError.uploadRejected(Self.launcherExhaustedText)
         case .moduleNotFound, .other:
             throw UltraBarError.uploadRejected(text)
         }

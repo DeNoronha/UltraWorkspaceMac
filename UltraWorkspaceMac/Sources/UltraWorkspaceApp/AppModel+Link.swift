@@ -26,7 +26,21 @@ extension AppModel {
                 }
             }, handler: { [weak self] type, payloadJSON in
                 guard let self else { return nil }
-                return await self.handlePush(type: type, payloadJSON: payloadJSON)
+                // Volume is answered here, off the main actor, straight from the CoreAudio cache: the bar gives
+                // up on a GET_VOLUME after about a second and asks again, and the main actor can be busy for
+                // longer than that right after launch or while cards render (p90 1.2 s measured 2026-11-04).
+                switch type {
+                case "GET_VOLUME":
+                    Task { @MainActor in self.notePush(type: type) }
+                    return CoreBarLink.json(MacAudio.shared.volume ?? 50)
+                case "SET_VOLUME":
+                    let v = max(0, min(100, Self.intValue(CoreBarLink.value(payloadJSON)) ?? 50))
+                    MacAudio.shared.setVolume(v)
+                    Task { @MainActor in self.notePush(type: type); self.lastKnobVolume = v }
+                    return CoreBarLink.json(v)
+                default:
+                    return await self.handlePush(type: type, payloadJSON: payloadJSON)
+                }
             })
         }
     }
@@ -38,10 +52,15 @@ extension AppModel {
 
     // MARK: Push handling (runs on the main actor; keep it quick)
 
-    private func handlePush(type: String, payloadJSON: Data?) async -> Data? {
+    /// Bookkeeping for the status views; the volume fast path above calls it without waiting.
+    func notePush(type: String) {
         pushCount += 1
         lastPushAt = Date()
         if type == "GET_VOLUME" || type == "SET_VOLUME" { lastVolumePushAt = Date() }
+    }
+
+    private func handlePush(type: String, payloadJSON: Data?) async -> Data? {
+        notePush(type: type)
         let payload = CoreBarLink.value(payloadJSON)
         let out: Any?
         switch type {
@@ -54,13 +73,9 @@ extension AppModel {
         case "NETWORK":
             let t = agentNetworkStats.totals()
             out = ["totalReceived": t.received, "totalSent": t.sent]
-        case "GET_VOLUME":
-            out = Self.macVolume() ?? 50
-        case "SET_VOLUME":
-            let v = max(0, min(100, Self.intValue(payload) ?? 50))
-            Self.setMacVolume(v)
-            lastKnobVolume = v
-            out = v
+        case "GET_VOLUME", "SET_VOLUME":
+            // Answered on the link's own task (see startLink); never reaches here.
+            out = MacAudio.shared.volume ?? 50
         case "GET_BRIGHTNESS":
             out = 50 // not controllable from here (the vendor's Mac client stubs this too)
         case "SET_BRIGHTNESS":
@@ -137,24 +152,10 @@ extension AppModel {
         return Int(((total - free) / total * 100).rounded())
     }
 
-    nonisolated static func macVolume() -> Int? {
-        guard let out = osascript("output volume of (get volume settings)") else { return nil }
-        return Int(out.trimmingCharacters(in: .whitespacesAndNewlines))
-    }
-    nonisolated static func setMacVolume(_ v: Int) { _ = osascript("set volume output volume \(v)") }
-    nonisolated static func toggleMacMute() {
-        if let m = osascript("output muted of (get volume settings)") {
-            _ = osascript("set volume output muted \(m.contains("true") ? "false" : "true")")
-        }
-    }
-    nonisolated private static func osascript(_ src: String) -> String? {
-        let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript"); p.arguments = ["-e", src]
-        let pipe = Pipe(); p.standardOutput = pipe; p.standardError = Pipe()
-        do { try p.run() } catch { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
-        return String(data: data, encoding: .utf8)
-    }
-    nonisolated private static func intValue(_ v: Any?) -> Int? {
+    /// Mac output volume (0…100) from the CoreAudio cache; nil when the output device has no control.
+    nonisolated static func macVolume() -> Int? { MacAudio.shared.volume }
+    nonisolated static func toggleMacMute() { MacAudio.shared.toggleMute() }
+    nonisolated static func intValue(_ v: Any?) -> Int? {
         if let i = v as? Int { return i }
         if let n = v as? NSNumber { return n.intValue }
         if let d = v as? Double { return Int(d) }

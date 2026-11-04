@@ -80,7 +80,9 @@ struct KnobKeyView: View {
                     HStack(alignment: .top, spacing: 24) {
                         Image(systemName: "dial.medium").font(.system(size: 72)).foregroundStyle(.secondary).frame(width: 110)
                         Panel("What it does") {
-                            BindingRow(icon: "arrow.clockwise", control: "Turn", action: "Nothing (for now)", note: "Mac volume was too laggy — to be debugged")
+                            BindingRow(icon: "arrow.clockwise", control: "Turn", action: "Mac volume",
+                                       note: MacAudio.shared.hasControl ? "\(MacAudio.shared.name) · \(model.lastKnobVolume ?? MacAudio.shared.volume ?? 0) %"
+                                                                        : "\(MacAudio.shared.name) has no volume control (HDMI / DisplayPort audio) — choose other speakers in System Settings → Sound")
                             BindingRow(icon: "hand.tap", control: "Press", action: "Play / pause in Apple Music", note: "via this Mac")
                             if let v = model.lastKnobVolume { Text("Last level set from the knob: \(v) %").font(.caption).foregroundStyle(.secondary) }
                             BindingsFooter(lastUsed: model.lastVolumePushAt)

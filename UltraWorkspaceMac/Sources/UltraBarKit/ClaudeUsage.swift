@@ -48,6 +48,20 @@ public enum ClaudeUsage {
         return false
     }
 
+    /// Per-transcript tally: how far the file was read and what it contributed to today's tokens.
+    private struct Tally { var offset: UInt64; var tokens: Int }
+    private final class TallyBox: @unchecked Sendable {
+        let lock = NSLock()
+        var tallies: [String: Tally] = [:]
+        var day: Date?
+    }
+    private static let box = TallyBox()
+
+    /// Tokens used today and sessions active recently. Incremental since 2026-11-04: each transcript is
+    /// read only past the point it was read before (the whole file once, then just what was appended),
+    /// and only lines stamped today count. Before that, every pass re-read every file touched today —
+    /// hundreds of MB every 2 s — which kept Deckhand at 30 % CPU, starved the Swift thread pool (the
+    /// bar's GET_VOLUME waited over a second) and made the app's own window unresponsive.
     public static func snapshot(activeWindow: TimeInterval = 300) -> Snapshot {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let root = home.appendingPathComponent(".claude/projects", isDirectory: true)
@@ -60,31 +74,60 @@ public enum ClaudeUsage {
         var active = 0
         var tokens = 0
         var anyFile = false
-        var filesScanned = 0
 
+        let box = Self.box
+        box.lock.lock(); defer { box.lock.unlock() }
+        if box.day != startOfDay { box.tallies = [:]; box.day = startOfDay }
         for case let url as URL in en {
             guard url.pathExtension == "jsonl" else { continue }
             anyFile = true
             let vals = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
             let mod = vals?.contentModificationDate ?? .distantPast
             if now.timeIntervalSince(mod) <= activeWindow { active += 1 }
-            // Only tally tokens for files touched today, and cap work.
-            guard mod >= startOfDay, filesScanned < 80, (vals?.fileSize ?? 0) < 50_000_000 else { continue }
-            filesScanned += 1
-            guard let content = try? String(contentsOf: url, encoding: .utf8) else { continue }
-            content.enumerateLines { line, _ in
-                guard line.contains("\"usage\""),
-                      let data = line.data(using: .utf8),
-                      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-                if let u = findUsage(obj) {
-                    // Exclude cache_read (cheap, counted every turn — would dwarf the rest).
-                    tokens += (u["input_tokens"] as? Int ?? 0)
-                        + (u["output_tokens"] as? Int ?? 0)
-                        + (u["cache_creation_input_tokens"] as? Int ?? 0)
-                }
+            guard mod >= startOfDay else { continue }
+            let size = UInt64(vals?.fileSize ?? 0)
+            var t = box.tallies[url.path] ?? Tally(offset: 0, tokens: 0)
+            if size < t.offset { t = Tally(offset: 0, tokens: 0) }   // rewritten or truncated: start over
+            if size > t.offset {
+                let (consumed, added) = tallyTokens(url, from: t.offset, since: startOfDay)
+                t.offset += consumed; t.tokens += added
             }
+            box.tallies[url.path] = t
+            tokens += t.tokens
         }
         return Snapshot(activeSessions: active, todayTokens: tokens, hasData: anyFile, waitingForInput: waitingSessions())
+    }
+
+    /// Read `url` from `offset` in chunks, line by line; sum the usage of lines stamped on or after
+    /// `since` (lines without a timestamp count). Returns the bytes consumed up to the last complete
+    /// line (a partial last line is read again next time) and the tokens added.
+    private static func tallyTokens(_ url: URL, from offset: UInt64, since: Date) -> (consumed: UInt64, tokens: Int) {
+        guard let h = try? FileHandle(forReadingFrom: url) else { return (0, 0) }
+        defer { try? h.close() }
+        guard (try? h.seek(toOffset: offset)) != nil else { return (0, 0) }
+        var consumed: UInt64 = 0
+        var tokens = 0
+        var rest = Data()
+        let needle = Data("\"usage\"".utf8)
+        let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoPlain = ISO8601DateFormatter(); isoPlain.formatOptions = [.withInternetDateTime]
+        while let chunk = try? h.read(upToCount: 4_000_000), !chunk.isEmpty {
+            rest.append(chunk)
+            var lineStart = rest.startIndex
+            while let nl = rest[lineStart...].firstIndex(of: 10) {
+                let line = rest[lineStart..<nl]
+                consumed += UInt64(nl - lineStart + 1)
+                lineStart = nl + 1
+                guard line.range(of: needle) != nil,
+                      let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                      let u = findUsage(obj) else { continue }
+                if let ts = obj["timestamp"] as? String, let d = iso.date(from: ts) ?? isoPlain.date(from: ts), d < since { continue }
+                // Exclude cache_read (cheap, counted every turn — would dwarf the rest).
+                tokens += (u["input_tokens"] as? Int ?? 0) + (u["output_tokens"] as? Int ?? 0) + (u["cache_creation_input_tokens"] as? Int ?? 0)
+            }
+            rest = Data(rest[lineStart...])
+        }
+        return (consumed, tokens)
     }
 
     private static func findUsage(_ obj: [String: Any]) -> [String: Any]? {

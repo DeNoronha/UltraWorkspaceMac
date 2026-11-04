@@ -212,6 +212,8 @@ do {
     check(R(accepted: false, text: #"{"state":-1,"msg":"reply error:2"}"#) == .cubeOffline(code: 2), "upload reply: reply error:2 → cubeOffline (no retry)")
     check(R(accepted: false, text: #"{"state":-1,"msg":"reply error:7"}"#) == .other(#"{"state":-1,"msg":"reply error:7"}"#), "upload reply: other reply error → other")
     check(R(accepted: false, text: "HTTP 503") == .other("HTTP 503"), "upload reply: HTTP failure → other")
+    check(R(accepted: false, text: #"{"state":-1}"#) == .launcherExhausted, "upload reply: bare state -1 → launcher out of upload slots (restart it)")
+    check(R(accepted: false, text: #"{"state":-1,"msg":"write update command success,update timeout"}"#) == .other(#"{"state":-1,"msg":"write update command success,update timeout"}"#), "upload reply: module timeout → other")
 }
 
 // CRC32 known vector
