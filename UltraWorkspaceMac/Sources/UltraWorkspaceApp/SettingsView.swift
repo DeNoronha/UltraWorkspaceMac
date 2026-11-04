@@ -37,6 +37,33 @@ struct SettingsView: View {
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
 
+                Section("Debug bridge (ADB)") {
+                    let st = model.adbStatus
+                    LabeledContent("adb on this Mac", value: st.adbPath ?? "not found — brew install --cask android-platform-tools")
+                    LabeledContent("Wi-Fi ADB (port 5555)") {
+                        Text(st.wifi.map { $0 ? "reachable" : "off — the bar refuses the connection" } ?? "not checked")
+                            .foregroundStyle(st.wifi == false ? .orange : .primary)
+                    }
+                    LabeledContent("After a reboot") {
+                        Text(st.persistent.map { $0 ? "stays on" : "turns off again" } ?? "—")
+                            .foregroundStyle(st.persistent == false ? .orange : .primary)
+                    }
+                    LabeledContent("Over USB", value: st.usbSerials.isEmpty ? "no bar attached" : st.usbSerials.joined(separator: ", "))
+                    if let m = st.message { Text(m).font(.callout).foregroundStyle(.orange) }
+                    HStack {
+                        Button { model.checkAdb() } label: { Label("Check", systemImage: "arrow.clockwise") }
+                        Button { model.enableWifiAdbOverUSB() } label: { Label("Turn on over USB", systemImage: "cable.connector") }
+                            .disabled(st.usbSerials.isEmpty || st.adbPath == nil)
+                            .help("adb tcpip 5555 on the bar attached over USB: Wi-Fi ADB on until its next reboot")
+                        Button { model.makeWifiAdbPersistent() } label: { Label("Keep on after reboots", systemImage: "pin") }
+                            .disabled(st.wifi != true || st.persistent == true)
+                            .help("setprop persist.adb.tcp.port 5555 on the bar")
+                        if model.adbBusy { ProgressView().controlSize(.small) }
+                    }
+                    Text("Installing the Deckhand apps, restarting the bar's launcher and keeping the screen on all go through Android's debug bridge. The bar's Developer options can turn Wi-Fi ADB on, but it turns off at every reboot. Two ways around that: plug the bar into this Mac over USB and press Turn on over USB (accept the prompt on the bar the first time), then Keep on after reboots so it sticks.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+
                 Section("Connecting") {
                     ConnectionHelp()
                 }
@@ -56,6 +83,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
         }
+        .onAppear { if model.adbStatus.checkedAt == nil { model.checkAdb() } }
     }
 
     private func note(_ title: String, _ body: String) -> some View {

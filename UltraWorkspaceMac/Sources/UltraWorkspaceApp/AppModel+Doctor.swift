@@ -115,7 +115,7 @@ extension AppModel {
         guard let ip = ipForSelected() else { return false }
         let bridge = AdbBridge(path: adb, ip: ip)
         guard await bridge.connect() else {
-            say("The bar's launcher needs a restart (\(reason)), but the bar refuses ADB — turn Wi-Fi ADB on in its Developer options, or restart the bar."); return false
+            say("The bar's launcher needs a restart (\(reason)), but the bar refuses ADB — Settings → Debug bridge to turn Wi-Fi ADB on, or restart the bar."); return false
         }
         say("Restarting the bar's launcher — \(reason). The bar's screen reloads; back in about 20 s.")
         WireLog.shared.event("adb: restarting the launcher (\(reason))")

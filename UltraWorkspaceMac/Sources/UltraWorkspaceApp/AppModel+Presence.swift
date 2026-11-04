@@ -92,6 +92,31 @@ struct AdbBridge {
         await run(["-s", device, "shell", cmd], timeout: 10)
     }
 
+    /// Serials of devices attached over USB (anything `adb devices` lists that is not an ip:port).
+    static func usbSerials(adb path: String) async -> [String] {
+        let out = await AdbBridge(path: path, ip: "").run(["devices"], timeout: 8)
+        return out.split(separator: "\n").dropFirst().compactMap { line -> String? in
+            let parts = line.split(whereSeparator: { $0 == "\t" || $0 == " " })
+            guard parts.count >= 2, parts[1] == "device", !parts[0].contains(":") else { return nil }
+            return String(parts[0])
+        }
+    }
+
+    /// `adb tcpip 5555` on the USB-attached device: the bar's adbd restarts listening on Wi-Fi (until the next reboot).
+    static func enableTcpip(adb path: String, usbSerial: String) async -> String {
+        await AdbBridge(path: path, ip: "").run(["-s", usbSerial, "tcpip", "5555"], timeout: 15)
+    }
+
+    /// Whether the bar keeps Wi-Fi ADB on across reboots (`persist.adb.tcp.port`).
+    func isPersistent() async -> Bool {
+        (await shell("getprop persist.adb.tcp.port")).trimmingCharacters(in: .whitespacesAndNewlines) == "5555"
+    }
+
+    func makePersistent() async -> Bool {
+        _ = await shell("setprop persist.adb.tcp.port 5555")
+        return await isPersistent()
+    }
+
     /// `adb logcat -s <tag>` as a long-running process; `onLine` runs on a background queue.
     func tailLog(tag: String, onLine: @escaping @Sendable (String) -> Void) -> Process? {
         let p = Process(); p.executableURL = URL(fileURLWithPath: path)

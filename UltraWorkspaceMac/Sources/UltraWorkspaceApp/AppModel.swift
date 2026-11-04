@@ -49,6 +49,9 @@ final class AppModel: ObservableObject {
     @Published var appStoreError: String?
     /// Why the last bar-app install over ADB failed (shown on the Apps page until the next attempt succeeds).
     @Published var barAppError: String?
+    /// Settings → Debug bridge: what Deckhand last saw of the bar's ADB.
+    @Published var adbStatus = AdbStatus()
+    @Published var adbBusy = false
     @Published var screensaver: CoreBarSession.ScreensaverConfig?
     // Persistent link ("Mac agent") that answers the CoreBar's push queries. Wording lives in `LinkBadge`.
     @Published var link: CoreBarLink.State = .stopped
