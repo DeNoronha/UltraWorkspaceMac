@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OpenBarX marketplace — apps and cards for the UltraBar X</title>
+<meta name="description" content="Apps for the CoreBar's screen and cards for the VivoCube, installed through Deckhand. A public, curated index.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,700;0,6..12,900&family=JetBrains+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+  .filters { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:2rem }
+  .filters button { all:unset; cursor:pointer; min-height:44px; padding:.4rem 1rem; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); font:700 .875rem/1.5 var(--font-sans); color:var(--text) }
+  .filters button[aria-pressed="true"] { background:var(--ink-900); color:#fff; border-color:var(--ink-900) }
+  .filters button:focus-visible { box-shadow:var(--shadow-ring) }
+  .count { margin-bottom:1rem }
+  .cards-grid { display:grid; gap:1.5rem; grid-template-columns:repeat(auto-fill,minmax(14rem,1fr)) }
+  .cube { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:1.25rem; display:grid; gap:.5rem; min-width:0 }
+  .cube .sq { width:3rem; height:3rem; border-radius:3px; background:var(--ink-900); display:grid; place-items:center; color:var(--accent); font:700 .75rem/1 var(--font-mono); letter-spacing:.04em }
+  .cube h3 { font-size:1.125rem }
+  .cube p { color:var(--ink-500); font-size:.875rem; line-height:1.375rem }
+  .submit { display:grid; gap:1.5rem; max-width:44rem }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="../" aria-label="OpenBarX home">
+      <span class="name">OpenBar<i>X</i></span>
+      <span class="tag">Deckhand for macOS</span>
+    </a>
+    <nav class="nav" aria-label="Site">
+      <a href="../#deckhand">Deckhand</a>
+      <a href="../#apps">Bar apps</a>
+      <a href="./" aria-current="page">Marketplace</a>
+      <a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/MANUAL.md">Manual</a>
+      <a href="https://github.com/DeNoronha/UltraWorkspaceMac">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="container">
+      <p class="eyebrow">OpenBarX marketplace <span class="sep">·</span> <span id="updated">index</span></p>
+      <h1>Apps and cards for the bar.</h1>
+      <p class="lede">Everything here installs through Deckhand. Bar apps run on the CoreBar's own screen and get their data from your Mac; cube cards are drawn on the Mac and shown on the VivoCube. The index is one public JSON file, curated through pull requests.</p>
+    </div>
+  </section>
+
+  <section class="section" id="bar-apps">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Bar apps</p>
+        <h2>Full width, near real time.</h2>
+      </div>
+      <div class="filters" role="group" aria-label="Filter">
+        <button type="button" aria-pressed="true" data-filter="all">All</button>
+        <button type="button" aria-pressed="false" data-filter="bundled">Ships with Deckhand</button>
+        <button type="button" aria-pressed="false" data-filter="community">Community</button>
+      </div>
+      <p class="meta count" id="count">Loading the index…</p>
+      <div class="apps" id="apps"></div>
+      <noscript><p class="lede">This page needs JavaScript to render <a href="registry.json">registry.json</a>. The six bar apps are also described on the <a href="../#apps">home page</a>.</p></noscript>
+    </div>
+  </section>
+
+  <section class="section" id="cube-cards">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">VivoCube cards</p>
+        <h2>Seven cards, 240 × 240.</h2>
+        <p class="lede">Rendered on the Mac, uploaded to the cube as one package and switched in place. All of these ship inside Deckhand; pick them on the VivoCube page.</p>
+      </div>
+      <div class="cards-grid" id="cards"></div>
+    </div>
+  </section>
+
+  <section class="section" id="submit">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Submit an app</p>
+        <h2>Phase 1: a pull request.</h2>
+      </div>
+      <div class="submit">
+        <ol class="steps">
+          <li><b>Build a bar app.</b><span>Any Android app with a launcher activity shows up on the bar. The simplest kind is a kiosk WebView that opens a page your Mac serves, which is how Deckhand's own apps work; the Android project is in the repository as a template.</span></li>
+          <li><b>Add an entry to registry.json.</b><span>Id, name, package, version, a one-line summary, an icon, a screenshot at 1424 × 280 and a link to the source. Keep the shape of the existing entries.</span></li>
+          <li><b>Open a pull request.</b><span>Apps are reviewed for what they do on the bar and on the network before they are listed. Nothing in the index may need an account or send data off the LAN without saying so.</span></li>
+        </ol>
+        <pre><code>{
+  "id": "my-app",
+  "name": "My app",
+  "kind": "bar-app",
+  "package": "com.example.myapp",
+  "version": "1.0",
+  "summary": "One line on what it shows.",
+  "icon": "https://example.com/icon.png",
+  "screenshot": "https://example.com/bar.png",
+  "requires": { "deckhand": "&gt;=0.1", "wifiAdb": true },
+  "source": "https://github.com/example/my-app",
+  "distribution": "apk",
+  "apk": "https://github.com/example/my-app/releases/latest/download/my-app.apk",
+  "publisher": "Example",
+  "license": "MIT"
+}</code></pre>
+        <p class="meta">Full registry: <a href="registry.json">registry.json</a>. Format and open decisions: <a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/docs/WIDGETS.md">WIDGETS.md</a>.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="cols">
+      <div class="dnc">
+        <img src="../assets/img/dnc-logo-white.svg" alt="De Noronha Consulting">
+        <p>Deckhand and OpenBarX are made by De Noronha Consulting in Sassenheim, the Netherlands.</p>
+        <a href="https://denoronha.consulting">denoronha.consulting <span class="arrow">→</span></a>
+      </div>
+      <div>
+        <h4>Deckhand</h4>
+        <ul>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/releases/latest/download/Deckhand.dmg">Download the DMG</a></li>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/MANUAL.md">Manual</a></li>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/docs/ROADMAP.md">Roadmap</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>For builders</h4>
+        <ul>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac">Source on GitHub</a></li>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/PROTOCOL.md">The CoreBar protocol</a></li>
+          <li><a href="registry.json">Marketplace registry (JSON)</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="fine">Deckhand is independent, community software under the MIT license. UltraBar X, CoreBar, VivoCube, SenseCube, KnobKey and DotKey are names of Sanytron products; this project is not affiliated with or endorsed by Sanytron.</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var appsEl = document.getElementById('apps'), cardsEl = document.getElementById('cards'), countEl = document.getElementById('count');
+  var all = [], filter = 'all';
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function render() {
+    var list = all.filter(function (a) { return filter === 'all' || (filter === 'bundled' ? a.distribution === 'bundled' : a.distribution !== 'bundled'); });
+    countEl.textContent = list.length + (list.length === 1 ? ' app' : ' apps') + (filter === 'all' ? '' : ' · ' + filter);
+    appsEl.innerHTML = list.length ? list.map(function (a) {
+      var bundled = a.distribution === 'bundled';
+      return '<article class="app">' +
+        '<div class="icon">' + (a.icon ? '<img src="' + esc(a.icon) + '" alt="">' : '') + '</div>' +
+        '<div class="body"><div class="title"><h3>' + esc(a.name) + '</h3><span class="badge">' + esc(a.version) + '</span>' +
+        (bundled ? '<span class="badge badge-ok">ships with Deckhand</span>' : '<span class="badge">community</span>') + '</div>' +
+        '<p>' + esc(a.summary) + '</p>' +
+        '<div class="meta-row meta"><span>' + esc(a.package) + '</span><span class="sep">·</span><span>' + esc(a.publisher || '') + '</span><span class="sep">·</span><span>' + esc(a.license || '') + '</span>' +
+        (a.requires && a.requires.wifiAdb ? '<span class="sep">·</span><span>needs Wi-Fi ADB</span>' : '') + '</div>' +
+        '<div class="meta-row">' + (a.source ? '<a href="' + esc(a.source) + '">Source <span class="arrow">→</span></a>' : '') +
+        (bundled ? '<span class="meta">Install: Deckhand → Apps → Deckhand apps</span>' : (a.apk ? '<a href="' + esc(a.apk) + '">APK <span class="arrow">→</span></a>' : '')) + '</div></div>' +
+        (a.screenshot ? '<div class="shot"><img src="' + esc(a.screenshot) + '" alt="' + esc(a.name) + ' on the bar" loading="lazy"></div>' : '') +
+        '</article>';
+    }).join('') : '<p class="lede">No community apps yet. Yours could be the first; see below.</p>';
+  }
+  document.querySelectorAll('.filters button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      filter = b.dataset.filter;
+      document.querySelectorAll('.filters button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
+      render();
+    });
+  });
+  fetch('registry.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (reg) {
+    all = reg.apps || [];
+    document.getElementById('updated').textContent = 'updated ' + (reg.updated || '');
+    render();
+    cardsEl.innerHTML = (reg.cards || []).map(function (c) {
+      return '<article class="cube"><div class="sq">240²</div><h3>' + esc(c.name) + '</h3><p>' + esc(c.summary) + '</p></article>';
+    }).join('');
+  }).catch(function () { countEl.textContent = 'The index could not be loaded. Open registry.json directly.'; });
+})();
+</script>
+</body>
+</html>
