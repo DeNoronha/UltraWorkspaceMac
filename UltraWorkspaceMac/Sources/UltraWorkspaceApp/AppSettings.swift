@@ -51,8 +51,11 @@ final class AppSettings: ObservableObject {
     /// Your own daily token budget (for the % on the card); 0 = no percentage.
     @Published var claudeDailyBudget: Int = 0 { didSet { save() } }
     @Published var claudeNotifyWaiting: Bool = true { didSet { save() } }
-    /// Experimental: re-select the bar's current page every few minutes so its screen does not time out.
-    @Published var keepBarAwake: Bool = false { didSet { save() } }
+    /// Serve the live Monitor page for the bar's Monitor app (LAN, read-only Mac stats).
+    @Published var monitorServe: Bool = false { didSet { save() } }
+    /// Presence-aware bar screen over ADB: on while the SenseCube sees someone, off after `presenceSleepMinutes`.
+    @Published var presenceWake: Bool = false { didSet { save() } }
+    @Published var presenceSleepMinutes: Int = 10 { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows about this many cards without scrolling (the clock card is double width).
     static let coreCardsThatFit = 4
@@ -112,7 +115,9 @@ final class AppSettings: ObservableObject {
         var claudePlan: ClaudePlan? = nil
         var claudeDailyBudget: Int? = nil
         var claudeNotifyWaiting: Bool? = nil
-        var keepBarAwake: Bool? = nil
+        var monitorServe: Bool? = nil
+        var presenceWake: Bool? = nil
+        var presenceSleepMinutes: Int? = nil
     }
 
     // MARK: VivoCube cards (ordered, max 6)
@@ -185,7 +190,9 @@ final class AppSettings: ObservableObject {
             claudePlan = p.claudePlan ?? .max5
             claudeDailyBudget = p.claudeDailyBudget ?? 0
             claudeNotifyWaiting = p.claudeNotifyWaiting ?? true
-            keepBarAwake = p.keepBarAwake ?? false
+            monitorServe = p.monitorServe ?? false
+            presenceWake = p.presenceWake ?? false
+            presenceSleepMinutes = p.presenceSleepMinutes ?? 10
         }
     }
 
@@ -199,7 +206,7 @@ final class AppSettings: ObservableObject {
                           vivoSwitchMode: vivoSwitchMode, vivoPicturePath: vivoPicturePath,
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
-                          claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, keepBarAwake: keepBarAwake)
+                          claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, monitorServe: monitorServe, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes)
         if let data = try? JSONEncoder().encode(p) { try? data.write(to: url, options: .atomic) }
     }
 

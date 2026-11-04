@@ -24,7 +24,7 @@ struct ContentView: View {
         .onAppear {
             // The cube keeps its last package across restarts: let DotKey "next" wrap at that count.
             model.lastPublishedVivoLayers = max(model.lastPublishedVivoLayers, settings.vivoLayerCount)
-            model.startMusicPolling(); model.startDailyCoverRefresh(settings: settings); model.startClaudeWatch(settings: settings); model.startKeepAwake(settings: settings)
+            model.startMusicPolling(); model.startDailyCoverRefresh(settings: settings); model.startClaudeWatch(settings: settings); model.startMonitor(settings: settings); model.startPresence(settings: settings)
             // Resume timed switching if it was on when the app last quit.
             if settings.vivoRotationOn, settings.vivoSwitchMode == .timed, !model.themeRunning { model.sendToCube(settings: settings) }
         }

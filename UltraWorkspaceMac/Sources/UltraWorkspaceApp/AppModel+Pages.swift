@@ -274,21 +274,6 @@ extension AppModel {
         }
     }
 
-    /// Experimental "keep awake": every 4 minutes re-select whatever page the bar is on. The protocol has no
-    /// known screen-timeout setting for the bar; a page switch is the only known action that redraws its screen.
-    func startKeepAwake(settings: AppSettings) {
-        keepAwakeTask?.cancel()
-        keepAwakeTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 240_000_000_000)
-                guard let self, settings.keepBarAwake, let bar = self.selectedCoreBar, let session = self.session(for: bar) else { continue }
-                let id = self.currentPageId ?? Self.defaultPageId
-                _ = try? await session.switchPage(id: id)
-                WireLog.shared.event("keep-awake: re-selected page \(id)")
-            }
-        }
-    }
-
     /// Non-destructive: switch pages by id.
     /// After (re)connecting: if the Deckhand page is on the bar, show it. Covers a bar that
     /// rebooted into its default/black screen and Deckhand starting after the bar.

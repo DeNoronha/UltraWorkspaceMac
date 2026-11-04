@@ -178,6 +178,8 @@ Mirrors [`docs/ROADMAP.md`](docs/ROADMAP.md); that file is authoritative.
 
 **Pending**
 - **Custom KnobKey / DotKey bindings** — today they are fixed; a per-key action editor is planned.
+- **Monitor app on the bar** (`android/DeckhandMonitor`, 2026-11-04) — a tiny Android kiosk app for the bar that shows a full-width, moving view of the Mac served by Deckhand (Settings → Monitor app). Finds Deckhand through a UDP beacon on port 5320.
+- **Presence-aware bar screen** (Settings → Bar screen, 2026-11-04) — over ADB, because the protocol cannot wake the screen: on while the SenseCube sees someone, off after N minutes without anyone.
 - **Presence → wake** via an on-device scene (`BATCH_CREATE_SCENE`) — understood, not implemented.
 - **Module OTA firmware flashing** (`UBX-OTA-FILE` `.bin`, `MODULE_OAT_START` / `DATA` — framing fully specified in `PROTOCOL.md`).
 - ~~VivoCube panel size~~ — resolved: the panel is 240 × 240 (hardware test 2026-11-01).

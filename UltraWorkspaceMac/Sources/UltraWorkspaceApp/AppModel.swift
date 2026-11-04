@@ -89,7 +89,15 @@ final class AppModel: ObservableObject {
     @Published var pageProgress = StepProgress()
     @Published var lastCubeSentAt: Date?
     var claudeWatchTask: Task<Void, Never>?
-    var keepAwakeTask: Task<Void, Never>?
+    // Monitor page (AppModel+Monitor) and presence-aware screen (AppModel+Presence).
+    var monitorTask: Task<Void, Never>?
+    @Published var monitorURL: String?
+    @Published var monitorError: String?
+    var presenceTask: Task<Void, Never>?
+    var presenceLog: Process?
+    @Published var lastPresenceAt: Date?
+    @Published var barScreenOn: Bool?
+    @Published var presenceStatus = "Off."
     @Published var lastPagePublishedAt: Date?
     @Published var lastCoverRefreshAt: Date?
     @Published var showingVivoWiFi = false

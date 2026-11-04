@@ -68,6 +68,7 @@ Principle: the CoreBar renders and keeps its own cards alive; the Mac only confi
 - **VivoCube rotation** stays a Mac timer (the firmware has no time/interval trigger — CONFIRMED absent; see docs/research/device-first-findings.md §D), but each step is a single property-9 write and DotKey buttons switch widgets without the Mac.
 - **Cover** — the clock-card cover is a static picture (weather & date, no time), so it is refreshed once an hour and at launch instead of every minute; the live time comes from the CoreBar's own TIME card.
 - **Plugin packs** — vendor hotkey packs (`config.json` + icons; see docs/research/vendor-plugins-findings.md) are importable as HOT_KEY_GROUP cards; importer not built yet.
+- **Monitor app + presence screen** (2026-11-04): `android/DeckhandMonitor` kiosk WebView + `MonitorServer` (:7432) + beacon (UDP 5320); presence-aware screen timeout over ADB (`AppModel+Presence`). First version; to verify on hardware: beacon reaching the app, icon in the launcher, wake/sleep timing.
 - Open hardware checks: KnobKey volume; DotKey layer switching; PC_CONTROL cards push; WORLD_TIME offset format renders; iconScale 80 looks right; SenseCube Light / Presence / Sound level cards. Done: metric cards show live values (2026-11-02), APPS cards show the apps' icons (2026-11-03).
 
 ## Ideas from SmallTV-Max / GeekMagic ecosystem (see docs/research/smalltv-max.md)

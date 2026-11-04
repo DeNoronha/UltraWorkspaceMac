@@ -16,11 +16,37 @@ struct SettingsView: View {
                         LabeledContent("Name", value: bar.name)
                         LabeledContent("Serial") { Text(bar.serialNo).textSelection(.enabled) }
                         LabeledContent("Address", value: model.ipForSelected() ?? bar.lastIp)
-                        Toggle("Keep the bar's screen on (experimental)", isOn: $settings.keepBarAwake)
-                        Text("The bar switches its screen off after a few minutes; Deckhand cannot change that timeout (no such setting in the protocol). With this on, Deckhand re-selects the current page every 4 minutes, which is the only known way to wake the screen. Tell me whether it works.").font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text("No CoreBar selected.").foregroundStyle(.secondary)
                     }
+                }
+
+                Section("Bar screen") {
+                    Toggle("Keep the screen on while someone is at the desk (via ADB)", isOn: $settings.presenceWake)
+                        .onChange(of: settings.presenceWake) { on in on ? model.startPresence(settings: settings) : model.stopPresence(settings: settings) }
+                    Stepper("Switch off after \(settings.presenceSleepMinutes) min without anyone", value: $settings.presenceSleepMinutes, in: 1...120)
+                        .disabled(!settings.presenceWake)
+                    LabeledContent("Status") {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(model.presenceStatus)
+                            if let on = model.barScreenOn { Text("Bar screen: \(on ? "on" : "off")").foregroundStyle(.secondary) }
+                            if let t = model.lastPresenceAt { Text("Last movement \(Int(Date().timeIntervalSince(t))) s ago").foregroundStyle(.secondary) }
+                        }.font(.callout)
+                    }
+                    Text("Uses the SenseCube's presence sensor through the bar's debug bridge: the bar needs \"Wi-Fi ADB\" on in its Developer options and adb on this Mac (brew install --cask android-platform-tools). The bar's own protocol cannot wake its screen; without this, the bar's Screen timeout setting (max 5 min or never) decides.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+
+                Section("Monitor app on the bar") {
+                    Toggle("Serve the live Monitor page", isOn: $settings.monitorServe)
+                        .onChange(of: settings.monitorServe) { _ in model.startMonitor(settings: settings) }
+                    if let url = model.monitorURL { LabeledContent("Page") { Text(url).textSelection(.enabled).font(.callout) } }
+                    if let e = model.monitorError { Text(e).foregroundStyle(.red).font(.callout) }
+                    LabeledContent("App on the bar") {
+                        Text(model.monitorInstalled ? "Installed — tap its card on the bar" : "Not installed (see Apps)").font(.callout).foregroundStyle(model.monitorInstalled ? .primary : .secondary)
+                    }
+                    Text("A full-screen, moving view of this Mac (CPU, memory, network, disk) for the bar's Monitor app (android/DeckhandMonitor). The page is plain HTTP on this network, read-only, and only exists while this is on. Tap the card on the bar to open it; ✕ or a long press closes it.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
 
                 Section("Connecting") {
