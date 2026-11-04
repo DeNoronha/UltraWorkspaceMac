@@ -36,14 +36,17 @@ struct AppsView: View {
                         }
                         ForEach(AppModel.barAppPages, id: \.page) { app in
                             HStack(spacing: 10) {
-                                Image(systemName: Self.barAppIcon(app.page)).frame(width: 22).foregroundStyle(.secondary)
+                                icon(url: model.barAppIconURL(app.page), fallback: Self.barAppIcon(app.page))
                                 Text(app.label).fontWeight(.medium).frame(width: 90, alignment: .leading)
-                                if let v = model.barAppVersion(app.page) { Text("on the bar · \(v)").font(.caption).foregroundStyle(.secondary) }
-                                else { Text("not on the bar").font(.caption).foregroundStyle(.secondary) }
+                                let installed = model.barAppVersion(app.page), stale = model.barAppNeedsUpdate(app.page)
+                                if let v = installed {
+                                    Text("on the bar · \(v)").font(.caption).foregroundStyle(.secondary)
+                                    if stale { tag("update to \(AppModel.barAppsVersion)", .orange) } else { Label("up to date", systemImage: "checkmark").font(.caption).foregroundStyle(.green) }
+                                } else { Text("not on the bar · \(AppModel.barAppsVersion) available").font(.caption).foregroundStyle(.secondary) }
                                 Spacer()
                                 if model.barAppBusy == app.page { ProgressView().controlSize(.small) }
-                                else {
-                                    Button(model.barAppVersion(app.page) == nil ? "Install" : "Update") { model.installBarApp(app.page) }
+                                else if installed == nil || stale {
+                                    Button(installed == nil ? "Install" : "Update") { model.installBarApp(app.page) }
                                         .buttonStyle(.bordered).tint(.blue)
                                         .disabled(model.barAppBusy != nil || AppModel.bundledAPK(app.apk) == nil)
                                 }

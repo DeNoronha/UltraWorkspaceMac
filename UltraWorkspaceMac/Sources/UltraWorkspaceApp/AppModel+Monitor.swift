@@ -60,6 +60,15 @@ extension AppModel {
     }
 
     func barAppVersion(_ page: String) -> String? { barApps.first { $0.packageName == BarPages.package(for: page) }?.versionName }
+    /// Version of the APKs shipped with this build — keep in step with android/DeckhandMonitor/app/build.gradle.kts.
+    nonisolated static let barAppsVersion = "1.2"
+    /// The bar's copy is older than the one shipped with Deckhand.
+    func barAppNeedsUpdate(_ page: String) -> Bool {
+        guard let v = barAppVersion(page) else { return false }
+        let a = v.split(separator: ".").map { Int($0) ?? 0 }, b = Self.barAppsVersion.split(separator: ".").map { Int($0) ?? 0 }
+        return a.lexicographicallyPrecedes(b)
+    }
+    func barAppIconURL(_ page: String) -> URL? { barApps.first { $0.packageName == BarPages.package(for: page) }?.iconUrl.flatMap(URL.init) }
 
     /// Install (or update) one bar app over ADB — Deckhand's own `adb install -r` of the bundled APK.
     func installBarApp(_ page: String) {
