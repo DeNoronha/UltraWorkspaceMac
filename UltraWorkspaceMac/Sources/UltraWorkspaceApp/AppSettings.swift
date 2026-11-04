@@ -57,8 +57,8 @@ final class AppSettings: ObservableObject {
     @Published var presenceWake: Bool = false { didSet { save() } }
     @Published var presenceSleepMinutes: Int = 10 { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
-    /// The 1424-px strip shows about this many cards without scrolling (the clock card is double width).
-    static let coreCardsThatFit = 4
+    /// The 1424-px strip shows this many single cards without scrolling (the clock card takes two slots) — counted on the bar 2026-11-04.
+    static let coreCardsThatFit = 5
     struct CoreCard: Identifiable { let id: String; let title: String; let needsMac: Bool; let icon: String; let note: String }
     static let allCoreCards: [CoreCard] = [
         CoreCard(id: "TIME", title: "Clock", needsMac: false, icon: "clock", note: "The bar's clock card with Deckhand's picture (weather & date, free, updated hourly while Deckhand runs)."),

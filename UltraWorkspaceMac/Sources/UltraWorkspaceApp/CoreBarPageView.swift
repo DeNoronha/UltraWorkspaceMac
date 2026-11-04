@@ -56,9 +56,16 @@ struct CoreBarPageView: View {
         // sideways through the rest, so the preview pages through them the same way. A fixed width keeps
         // a long list from pushing the split view wider than the window (2026-11-03).
         let per = AppSettings.coreCardsThatFit
-        let pages = max(1, Int((Double(cards.count) / Double(per)).rounded(.up)))
+        // Screenfuls by slots: the clock card takes two.
+        var screenfuls: [[AppSettings.CoreCard]] = [[]]; var used = 0
+        for c in cards {
+            let w = c.id == "TIME" ? 2 : 1
+            if used + w > per, !screenfuls[screenfuls.count - 1].isEmpty { screenfuls.append([]); used = 0 }
+            screenfuls[screenfuls.count - 1].append(c); used += w
+        }
+        let pages = screenfuls.count
         let page = min(ui.stripPage, pages - 1)
-        let shown = Array(cards.dropFirst(page * per).prefix(per))
+        let shown = screenfuls[page]
         return Panel("Preview", footer: "Drawn from the list below — not read back from the bar.") {
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black)
@@ -70,7 +77,7 @@ struct CoreBarPageView: View {
                     if cards.isEmpty { Text("No cards yet — use Add a card… below.").foregroundStyle(.secondary).padding(.leading, 12) }
                 }.padding(8)
             }
-            .frame(width: 8 + CGFloat(per) * 88 + 82 + 8, height: 98).clipped()
+            .frame(width: 8 + CGFloat(per) * 88 + 8, height: 98).clipped()
             if pages > 1 {
                 HStack(spacing: 8) {
                     Button { ui.stripPage = max(0, page - 1) } label: { Image(systemName: "chevron.left") }.disabled(page == 0).accessibilityLabel("Previous screenful")
