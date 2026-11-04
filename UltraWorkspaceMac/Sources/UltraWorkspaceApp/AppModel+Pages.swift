@@ -215,10 +215,8 @@ extension AppModel {
                                  "values": [["id": "1", "value": ["output": 10, "payload": ["deckhand": cmd]]]]]]]]
             }
             var buttons: [[String: Any]] = [step(2, "Previous", "previous"), step(1, "Next", "next")]
+            // The long key only answers a hold (2026-11-04: its short press used to be "next" too, dropped as redundant).
             buttons.append(["keyCode": 0,
-                "singleClick": ["show": false, "name": "Next", "icon": "",
-                    "actions": [["type": "PC_CONTROL", "id": "1", "name": "Next",
-                                 "values": [["id": "1", "value": ["output": 10, "payload": ["deckhand": "next"]]]]]]],
                 "longPress": ["show": false, "name": "Standard page", "icon": "",
                     "actions": [["type": "CHANGE_PROFILE", "id": "profile", "name": "Standard page",
                                  "values": [["id": "1", "value": Self.defaultPageId]]]]]])

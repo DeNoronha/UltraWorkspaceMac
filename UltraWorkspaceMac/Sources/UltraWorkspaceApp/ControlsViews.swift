@@ -77,9 +77,8 @@ struct DotKeyView: View {
                         Panel("What it does") {
                             BindingRow(icon: "1.circle", control: "Key 1", action: "Cube: previous card", note: "via this Mac")
                             BindingRow(icon: "2.circle", control: "Key 2", action: "Cube: next card", note: "via this Mac")
-                            BindingRow(icon: "3.circle", control: "Key 3", action: "Cube: next card", note: "via this Mac")
                             BindingRow(icon: "3.circle.fill", control: "Hold key 3", action: "Bar: Standard page", note: "")
-                            if !model.modules.contains(where: { $0.isVivoCube }) { Text("No VivoCube found — keys 1, 2 and 3 do nothing until one is attached.").font(.caption).foregroundStyle(.orange) }
+                            if !model.modules.contains(where: { $0.isVivoCube }) { Text("No VivoCube found — keys 1 and 2 do nothing until one is attached.").font(.caption).foregroundStyle(.orange) }
                             BindingsFooter(lastUsed: nil)
                         }
                     }
