@@ -7,7 +7,7 @@ import UltraBarKit
 /// need fresh on its own cadence (crypto and weather every few minutes, calendar every minute, Claude
 /// sessions and Music every 2 s) so a request never waits on the network.
 ///
-/// Routes: `/<page>` (html), `/<page>/data.json`, `/music/art.jpg`, `/music/cmd/<play|next|previous>`.
+/// Routes: `/<page>` (html), `/<page>/data.json`, `/music/art.jpg`, `/music/cmd/<play|next|previous>`, `/flights/tile/z/x/y.png`, `/tasks/done/<id>`.
 @MainActor
 final class BarPages {
     nonisolated static let pages = ["monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks"]
@@ -129,7 +129,7 @@ final class BarPages {
                                     "km": (a.distanceKm * 10).rounded() / 10, "bearing": a.bearing, "dir": Flights.compass(a.bearing), "inside": a.distanceKm <= radius,
                                     "airline": route?.airline ?? NSNull(), "from": ap(route?.origin), "to": ap(route?.destination)])
                     }
-                    self.flights = ["aircraft": out, "radius": Int(radius), "place": loc.name, "at": Int(Date().timeIntervalSince1970)]
+                    self.flights = ["aircraft": out, "radius": Int(radius), "place": loc.name, "lat": loc.lat, "lon": loc.lon, "at": Int(Date().timeIntervalSince1970)]
                 }
                 try? await Task.sleep(nanoseconds: (open ? 10 : 120) * 1_000_000_000)
             }
@@ -191,7 +191,7 @@ final class BarPages {
                         let r = try await LinearTasks.fetch(apiKey: key)
                         model.linearError = nil
                         self.linear = ["hasKey": true, "me": r.me, "at": Int(Date().timeIntervalSince1970), "issues": r.issues.map {
-                            i -> [String: Any] in ["id": i.identifier, "title": i.title, "priority": i.priority, "priorityLabel": i.priorityLabel, "due": i.dueDate.map { $0 as Any } ?? NSNull(),
+                            i -> [String: Any] in ["id": i.identifier, "uid": i.id, "title": i.title, "priority": i.priority, "priorityLabel": i.priorityLabel, "due": i.dueDate.map { $0 as Any } ?? NSNull(),
                              "state": i.state, "stateType": i.stateType, "color": i.stateColor, "project": i.project.map { $0 as Any } ?? NSNull(), "team": i.team] }]
                     } catch {
                         model.linearError = error.localizedDescription
@@ -216,6 +216,30 @@ final class BarPages {
         if page == "music", parts[1] == "art.jpg" {
             let jpeg = DispatchQueue.main.sync { self.art?.jpeg } ?? Data()
             return jpeg.isEmpty ? nil : MonitorServer.Response(type: "image/jpeg", body: jpeg)
+        }
+        if page == "flights", parts.count == 5, parts[1] == "tile", let z = Int(parts[2]), let x = Int(parts[3]), let y = Int(parts[4].replacingOccurrences(of: ".png", with: "")) {
+            guard let png = MapTiles.tile(z: z, x: x, y: y) else { return MonitorServer.Response("404 Not Found", type: "text/plain", body: Data()) }
+            return MonitorServer.Response(type: "image/png", body: png)
+        }
+        if page == "tasks", parts.count == 3, parts[1] == "done" {
+            // The bar marks an issue done: Deckhand moves it to the team's Done state and drops it from the list.
+            let uid = parts[2]
+            DispatchQueue.main.async {
+                let key = model.linearKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !key.isEmpty, uid.range(of: "^[0-9a-fA-F-]{36}$", options: .regularExpression) != nil else { return }
+                Task { @MainActor in
+                    do {
+                        try await LinearTasks.complete(apiKey: key, issueID: uid)
+                        var l = self.linear
+                        let issues = (l["issues"] as? [[String: Any]]) ?? []
+                        let done = issues.first { ($0["uid"] as? String) == uid }?["id"] as? String ?? uid
+                        l["issues"] = issues.filter { ($0["uid"] as? String) != uid }
+                        self.linear = l
+                        model.say("Linear: \(done) marked done from the bar.")
+                    } catch { model.linearError = "Could not mark the issue done: \(error.localizedDescription)"; model.say(model.linearError!) }
+                }
+            }
+            return .json(["ok": true])
         }
         if page == "music", parts.count == 3, parts[1] == "cmd" {
             DispatchQueue.main.async {
@@ -418,34 +442,58 @@ final class BarPages {
 
     nonisolated static let flightsJS = #"""
         const POLL=5000;
+        // Radar on the left (one card wide, a dark map underneath), up to four flights beside it, each in its own
+        // colour that also marks its plane and flight number on the radar.
+        const COLS=['#4ade80','#fbbf24','#60a5fa','#f472b6'];
+        const tiles={};
+        function tile(z,x,y){ const k=z+'/'+x+'/'+y; if(tiles[k]) return tiles[k]; const im=new Image(); im.src='/flights/tile/'+z+'/'+x+'/'+y+'.png'; tiles[k]=im; return im; }
+        // OpenStreetMap tiles, darkened and cached by the Mac (see MapTiles.swift), scaled so the circle is exactly R km across.
+        function map(cx,cy,r,lat,lon,R){ if(lat==null||lon==null) return false;
+          const mpp=R*1000/r, zf=Math.log2(156543.03*Math.cos(lat*Math.PI/180)/mpp), z=Math.max(2,Math.min(17,Math.floor(zf))), s=Math.pow(2,zf-z), n=Math.pow(2,z);
+          const wx=(lon+180)/360*n*256, lr=lat*Math.PI/180, wy=(1-Math.log(Math.tan(lr)+1/Math.cos(lr))/Math.PI)/2*n*256;
+          let drew=false; g.save(); g.beginPath(); g.arc(cx,cy,r,0,7); g.clip(); g.globalAlpha=0.9;
+          const x0=Math.floor((wx-r/s)/256), x1=Math.floor((wx+r/s)/256), y0=Math.floor((wy-r/s)/256), y1=Math.floor((wy+r/s)/256);
+          for(let tx=x0;tx<=x1;tx++) for(let ty=y0;ty<=y1;ty++){ const im=tile(z,tx,ty); if(im.complete&&im.naturalWidth){ g.drawImage(im,cx+(tx*256-wx)*s,cy+(ty*256-wy)*s,256*s+0.5,256*s+0.5); drew=true; } }
+          g.restore(); return drew; }
         function plane(x,y,r,heading,col){ g.save(); g.translate(x,y); g.rotate((heading||0)*Math.PI/180); g.fillStyle=col; g.beginPath();
           g.moveTo(0,-r); g.lineTo(r*.35,r*.25); g.lineTo(r*.12,r*.15); g.lineTo(r*.12,r*.6); g.lineTo(r*.3,r*.8); g.lineTo(0,r*.65); g.lineTo(-r*.3,r*.8); g.lineTo(-r*.12,r*.6); g.lineTo(-r*.12,r*.15); g.lineTo(-r*.35,r*.25); g.closePath(); g.fill(); g.restore(); }
         function render(d){
-          const R=d.radius||3, ac=d.aircraft||[], inside=ac.filter(a=>a.inside), show=(inside.length?inside:ac.slice(0,1)).slice(0,3);
-          // radar
-          const cx=150,cy=140,rr0=118; g.strokeStyle='rgba(255,255,255,.14)'; g.lineWidth=1.5;
+          const R=d.radius||3, ac=d.aircraft||[], inside=ac.filter(a=>a.inside), show=(inside.length?inside:ac.slice(0,1)).slice(0,4);
+          // radar: 250 px circle, full height
+          const cx=140,cy=140,rr0=122;
+          g.fillStyle='#141821'; g.beginPath(); g.arc(cx,cy,rr0,0,7); g.fill();
+          const hasMap=map(cx,cy,rr0,d.lat,d.lon,R);
+          g.strokeStyle='rgba(255,255,255,'+(hasMap?'.22':'.14')+')'; g.lineWidth=1.5;
           [1/3,2/3,1].forEach(f=>{ g.beginPath(); g.arc(cx,cy,rr0*f,0,7); g.stroke(); });
           g.beginPath(); g.moveTo(cx-rr0,cy); g.lineTo(cx+rr0,cy); g.moveTo(cx,cy-rr0); g.lineTo(cx,cy+rr0); g.stroke();
-          const sweep=(Date.now()/4000*Math.PI*2)%(Math.PI*2); const gr=g.createConicalGradient? null:null;
-          g.save(); g.beginPath(); g.moveTo(cx,cy); g.arc(cx,cy,rr0,sweep-0.9,sweep); g.closePath(); g.fillStyle='rgba(74,222,128,.10)'; g.fill(); g.restore();
-          g.fillStyle='#4ade80'; g.beginPath(); g.arc(cx,cy,4,0,7); g.fill();
-          txt('N',cx,cy-rr0-8,13,'#8b94a6','center'); txt(R+' km',cx+rr0+6,cy+5,12,'#6b7280','left');
-          ac.forEach(a=>{ if(a.km>R) return; const rad=a.bearing*Math.PI/180, dd=Math.min(1,a.km/R)*rr0; plane(cx+Math.sin(rad)*dd, cy-Math.cos(rad)*dd, 13, a.track, a.inside?'#fff':'#6b7280'); });
-          txt('Overhead',40,30,15,'#8b94a6','left','600'); txt((d.place||'')+' · '+R+' km',300,30,15,'#8b94a6','right');
-          // cards
-          if(!show.length){ txt('Nothing within '+R+' km',330,130,36,'#9aa3b2','left','700'); txt(ac.length? ac.length+' aircraft within 25 km, nearest '+ac[0].km+' km '+ac[0].dir:'Clear skies for 25 km around.',330,172,19,'#6b7280'); return; }
-          const n=show.length, W=Math.floor((1424-330-40-(n-1)*16)/n);
-          show.forEach((a,i)=>{ const x=330+i*(W+16), y=20, H=240; rr(x,y,W,H,16, a.inside?'rgba(255,255,255,.07)':'rgba(255,255,255,.04)');
-            txt(a.callsign||a.reg||'—',x+18,y+44,34,'#fff','left','700'); if(a.airline) txt(clip(a.airline,W>400?34:22),x+18,y+70,16,'#b4bccb');
-            if(a.from||a.to){ const f=a.from?a.from.iata:'?', t=a.to?a.to.iata:'?'; txt(f+' → '+t,x+18,y+112,28,'#fbbf24','left','700');
-              txt(clip((a.from?a.from.city||a.from.name:'')+'  →  '+(a.to?a.to.city||a.to.name:''),W>400?44:28),x+18,y+138,15,'#8b94a6'); }
-            else txt('route unknown',x+18,y+112,18,'#6b7280');
+          const sweep=(Date.now()/4000*Math.PI*2)%(Math.PI*2);
+          g.save(); g.beginPath(); g.moveTo(cx,cy); g.arc(cx,cy,rr0,sweep-0.9,sweep); g.closePath(); g.fillStyle='rgba(74,222,128,.12)'; g.fill(); g.restore();
+          g.fillStyle='#fff'; g.beginPath(); g.arc(cx,cy,4,0,7); g.fill();
+          txt('N',cx,cy-rr0+16,12,'#c7cdd8','center','600'); txt(R+' km',cx+rr0-6,cy-6,11,'#9aa3b2','right');
+          if(hasMap) txt('© OpenStreetMap',cx,cy+rr0-6,9,'rgba(255,255,255,.5)','center');
+          // every aircraft in the circle: the shown ones in their colour with the flight number, the rest grey
+          ac.forEach(a=>{ if(a.km>R) return; const i=show.indexOf(a), col=i>=0?COLS[i]:'#8b94a6';
+            const rad=a.bearing*Math.PI/180, dd=Math.min(1,a.km/R)*rr0, px=cx+Math.sin(rad)*dd, py=cy-Math.cos(rad)*dd;
+            plane(px,py,i>=0?13:9,a.track,col);
+            if(i>=0){ const lab=a.callsign||a.reg||''; if(lab){ g.save(); g.shadowColor='rgba(0,0,0,.9)'; g.shadowBlur=4; txt(lab,px+(px<cx?-12:12),py+5,12,col,px<cx?'right':'left','700'); g.restore(); } } });
+          // panels
+          const X0=296, GAP=12, N=4, W=Math.floor((1424-X0-20-(N-1)*GAP)/N), y=16, H=248;
+          if(!show.length){ txt('Nothing within '+R+' km',X0+10,120,34,'#9aa3b2','left','700');
+            txt(ac.length? ac.length+' aircraft within 25 km, nearest '+ac[0].km+' km '+ac[0].dir:'Clear skies for 25 km around.',X0+10,160,18,'#6b7280');
+            txt(d.place||'',X0+10,200,15,'#6b7280'); return; }
+          show.forEach((a,i)=>{ const x=X0+i*(W+GAP), col=COLS[i]; rr(x,y,W,H,14, a.inside?'rgba(255,255,255,.07)':'rgba(255,255,255,.04)');
+            g.fillStyle=col; g.fillRect(x,y+18,5,H-36);
+            txt(a.callsign||a.reg||'—',x+18,y+40,30,col,'left','700'); plane(x+W-30,y+30,15,a.track,col);
+            txt(clip(a.airline||(a.type||'')+(a.reg?' · '+a.reg:''),30),x+18,y+64,14,'#b4bccb');
+            if(a.from||a.to){ const f=a.from?a.from.iata:'?', t=a.to?a.to.iata:'?'; txt(f+' → '+t,x+18,y+104,26,'#fff','left','700');
+              txt(clip((a.from?a.from.city||a.from.name:'?')+' → '+(a.to?a.to.city||a.to.name:'?'),34),x+18,y+128,13,'#8b94a6'); }
+            else txt('route unknown',x+18,y+104,18,'#6b7280');
             const alt=a.ground?'on the ground':(a.alt!=null? a.alt.toLocaleString()+' m':'—'), vs=a.vs==null?'':(a.vs>1?' ↑':a.vs<-1?' ↓':' →');
-            txt(alt+vs+(a.speed!=null?'  ·  '+a.speed+' km/h':''),x+18,y+176,17,'#d6dbe6');
-            txt((a.type||'')+(a.reg?'  ·  '+a.reg:''),x+18,y+200,15,'#8b94a6');
-            txt(a.km+' km '+a.dir+(a.inside?'':'  ·  outside the circle'),x+18,y+H-16,15,a.inside?'#4ade80':'#6b7280','left','600');
-            plane(x+W-40,y+44,16,a.track,'#fff');
+            txt(alt+vs+(a.speed!=null?'  ·  '+a.speed+' km/h':''),x+18,y+168,16,'#d6dbe6');
+            if(a.airline) txt((a.type||'')+(a.reg?'  ·  '+a.reg:''),x+18,y+192,13,'#8b94a6');
+            txt(a.km+' km '+a.dir+(a.inside?'':'  ·  outside the circle'),x+18,y+H-16,14,a.inside?col:'#6b7280','left','600');
           });
+          if(inside.length>4) txt('+'+(inside.length-4)+' more',1424-24,y+H-16,13,'#6b7280','right');
         }
         """#
 
@@ -518,22 +566,35 @@ final class BarPages {
 
     nonisolated static let tasksJS = #"""
         const POLL=30000;
+        // Tap an issue to get a Done button; tap Done to close it in Linear (Deckhand does the call).
+        let hit=[], sel=null, selAt=0, pending={};
+        c.addEventListener('click',e=>{ const x=e.offsetX, y=e.offsetY;
+          for(const h of hit){ if(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h){
+            if(h.btn){ pending[h.uid]=Date.now(); sel=null; fetch('/tasks/done/'+h.uid).then(()=>setTimeout(poll,1500)); return; }
+            sel= sel===h.uid? null : h.uid; selAt=Date.now(); return; } }
+          sel=null; });
         function bars(x,y,p,col){ for(let i=0;i<4;i++){ g.fillStyle= (p&&i<5-p)?col:'rgba(255,255,255,.14)'; g.fillRect(x+i*6,y+12-(i+1)*3,4,(i+1)*3); } }
         function render(d){
-          if(!d.hasKey){ txt('Add your Linear API key in Deckhand',40,130,32,'#9aa3b2','left','700'); txt('Apps → App settings → Tasks. The key stays on the Mac.',40,172,19,'#6b7280'); return; }
-          const items=d.issues||[]; if(d.error&&!items.length){ txt(d.error,40,150,22,'#f87171'); return; }
+          hit=[]; if(sel&&Date.now()-selAt>8000) sel=null;
+          if(!d.hasKey){ txt('Add your Linear API key in Deckhand',40,130,32,'#9aa3b2','left','700'); txt('Apps → Tasks. The key stays on the Mac.',40,172,19,'#6b7280'); return; }
+          const items=(d.issues||[]).filter(i=>!(pending[i.uid]&&Date.now()-pending[i.uid]<20000)); if(d.error&&!items.length){ txt(d.error,40,150,22,'#f87171'); return; }
           const today=new Date().toISOString().slice(0,10), week=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
           const due=items.filter(i=>i.due&&i.due<=week).length, over=items.filter(i=>i.due&&i.due<today).length;
           txt((d.me?d.me+' · ':'')+items.length+' open',40,34,15,'#8b94a6','left','600');
-          txt(over? over+' overdue · ':''+(due? due+' due this week':''),1384,34,15,over?'#f87171':'#8b94a6','right','600');
+          txt((over? over+' overdue':'')+(over&&due?' · ':'')+(due? due+' due this week':''),1340,34,15,over?'#f87171':'#8b94a6','right','600');
+          if(d.error) txt(clip(d.error,80),712,34,13,'#f87171','center');
           if(!items.length){ txt('Nothing assigned to you. Enjoy it.',40,150,30,'#9aa3b2','left','700'); return; }
           const pc={1:'#f87171',2:'#fbbf24',3:'#60a5fa',4:'#8b94a6'};
-          items.slice(0,6).forEach((it,i)=>{ const col=i%2, row=Math.floor(i/2); const x=40+col*700, y=60+row*70; rr(x,y,660,60,10,it.stateType==='started'?'rgba(96,165,250,.12)':'rgba(255,255,255,.06)');
+          items.slice(0,6).forEach((it,i)=>{ const col=i%2, row=Math.floor(i/2); const x=40+col*700, y=60+row*70, W=660, H=60, isSel=sel===it.uid;
+            rr(x,y,W,H,10, isSel?'rgba(74,222,128,.14)':it.stateType==='started'?'rgba(96,165,250,.12)':'rgba(255,255,255,.06)');
+            hit.push({x,y,w:W,h:H,uid:it.uid});
             bars(x+16,y+22,it.priority,pc[it.priority]||'#8b94a6'); txt(it.id,x+50,y+26,14,'#8b94a6','left','600');
-            txt(clip(it.title,46),x+50,y+48,19,'#fff','left','600');
-            rr(x+520,y+14,120,22,11,it.color||'#4b5363'); txt(clip(it.state,14),x+580,y+30,12,'#fff','center','700');
-            if(it.due){ const late=it.due<today; txt((late?'overdue ':'due ')+it.due.slice(5),x+640,y+52,13,late?'#f87171':'#8b94a6','right'); } });
+            txt(clip(it.title,isSel?34:46),x+50,y+48,19,'#fff','left','600');
+            if(isSel){ rr(x+W-150,y+10,138,40,20,'#4ade80'); txt('✓  Done',x+W-81,y+37,18,'#0b2e17','center','700'); hit.push({x:x+W-150,y:y+10,w:138,h:40,uid:it.uid,btn:true}); }
+            else { rr(x+520,y+14,120,22,11,it.color||'#4b5363'); txt(clip(it.state,14),x+580,y+30,12,'#fff','center','700');
+              if(it.due){ const late=it.due<today; txt((late?'overdue ':'due ')+it.due.slice(5),x+640,y+52,13,late?'#f87171':'#8b94a6','right'); } } });
           if(items.length>6) txt('+'+(items.length-6)+' more',712,272,12,'#4b5363','center');
+          if(!sel) txt('tap an issue to mark it done',40,272,12,'#4b5363','left');
         }
         """#
 }

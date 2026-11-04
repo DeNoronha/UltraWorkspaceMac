@@ -23,8 +23,10 @@ extension AppModel {
         guard let pkg = Self.appPackage(id) else { return nil }
         let app = barApps.first { $0.packageName == pkg }
         let name = app?.appName ?? pkg
-        return AppSettings.CoreCard(id: id, title: name, needsMac: false, icon: "app.badge",
-                                    note: "Opens \(name) on the bar when tapped.", imageURL: app?.iconUrl.flatMap(URL.init))
+        let ours = pkg.hasPrefix(BarPages.packagePrefix)
+        return AppSettings.CoreCard(id: id, title: name, needsMac: ours, icon: "app.badge",
+                                    note: ours ? "Opens \(name) on the bar: a page served by this Mac, so it needs Deckhand running." : "Opens \(name) on the bar when tapped.",
+                                    imageURL: app?.iconUrl.flatMap(URL.init))
     }
     /// Everything that can go on the Deckhand page right now.
     var allCoreCardsNow: [AppSettings.CoreCard] { AppSettings.allCoreCards + appCards }

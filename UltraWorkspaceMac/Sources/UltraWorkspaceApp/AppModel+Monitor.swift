@@ -63,7 +63,7 @@ extension AppModel {
 
     func barAppVersion(_ page: String) -> String? { barApps.first { $0.packageName == BarPages.package(for: page) }?.versionName }
     /// Version of the APKs shipped with this build — keep in step with android/DeckhandMonitor/app/build.gradle.kts.
-    nonisolated static let barAppsVersion = "1.3"
+    nonisolated static let barAppsVersion = "1.4"
     /// The bar's copy is older than the one shipped with Deckhand.
     func barAppNeedsUpdate(_ page: String) -> Bool {
         guard let v = barAppVersion(page) else { return false }

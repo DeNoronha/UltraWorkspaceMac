@@ -29,6 +29,15 @@ struct ContentView: View {
             if settings.vivoRotationOn, settings.vivoSwitchMode == .timed, !model.themeRunning { model.sendToCube(settings: settings) }
         }
         .toolbar {
+            // The link to the bar, right of the window title: the same badge on every page.
+            ToolbarItem(placement: .navigation) {
+                HStack(spacing: 10) {
+                    LinkBadge()
+                    if model.link.isConnected, let age = model.lastPushAt.map({ Int(Date().timeIntervalSince($0)) }) {
+                        Text("last request \(age) s ago").font(.caption).foregroundStyle(.tertiary)
+                    }
+                }.padding(.leading, 6)
+            }
             ToolbarItem { Button { model.showActivity.toggle() } label: { Label("Activity", systemImage: "sidebar.trailing") }
                 .help("Show or hide the activity list") }
         }
@@ -337,7 +346,6 @@ private struct StatusBar: View {
             if model.isScanning || model.isWorking { ProgressView().controlSize(.small) }
             Text(model.statusLine).font(.caption).lineLimit(1).truncationMode(.tail)
             Spacer()
-            LinkBadge()
         }.padding(.horizontal, 12).padding(.vertical, 6).background(.bar)
     }
 }

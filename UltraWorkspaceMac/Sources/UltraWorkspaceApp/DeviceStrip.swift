@@ -12,10 +12,6 @@ struct DeviceStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 16) {
-                LinkBadge()
-                if let age = model.lastPushAt.map({ Int(Date().timeIntervalSince($0)) }), model.link.isConnected {
-                    Text("last request \(age) s ago").font(.caption).foregroundStyle(.tertiary)
-                }
                 if kind == .cube, let w = model.selectedModuleSerial.flatMap({ model.vivoWiFi[$0] ?? nil }) {
                     Label(w.isCoreBarHotspot ? "CoreBar hotspot" : w.ssid, systemImage: model.cubeOffline ? "wifi.exclamationmark" : "wifi")
                         .font(.caption).foregroundStyle(model.cubeOffline ? Color.orange : Color.secondary)

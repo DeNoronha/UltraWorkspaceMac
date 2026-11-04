@@ -29,8 +29,22 @@ public final class WireLog: @unchecked Sendable {
     }
 
     /// `dir` is a short arrow/tag: ">>" sent, "<<" received, "--" event, "HTTP".
+    /// The bar polls the Mac's volume about 24× a minute once a KnobKey is attached (its own timer). Logging
+    /// each of those drowns everything else, so volume traffic is counted and written as one line a minute.
+    private var volumeGets = 0, volumeSets = 0, volumeFlushAt = Date()
+
     public func log(_ dir: String, _ text: String) {
         guard enabled else { return }
+        if dir == ">>" || dir == "<<", text.contains("_VOLUME") {
+            lock.lock()
+            if text.contains("SET_VOLUME") { volumeSets += 1 } else { volumeGets += 1 }
+            let due = Date().timeIntervalSince(volumeFlushAt) >= 60
+            let gets = volumeGets, sets = volumeSets
+            if due { volumeGets = 0; volumeSets = 0; volumeFlushAt = Date() }
+            lock.unlock()
+            if due { log("--", "volume: \(gets / 2) GET_VOLUME answered, \(sets / 2) SET_VOLUME in the last minute (not logged one by one)") }
+            return
+        }
         let line = "\(Self.ts()) \(dir) \(Self.redact(text))"
         lock.lock(); ring.append(line); if ring.count > ringCap { ring.removeFirst(ring.count - ringCap) }; lock.unlock()
         let data = (line + "\n").data(using: .utf8) ?? Data()

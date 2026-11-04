@@ -79,20 +79,31 @@ struct SidebarView: View {
                 Button("Forget this CoreBar…", role: .destructive) { ui.confirmForget = true }
             }
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "rectangle.on.rectangle.angled").font(.title3)
+            HStack(spacing: 10) {
+                Image(systemName: "rectangle.on.rectangle.angled").font(.title2).foregroundStyle(Color.accentColor).frame(width: 28)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(model.selectedCoreBar?.name ?? "No CoreBar").fontWeight(.semibold)
-                    LinkBadge()
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
                 Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 12).padding(.vertical, 8).contentShape(Rectangle())
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.quaternary.opacity(0.5)))
+            .contentShape(Rectangle())
+            .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 6)
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden)
         .background(.bar)
         .help(model.selectedCoreBar.map { "\($0.serialNo) · \(model.ipForSelected() ?? $0.lastIp)" } ?? "")
+    }
+
+    /// Under the bar's name: its address and launcher version, or what to do when there is none.
+    private var subtitle: String {
+        guard let bar = model.selectedCoreBar else { return "Add one to begin" }
+        let ip = model.ipForSelected() ?? bar.lastIp
+        if let d = model.discovered.first(where: { $0.serialNo == bar.serialNo }), !d.version.isEmpty { return "\(ip) · launcher \(d.version)" }
+        return ip
     }
 
     private func select(_ bar: Store.PairedCoreBar) {
