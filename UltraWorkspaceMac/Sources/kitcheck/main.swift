@@ -373,6 +373,35 @@ do {
     check(Discovery.parse(Data(#"{"serialNo":"S4","tcpPort":0}"#.utf8), from: "10.0.0.4")?.tcpPort == 7431, "discovery: tcpPort 0 → default 7431")
 }
 
+// Request parsing used by the LAN servers (security review 2026-11-04).
+do {
+    check(MonitorServer.hostIsAllowed("GET / HTTP/1.1\r\nHost: 192.168.1.20:7432\r\n"), "host check: IPv4 with port")
+    check(MonitorServer.hostIsAllowed("GET / HTTP/1.1\r\nHost: 192.168.1.20\r\n"), "host check: IPv4 without port")
+    check(MonitorServer.hostIsAllowed("GET / HTTP/1.1\r\nhost: LOCALHOST:7432\r\n"), "host check: localhost, any case")
+    check(MonitorServer.hostIsAllowed("GET / HTTP/1.1\r\nHost: [fe80::1%en0]:7432\r\n"), "host check: IPv6 literal with zone and port")
+    check(MonitorServer.hostIsAllowed("GET / HTTP/1.0\r\n"), "host check: no Host header (HTTP/1.0) is allowed")
+    check(!MonitorServer.hostIsAllowed("GET / HTTP/1.1\r\nHost: deckhand.attacker.example:7432\r\n"), "host check: a DNS name is refused")
+    check(!MonitorServer.hostIsAllowed("GET / HTTP/1.1\r\nHost: 192.168.1.20.attacker.example\r\n"), "host check: an address-looking name is refused")
+    check(!MonitorServer.hostIsAllowed("GET / HTTP/1.1\r\nHost: \r\n"), "host check: an empty Host is refused")
+    check(MonitorServer.header("x-deckhand", in: "POST /a HTTP/1.1\r\nX-Deckhand:  action \r\n") == "action", "header: name is case-insensitive, value trimmed")
+    check(MonitorServer.header("host", in: "GET /host: x HTTP/1.1\r\nHost: 1.2.3.4\r\n") == "1.2.3.4", "header: the request line is not a header")
+    check(MonitorServer.hasActionMarker("POST /a HTTP/1.1\r\nX-Deckhand: Action\r\n"), "action marker: header present")
+    check(!MonitorServer.hasActionMarker("POST /a HTTP/1.1\r\nReferer: http://x/x-deckhand: action\r\n"), "action marker: the string inside another header does not count")
+    check(MonitorServer.peerMayAct("127.0.0.1", peers: ["10.0.0.5"]) && MonitorServer.peerMayAct("::1", peers: []), "action peers: loopback always may")
+    check(MonitorServer.peerMayAct("10.0.0.5", peers: ["10.0.0.5"]) && MonitorServer.peerMayAct("::ffff:10.0.0.5", peers: ["10.0.0.5"]), "action peers: the listed bar may (also IPv4-mapped)")
+    check(!MonitorServer.peerMayAct("10.0.0.6", peers: ["10.0.0.5"]) && !MonitorServer.peerMayAct(nil, peers: nil), "action peers: another host may not; unknown peer may not")
+    check(MonitorServer.peerMayAct("10.0.0.6", peers: nil), "action peers: nil = any peer (default)")
+    // Discovery replies are unauthenticated LAN data.
+    let spoof = Discovery.parse(Data(#"{"serialNo":"S9","tcpPort":7431,"ip":"evil.example"}"#.utf8), from: "10.0.0.9")
+    check(spoof?.ip == "10.0.0.9", "discovery: an ip that is not an IPv4 literal → sender address", spoof?.ip ?? "nil")
+    check(Discovery.parse(Data(#"{"serialNo":"S9","tcpPort":70000}"#.utf8), from: "10.0.0.9") == nil, "discovery: tcpPort out of range → ignored")
+    check(Discovery.parse(Data(#"{"tcpPort":7431}"#.utf8), from: "10.0.0.9") == nil, "discovery: no serial → ignored")
+    let ctl = Discovery.parse(Data("{\"serialNo\":\"S9\",\"tcpPort\":7431,\"name\":\"bar\\r\\nfake\"}".utf8), from: "10.0.0.9")
+    check(ctl?.name == "barfake", "discovery: control characters stripped from strings", ctl?.name ?? "nil")
+    let long = Discovery.parse(Data(("{\"serialNo\":\"" + String(repeating: "A", count: 500) + "\",\"tcpPort\":7431}").utf8), from: "10.0.0.9")
+    check(long?.serialNo.count == 64, "discovery: serial capped at 64 characters", "\(long?.serialNo.count ?? -1)")
+}
+
 // MonitorServer on a loopback ephemeral port: routing, percent-decoding, 405, bare-LF request lines,
 // and a client that never finishes its request is dropped after `requestTimeout`.
 do {
@@ -380,8 +409,10 @@ do {
     MonitorServer.shared.setRoute { path in
         if path == "/a b" { return .text("hit") }
         if path == "/j" { return .json(["ok": true]) }
+        if path == "/h" { return .html("<p>hi</p>") }
         return nil
     }
+    MonitorServer.shared.setActionRoute { path in path == "/act" ? .json(["did": true]) : nil }
     func get(_ path: String, method: String = "GET") async -> (Int, String) {
         var r = URLRequest(url: URL(string: "http://127.0.0.1:\(MonitorServer.shared.port)\(path)")!); r.httpMethod = method; r.timeoutInterval = 5
         guard let (d, resp) = try? await URLSession.shared.data(for: r) else { return (-1, "") }
@@ -416,12 +447,31 @@ do {
         check(put.0 == 405, "monitor server: PUT → 405", "\(put.0)")
         let head = await get("/j", method: "HEAD")
         check(head.0 == 200 && head.1.isEmpty, "monitor server: HEAD has no body", "\(head)")
-        let lf = raw("GET /j\nHost: x\r\n\r\n", timeout: 5)
+        let lf = raw("GET /j\nHost: 127.0.0.1\r\n\r\n", timeout: 5)
         check(lf.closed && lf.text.hasPrefix("HTTP/1.1 200") && lf.text.hasSuffix("{\"ok\":true}"), "monitor server: bare-LF request line still parsed", lf.text.prefix(40).replacingOccurrences(of: "\r\n", with: " | "))
         let t0 = Date()
-        let slow = raw("GET /j HTTP/1.1\r\nHost: x\r\n", timeout: 5) // head never completed
+        let slow = raw("GET /j HTTP/1.1\r\nHost: 127.0.0.1\r\n", timeout: 5) // head never completed
         let dt = Date().timeIntervalSince(t0)
         check(slow.closed && slow.text.isEmpty && dt < 4, "monitor server: incomplete request dropped after requestTimeout (1 s)", String(format: "closed after %.1f s", dt))
+        // Security review 2026-11-04: Host must be an address (DNS rebinding), the action marker is a real header,
+        // actions are accepted from the paired bar or this Mac only, and every response carries the hardening headers.
+        let rebind = raw("GET /j HTTP/1.1\r\nHost: evil.example:7432\r\n\r\n", timeout: 5)
+        check(rebind.text.hasPrefix("HTTP/1.1 421"), "monitor server: a DNS name in Host → 421 (rebinding)", rebind.text.prefix(30).description)
+        let v6 = raw("GET /j HTTP/1.1\r\nHost: [::1]:7432\r\n\r\n", timeout: 5)
+        check(v6.text.hasPrefix("HTTP/1.1 200"), "monitor server: an IPv6 literal in Host is fine", v6.text.prefix(30).description)
+        let html = raw("GET /h HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", timeout: 5)
+        check(html.text.contains("Content-Security-Policy: default-src 'none'") && html.text.contains("X-Content-Type-Options: nosniff") && html.text.contains("X-Frame-Options: DENY"),
+              "monitor server: HTML carries CSP, nosniff and no-frame headers", html.text.prefix(300).replacingOccurrences(of: "\r\n", with: " | "))
+        let json = raw("GET /j HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", timeout: 5)
+        check(!json.text.contains("Content-Security-Policy") && json.text.contains("nosniff"), "monitor server: JSON gets nosniff but no CSP")
+        MonitorServer.shared.setActionPeers(["10.9.9.9"])   // not this Mac; loopback is always allowed
+        let act = raw("POST /act HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Deckhand: action\r\nContent-Length: 0\r\n\r\n", timeout: 5)
+        check(act.text.hasPrefix("HTTP/1.1 200") && act.text.hasSuffix("{\"did\":true}"), "monitor server: POST with X-Deckhand: action from loopback runs the action", act.text.prefix(30).description)
+        let forged = raw("POST /act HTTP/1.1\r\nHost: 127.0.0.1\r\nReferer: http://a/?x-deckhand: action\r\nContent-Length: 0\r\n\r\n", timeout: 5)
+        check(forged.text.hasPrefix("HTTP/1.1 403"), "monitor server: the marker inside another header does not count", forged.text.prefix(30).description)
+        let wrong = raw("POST /act HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Deckhand: nope\r\nContent-Length: 0\r\n\r\n", timeout: 5)
+        check(wrong.text.hasPrefix("HTTP/1.1 403"), "monitor server: X-Deckhand with another value → 403", wrong.text.prefix(30).description)
+        MonitorServer.shared.setActionPeers(nil)
         MonitorServer.shared.stop()
         check(!MonitorServer.shared.isRunning, "monitor server: stopped")
     } catch { check(false, "monitor server: start", "\(error)") }

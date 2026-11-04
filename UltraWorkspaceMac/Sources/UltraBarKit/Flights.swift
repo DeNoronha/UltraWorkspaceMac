@@ -26,7 +26,8 @@ public enum Flights {
     /// Aircraft within `radiusKm` of a point, nearest first.
     public static func nearby(lat: Double, lon: Double, radiusKm: Double) async throws -> [Aircraft] {
         let nm = max(1, Int((radiusKm / 1.852).rounded(.up)))
-        let url = URL(string: "https://api.adsb.lol/v2/point/\(lat)/\(lon)/\(nm)")!
+        // Three decimals (about 100 m) is all a radius in kilometres needs; the exact position stays on the Mac.
+        let url = URL(string: String(format: "https://api.adsb.lol/v2/point/%.3f/%.3f/%d", lat, lon, nm))!
         var req = URLRequest(url: url); req.timeoutInterval = 10
         let (data, _) = try await URLSession.shared.data(for: req)
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any], let ac = obj["ac"] as? [[String: Any]] else { return [] }

@@ -225,8 +225,11 @@ final class AppSettings: ObservableObject {
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
                           claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, monitorServe: monitorServe, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes,
                           flightsRadiusKm: flightsRadiusKm, newsSource: newsSource)
-        do { try JSONEncoder().encode(p).write(to: url, options: .atomic) }
-        catch { NSLog("Deckhand: settings.json could not be saved: \(error)") }
+        do {
+            try JSONEncoder().encode(p).write(to: url, options: .atomic)
+            // Holds the AccuWeather key and the manual location: user-only, like the token files.
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        } catch { NSLog("Deckhand: settings.json could not be saved: \(error)") }
     }
 
     /// This Mac's timezone identifier (e.g. "Europe/Amsterdam").

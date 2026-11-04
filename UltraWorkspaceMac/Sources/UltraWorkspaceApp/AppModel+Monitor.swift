@@ -40,6 +40,8 @@ extension AppModel {
             while !Task.isCancelled {
                 guard let self else { return }
                 let peer = self.ipForSelected()
+                // Actions (Music, Linear) come from the selected bar only; the pages stay readable on the LAN.
+                MonitorServer.shared.setActionPeers(Set([peer].compactMap { $0 }))
                 let url = MonitorServer.shared.url(reachableFrom: peer ?? "192.168.255.255")
                 if url != self.monitorURL { self.monitorURL = url }
                 if let url { MonitorBeacon.send(url: url, base: String(url.dropLast("/monitor".count)), to: peer) }
@@ -67,7 +69,7 @@ extension AppModel {
 
     func barAppVersion(_ page: String) -> String? { barApps.first { $0.packageName == BarPages.package(for: page) }?.versionName }
     /// Version of the APKs shipped with this build — keep in step with android/DeckhandMonitor/app/build.gradle.kts.
-    nonisolated static let barAppsVersion = "1.6"
+    nonisolated static let barAppsVersion = "1.7"
     /// The bar's copy is older than the one shipped with Deckhand.
     func barAppNeedsUpdate(_ page: String) -> Bool {
         guard let v = barAppVersion(page) else { return false }

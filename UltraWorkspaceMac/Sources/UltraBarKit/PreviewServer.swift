@@ -115,14 +115,16 @@ public final class PreviewServer: @unchecked Sendable {
     private func respond(_ conn: NWConnection, requestHead: String) {
         let (method, target) = MonitorServer.requestLine(requestHead)
         let name = String(target.drop(while: { $0 == "/" })).removingPercentEncoding ?? ""
+        let header = MonitorServer.responseHead   // same head as the Monitor: no sniffing, no framing
+        guard MonitorServer.hostIsAllowed(requestHead) else {   // a DNS name in Host: see MonitorServer.hostIsAllowed
+            WireLog.shared.http("preview server ← \(method) \(target) 421 (Host is not an address)")
+            send(conn, header("421 Misdirected Request", "text/plain", 0)); return
+        }
 
         lock.lock(); let file = files[name]; lock.unlock()
         WireLog.shared.http("preview server ← \(method) \(target) \(file == nil ? "404" : "200 (\(file!.data.count) B)")")
 
         var response = Data()
-        func header(_ status: String, _ type: String, _ length: Int) -> Data {
-            Data("HTTP/1.1 \(status)\r\nContent-Type: \(type)\r\nContent-Length: \(length)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8)
-        }
         guard method == "GET" || method == "HEAD" else {
             response = header("405 Method Not Allowed", "text/plain", 0)
             send(conn, response); return

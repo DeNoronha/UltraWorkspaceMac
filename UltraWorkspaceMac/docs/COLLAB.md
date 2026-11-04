@@ -5,7 +5,7 @@ A frustrated UltraBar X backer ("The Developer Incognito") — a senior develope
 This is the same tool that originally inspired this project. He and Deckhand are complementary:
 
 - **He**: Windows client + community momentum + an about-to-exist open-source home. Same end goal — "replace all of the vendor's software."
-- **Us (Deckhand)**: a working, feature-rich **macOS** client, plus a deep reverse-engineering of the local protocol (see PROTOCOL.md), VivoCube cards with the vendor's layer model, CoreBar pages made of the bar's own cards, SenseCube reads, KnobKey/DotKey bindings answered over a persistent link, and a security review (SECURITY.md).
+- **Us (Deckhand)**: a working, feature-rich **macOS** client, plus a deep reverse-engineering of the local protocol (see PROTOCOL.md), VivoCube cards with the vendor's layer model, CoreBar pages made of the bar's own cards, SenseCube reads, KnobKey/DotKey bindings answered over a persistent link, eleven full-width bar apps served by the Mac (`android/DeckhandMonitor`), installs through the bar's own app store, and a security review (SECURITY.md).
 
 ## Why reach out now (before Christmas)
 

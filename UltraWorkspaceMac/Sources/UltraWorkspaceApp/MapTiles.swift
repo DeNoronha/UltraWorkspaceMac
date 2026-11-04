@@ -15,10 +15,14 @@ enum MapTiles {
         return d
     }()
     nonisolated static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    /// The route is open to the LAN while the pages are served: at most this many OSM fetches at a time, so a
+    /// client asking for tiles in bulk cannot turn this Mac into a tile proxy or tie up the server's threads.
+    nonisolated static let fetchSlots = DispatchSemaphore(value: 4)
 
     /// The dark PNG for a tile, from cache or fetched now (blocking, up to 8 s). nil when unavailable.
+    /// Zoom 2…17 is what the radar asks for (see the page's `map`); anything else is refused.
     nonisolated static func tile(z: Int, x: Int, y: Int) -> Data? {
-        guard (0...19).contains(z), x >= 0, y >= 0, x < (1 << z), y < (1 << z) else { return nil }
+        guard (2...17).contains(z), x >= 0, y >= 0, x < (1 << z), y < (1 << z) else { return nil }
         let file = cacheDir.appendingPathComponent("\(z)-\(x)-\(y).png")
         var stale: Data?
         if let d = try? Data(contentsOf: file), !d.isEmpty {
@@ -26,6 +30,8 @@ enum MapTiles {
             stale = d   // older than 30 days: try to refresh, but an old map beats no map when OSM is unreachable
         }
         guard let url = URL(string: "https://tile.openstreetmap.org/\(z)/\(x)/\(y).png") else { return nil }
+        guard fetchSlots.wait(timeout: .now() + 2) == .success else { return stale }
+        defer { fetchSlots.signal() }
         var req = URLRequest(url: url); req.timeoutInterval = 8
         req.setValue("Deckhand/0.2 (+https://denoronha.github.io/UltraWorkspaceMac/)", forHTTPHeaderField: "User-Agent")
         let sem = DispatchSemaphore(value: 0)

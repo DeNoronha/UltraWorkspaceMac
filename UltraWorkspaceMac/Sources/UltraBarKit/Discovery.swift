@@ -152,24 +152,32 @@ public enum Discovery {
         return nil
     }
 
-    /// One discovery reply datagram → CoreBar (nil unless it carries `tcpPort`). `from` is the
-    /// sender's address, used when the reply has no `ip`.
+    /// One discovery reply datagram → CoreBar (nil unless it carries `tcpPort` and a serial). `from` is the
+    /// sender's address, used when the reply has no `ip` or an `ip` that is not an IPv4 literal. The reply is
+    /// unauthenticated LAN data: the port must be a port, the strings are capped (they go into the UI and into
+    /// file names), and an `ip` that is not an address cannot send a later connection somewhere else.
     public static func parse(_ data: Data, from: String) -> CoreBar? {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               obj["tcpPort"] != nil else { return nil }
-        func s(_ k: String) -> String {
-            if let v = obj[k] as? String { return v }
-            if let v = obj[k] { return String(describing: v) }
-            return ""
+        func s(_ k: String, max: Int) -> String {
+            let v: String
+            if let x = obj[k] as? String { v = x } else if let x = obj[k] { v = String(describing: x) } else { return "" }
+            let clean = v.unicodeScalars.filter { $0.value >= 0x20 && $0.value != 0x7F }
+            return String(String.UnicodeScalarView(clean).prefix(max))
         }
-        func i(_ k: String) -> Int {
+        func i(_ k: String) -> Int? {
             if let v = obj[k] as? Int { return v }
             if let v = obj[k] as? NSNumber { return v.intValue }
             if let v = obj[k] as? String, let n = Int(v) { return n }
-            return 0
+            return nil
         }
-        let ip = s("ip").isEmpty ? from : s("ip")
-        return CoreBar(serialNo: s("serialNo"), version: s("ver"), ip: ip, name: s("name"), tcpPort: i("tcpPort"))
+        guard let port = i("tcpPort"), (0...65535).contains(port) else { return nil }
+        let serial = s("serialNo", max: 64)
+        guard !serial.isEmpty else { return nil }
+        let ipField = s("ip", max: 45)
+        var a = in_addr()
+        let ip = (!ipField.isEmpty && inet_pton(AF_INET, ipField, &a) == 1) ? ipField : from
+        return CoreBar(serialNo: serial, version: s("ver", max: 32), ip: ip, name: s("name", max: 80), tcpPort: port)
     }
 }
 

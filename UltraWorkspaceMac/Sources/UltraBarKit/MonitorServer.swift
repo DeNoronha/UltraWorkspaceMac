@@ -31,6 +31,8 @@ public final class MonitorServer: @unchecked Sendable {
     private var connections: [ObjectIdentifier: NWConnection] = [:]
     private var route: Route = { _ in nil }
     private var actionRoute: ActionRoute = { _ in nil }
+    /// Addresses that may trigger actions (the paired bar); nil = any peer. Loopback is always allowed.
+    private var actionPeers: Set<String>?
     public private(set) var port: UInt16 = 0
     public var isRunning: Bool { lock.lock(); defer { lock.unlock() }; return listener?.state == .ready }
 
@@ -42,6 +44,9 @@ public final class MonitorServer: @unchecked Sendable {
 
     public func setRoute(_ r: @escaping Route) { lock.lock(); route = r; lock.unlock() }
     public func setActionRoute(_ r: @escaping ActionRoute) { lock.lock(); actionRoute = r; lock.unlock() }
+    /// Only these peer addresses (plus loopback) may POST actions; nil (the default) lets any peer. The app
+    /// sets it to the selected bar's address so another host on the LAN cannot drive Music or close issues.
+    public func setActionPeers(_ peers: Set<String>?) { lock.lock(); actionPeers = peers; lock.unlock() }
 
     /// Start on `port` (idempotent). Throws when the port is taken.
     public func start(port requested: UInt16 = MonitorServer.defaultPort) throws {
@@ -118,6 +123,58 @@ public final class MonitorServer: @unchecked Sendable {
         return (method, target)
     }
 
+    /// The first header called `name` (case-insensitive), trimmed; nil when absent.
+    public static func header(_ name: String, in head: String) -> String? {
+        let want = name.lowercased() + ":"
+        for line in head.split(whereSeparator: { $0 == "\r\n" || $0 == "\n" || $0 == "\r" }).dropFirst() {
+            guard line.lowercased().hasPrefix(want) else { continue }
+            return line.dropFirst(want.count).trimmingCharacters(in: .whitespaces)
+        }
+        return nil
+    }
+
+    /// An action is a POST whose `X-Deckhand` header is exactly `action` (a header, not the string anywhere in the head).
+    public static func hasActionMarker(_ head: String) -> Bool { header("x-deckhand", in: head)?.lowercased() == "action" }
+
+    /// Whether the request's `Host` is acceptable: an IPv4/IPv6 literal (optionally with a port), `localhost`, or no
+    /// Host at all (HTTP/1.0). A DNS name is refused: the pages have no login, so a web page the user visits could
+    /// otherwise point a name it controls at this Mac's address (DNS rebinding) and read them from the browser,
+    /// same-origin, including the headers an action needs. The bar and the Mac's own browser always use the IP.
+    public static func hostIsAllowed(_ head: String) -> Bool {
+        guard var host = header("host", in: head) else { return true }
+        host = host.lowercased()
+        if host.hasPrefix("[") {                       // [v6]:port
+            guard let close = host.firstIndex(of: "]") else { return false }
+            host = String(host[host.index(after: host.startIndex)..<close])
+        } else if let colon = host.lastIndex(of: ":"), host[host.startIndex..<colon].contains(":") == false {
+            host = String(host[..<colon])                // v4:port or name:port
+        }
+        if host.isEmpty { return false }
+        if host == "localhost" { return true }
+        if let pct = host.firstIndex(of: "%") { host = String(host[..<pct]) }   // v6 zone id
+        var a4 = in_addr(), a6 = in6_addr()
+        return inet_pton(AF_INET, host, &a4) == 1 || inet_pton(AF_INET6, host, &a6) == 1
+    }
+
+    /// The peer's address as a string, or nil when it is not an IP endpoint.
+    static func peerAddress(_ conn: NWConnection) -> String? {
+        guard case let .hostPort(host, _) = conn.endpoint else { return nil }
+        switch host {
+        case .ipv4(let a): return "\(a)"
+        case .ipv6(let a): return "\(a)".split(separator: "%").first.map(String.init)
+        case .name(let n, _): return n
+        @unknown default: return nil
+        }
+    }
+
+    /// Loopback (any form), the listed peers, or anyone when `peers` is nil.
+    public static func peerMayAct(_ address: String?, peers: Set<String>?) -> Bool {
+        guard let address else { return false }
+        if address.hasPrefix("127.") || address == "::1" || address.hasPrefix("::ffff:127.") { return true }
+        guard let peers else { return true }
+        return peers.contains(address) || (address.hasPrefix("::ffff:") && peers.contains(String(address.dropFirst(7))))
+    }
+
     private func readRequest(_ conn: NWConnection, buffer: Data) {
         conn.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [weak self] data, _, complete, error in
             guard let self else { return }
@@ -130,19 +187,37 @@ public final class MonitorServer: @unchecked Sendable {
         }
     }
 
+    /// Response head: no caching, no sniffing, no referrer, no framing, and for HTML a policy that keeps the page
+    /// to inline script/style and same-origin data and images (what the served pages use).
+    static func responseHead(_ status: String, _ type: String, _ length: Int) -> Data {
+        var h = "HTTP/1.1 \(status)\r\nContent-Type: \(type)\r\nContent-Length: \(length)\r\nCache-Control: no-store\r\n"
+        h += "X-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\n"
+        if type.hasPrefix("text/html") {
+            h += "Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'\r\n"
+        }
+        return Data((h + "Connection: close\r\n\r\n").utf8)
+    }
+
     private func respond(_ conn: NWConnection, requestHead: String) {
         let (method, target) = Self.requestLine(requestHead)
-        func header(_ status: String, _ type: String, _ length: Int) -> Data {
-            Data("HTTP/1.1 \(status)\r\nContent-Type: \(type)\r\nContent-Length: \(length)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".utf8)
+        let header = Self.responseHead
+        guard Self.hostIsAllowed(requestHead) else {
+            WireLog.shared.http("monitor ← \(method) \(target) 421 (Host is not an address)")
+            send(conn, header("421 Misdirected Request", "text/plain", 0)); return
         }
         let path = target.removingPercentEncoding ?? target
         let resp: Response
         if method == "POST" {
-            // Actions: POST + a custom header, so a page on another origin cannot trigger them (no CORS preflight passes).
-            let marked = requestHead.lowercased().contains("x-deckhand: action")
-            lock.lock(); let a = actionRoute; lock.unlock()
-            resp = marked ? (a(path) ?? Response("404 Not Found", type: "text/plain", body: Data("not found".utf8)))
-                          : Response("403 Forbidden", type: "text/plain", body: Data("actions need the X-Deckhand header".utf8))
+            // Actions: POST + a custom header, so a page on another origin cannot trigger them (no CORS preflight
+            // passes), and only from the paired bar (or this Mac) when the app has set the peers.
+            lock.lock(); let a = actionRoute, peers = actionPeers; lock.unlock()
+            if !Self.hasActionMarker(requestHead) {
+                resp = Response("403 Forbidden", type: "text/plain", body: Data("actions need the X-Deckhand header".utf8))
+            } else if !Self.peerMayAct(Self.peerAddress(conn), peers: peers) {
+                resp = Response("403 Forbidden", type: "text/plain", body: Data("actions are accepted from the paired bar only".utf8))
+            } else {
+                resp = a(path) ?? Response("404 Not Found", type: "text/plain", body: Data("not found".utf8))
+            }
         } else {
             guard method == "GET" || method == "HEAD" else { send(conn, header("405 Method Not Allowed", "text/plain", 0)); return }
             lock.lock(); let r = route; lock.unlock()
@@ -150,7 +225,7 @@ public final class MonitorServer: @unchecked Sendable {
         }
         if !target.hasSuffix(".json") { WireLog.shared.http("monitor ← \(method) \(target) \(resp.status)") }
         var out = header(resp.status, resp.type, resp.body.count)
-        if method == "GET" { out.append(resp.body) }
+        if method != "HEAD" { out.append(resp.body) }   // a POST reply carried a Content-Length but no body before 2026-11-04
         send(conn, out)
     }
 

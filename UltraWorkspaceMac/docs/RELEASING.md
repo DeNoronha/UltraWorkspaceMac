@@ -13,13 +13,13 @@ bash packaging/make-app.sh          # runs `swift build -c release` itself -> di
 bash packaging/make-dmg.sh          # calls make-app.sh release, then -> dist/Deckhand.dmg
 ```
 
-`make-dmg.sh` already rebuilds the app, so for a release the single `bash packaging/make-dmg.sh` is enough.
+`make-dmg.sh` already rebuilds the app, so for a release the single `bash packaging/make-dmg.sh` is enough. `make-app.sh` also copies `dist/bar-apps/*.apk` into the app bundle (`Contents/Resources/bar-apps/`), which is where the Apps page installs the bar apps from — build them first when they changed (`android/DeckhandMonitor/README.md`), or the release ships the old APKs.
 
 ## Cut a GitHub release
 
 ```sh
 git remote -v                        # upstream must show "DISABLED (push)"
-VER=0.1.0
+VER=0.2.1
 git tag -a "v$VER" -m "Deckhand v$VER"
 git push origin "v$VER"              # origin only
 gh release create "v$VER" dist/Deckhand.dmg \
@@ -32,7 +32,7 @@ gh release create "v$VER" dist/Deckhand.dmg \
 
 1. `packaging/make-app.sh` picks the first `Developer ID Application: …` identity from the keychain (`security find-identity`) and signs with `--options runtime --timestamp`; override with `DECKHAND_SIGN_IDENTITY="Developer ID Application: …"`, or force ad-hoc with `DECKHAND_SIGN_IDENTITY=-`.
 2. `packaging/make-dmg.sh` signs the DMG with the same identity and, when notary credentials exist under the keychain profile `deckhand-notary` (override with `DECKHAND_NOTARY_PROFILE`), runs `xcrun notarytool submit --wait`, staples the ticket and checks it with `spctl`. One-time setup: `xcrun notarytool store-credentials "deckhand-notary" --apple-id <apple-id> --team-id <TEAMID> --password <app-specific-password>`.
-3. Releases built this way install with no Gatekeeper warning; the DMG's "Read Me First" says so. Without the identity or the credentials the script says why it did not notarize.
+3. Releases built this way install with no Gatekeeper warning; the DMG's "Read Me First" says so (the text is chosen after the notarization decision, so it never claims a notarization that did not happen). Without the identity or the credentials the script says why it did not notarize; a DMG that Gatekeeper rejects after stapling aborts the build. v0.1.0 was ad-hoc signed; v0.2.0 was the first notarized release.
 
 Gotcha in these scripts: never pipe `codesign … | grep -q` under `pipefail` — SIGPIPE makes codesign exit 141 and the test silently fails.
 
@@ -40,4 +40,4 @@ Privacy usage descriptions to keep in mind for a signed build: local network (Co
 
 ## Versioning
 
-Bump `CFBundleShortVersionString` / `CFBundleVersion` in `packaging/Info.plist` before tagging. The About panel reads these at runtime.
+Bump `CFBundleShortVersionString` / `CFBundleVersion` in `packaging/Info.plist` before tagging. The About panel reads these at runtime. The bar apps have their own version: `versionCode` / `versionName` in `android/DeckhandMonitor/app/build.gradle.kts`, `AppModel.barAppsVersion` (what the Apps page compares the bar's copy against) and the `version` fields in `site/marketplace/registry.json` move together (1.7 / versionCode 8 today).

@@ -39,7 +39,7 @@ Deckhand talks to the CoreBar over **Wi-Fi / your LAN**, not over USB; the cable
 - **Auto-provision on upload** — if an image push is rejected with "module not found", the app provisions once and retries automatically.
 
 **VivoCube widgets**
-Each widget renders a 240 × 240 image on the Mac, which is encoded to the module pixel format and pushed over HTTP. Widgets can be published one at a time or rotated at a configurable interval (15 s – 3 min). Rotation follows the vendor's own model: all ticked widgets (max 6) go into **one** multi-layer package (layer *n* → widget `100+n`), uploaded once; after a 10 s settle the app switches layers by writing property 9 (`(layer<<16)|widget`) instead of re-flashing the cube each step, and re-uploads contents only every few minutes. The VivoCube page's **Maintenance** section has **Fix black screen** (screen on + layer 1 / widget 101, for the CoreBar's cached-state black screen), **Restart cube**, **Send test picture** (a 240 × 240 test pattern) and **Set cube Wi-Fi…**. Before every upload Deckhand reads the cube's Wi-Fi state (property 6: 0 not configured, 1 connected, 2 not connected, 3 connecting) and, while it is stuck at 3, re-writes the cube's own Wi-Fi settings (property 7) to complete the join; an upload answered with `reply error:4` or `:2` fails at once instead of retrying. Seven cards are offered for the cube (`Theme.library` in `Theme.swift`):
+Each widget renders a 240 × 240 image on the Mac, which is encoded to the module pixel format and pushed over HTTP. Widgets can be published one at a time or rotated at a configurable interval (15 s – 3 min). Rotation follows the vendor's own model: all ticked widgets (max 6) go into **one** multi-layer package (layer *n* → widget `100+n`), uploaded once; after a 10 s settle the app switches layers by writing property 9 (`(layer<<16)|widget`) instead of re-flashing the cube each step, and re-uploads contents only every few minutes. The VivoCube page's **Maintenance** section has a **Cube screen** on/off switch, **Fix black screen** (screen on + layer 1 / widget 101, for the CoreBar's cached-state black screen), **Send test picture** (a 240 × 240 test pattern), **Restart cube…**, **Restart bar launcher…** (over Wi-Fi ADB, for the launcher's upload-slot leak — see PROTOCOL.md) and **Set cube Wi-Fi…**. Before every upload Deckhand reads the cube's Wi-Fi state (property 6: 0 not configured, 1 connected, 2 not connected, 3 connecting) and, while it is stuck at 3, re-writes the cube's own Wi-Fi settings (property 7) to complete the join; an upload answered with `reply error:4` or `:2` fails at once instead of retrying. Seven cards are offered for the cube (`Theme.library` in `Theme.swift`):
 - **Weather** — Open-Meteo (free, no API key); current conditions only, no clock (a cube picture is refreshed every 5 minutes at most, so a clock would be stale). Location fallback order: macOS Location → the manual city/coordinates you entered → IP geolocation (ipwho.is).
 - **Music (album art)** — album art plus title/artist from Music.app.
 - **Claude Code monitor** — tokens today, plan, % of your daily budget, sessions, and sessions waiting for input, read from `~/.claude`.
@@ -49,7 +49,7 @@ Each widget renders a 240 × 240 image on the Mac, which is encoded to the modul
 **CoreBar big screen (1424 × 280)**
 - **Live link (Mac agent)** — a persistent connection answers the CoreBar's own questions (CPU, memory, storage, network, volume, PC_CONTROL button presses) so the device's native cards and KnobKey → volume work; see the status bar. Device-first: the CoreBar renders, the Mac supplies Mac-only data.
 - **CoreBar pages (works on hardware since 2026-11-01)**: the CoreBar page lists the bar's pages (`SCENE_DEPENDS_PROFILE` 30710), can switch between them (**Show**), and publishes a Deckhand page with `BATCH_SAVE_PROFILE` (1108). There is **no wallpaper / full-screen image page**: a page is a strip of the CoreBar's own cards, and Deckhand's image is only the clock card's cover (weather & date, refreshed hourly while Deckhand runs). The cards you can put on the page (`AppSettings.allCoreCards`): Clock, Weather (bar's own, needs an AccuWeather key), World clock, the five SenseCube readings (Temperature, Humidity, Light, Presence, Sound level), Mac CPU / memory / storage / network, Button: next cube card, Button: play / pause — plus one **Open \<app\>** card for every app installed on the bar (`GET_APP_LIST`; widget `{id: <package>, type: "APPS"}`). The Deckhand page is the bar's start page (`isDefault: true`) and is re-selected on every (re)connect. Publishing rewrites all pages on the device (the protocol has no read-back), so it asks first when something could be lost and re-sends the standard page. The one-shot `PREVIEW_SCREENSAVER` route was dropped: it is broken in the firmware (see PROTOCOL.md).
-- **KnobKey and DotKey** work while the Deckhand page is on the bar: knob turn → nothing for now (Mac volume lagged; to debug), knob press → play/pause in Music; DotKey 1 → previous cube card, 2 → next card, hold 3 → Standard page. The bindings are fixed today and are written with every page publish (see Controls).
+- **KnobKey and DotKey** work while the Deckhand page is on the bar: knob turn → Mac volume (answered from a CoreAudio cache, `MacAudio`), knob press → play/pause in Music; DotKey 1 → previous cube card, 2 → next card, hold 3 → Standard page. The bindings are fixed today and are written with every page publish (see Controls).
 - **Warning**: the official UltraWorkSpace app's *Deploy project* uploads its assets with a request that wipes the CoreBar's entire external files directory and replaces all profiles — anything Deckhand put there is gone. The two apps cannot co-own a CoreBar.
 
 **Image push**
@@ -68,12 +68,13 @@ Pick any image (or let a widget render one); it is encoded as an LVGL v8 image �
 Deckhand is a single window with a sidebar:
 
 - **Your CoreBar** at the top (menu: switch bars, **Add another CoreBar…**, **Find modules**, **Forget**). First run shows a connect flow (find → pair with a countdown → modules found automatically).
-- **Screens** — **CoreBar** (**Publish page** top-right; progress row first under the device strip; sections **Preview** — one screenful of 4 cards at a time with a pager —, **Cards on the bar** with **Add a card…**, **Pages on the bar**, **Maintenance**) and **VivoCube** (**Send to cube** top-right; sections **On the cube now**, **Cards on the cube** — up to 6 —, **Switching**, **Maintenance**).
-- **Controls** — **KnobKey**, **DotKey**: the bindings as they are written with every page publish.
+- **Screens** — **CoreBar** (**Publish page** top-right; progress row first under the device strip; sections **Preview** — one screenful at a time with a pager; about 5 single cards fit, the clock card takes two slots —, **Cards on the bar** with **Add a card…**, **Pages on the bar**, **Maintenance**) and **VivoCube** (**Send to cube** top-right; sections **On the cube now**, **Cards on the cube** — up to 6 —, **Switching**, **Maintenance**).
+- **Controls** — **KnobKey**, **DotKey**: the bindings as they are written with every page publish, and **Publish bindings**.
 - **Sensors** — **SenseCube** live readings.
-- **Library** — **Widgets** (three sections: **For the VivoCube**, **For the CoreBar**, **Apps on the bar**; preview + settings, "Add to the cube" / "Add to the CoreBar page"), **People**.
+- **Library** — four pages laid out alike (a list on the left, the chosen item with a switch and its settings on the right): **Installed** (everything in use on the bar and the screens, **Update** / **Remove**, **Update all**), **Widgets** (**For the VivoCube** and **For the CoreBar**; preview + settings; switches **On the cube** / **On the CoreBar page**), **Apps** (**Deckhand apps**, **Marketplace**, **Built into the firmware**; switch **Installed on the bar**, **Card on the CoreBar page**, the app's settings), **Screensavers** (switch **Installed on the bar**, **Use this screensaver**, the bar's screensaver timing) — plus **People**.
 - **Health** — **Status** (device truth, worst first, one button per problem, **Copy report**) and **Logs**.
-- Every device page carries a status strip (connected? what is the device showing? last sent? one fault + one fix). **Activity** (toolbar) shows Deckhand's own log.
+- **Deckhand** — **Settings** (the bar, **Bar screen**, **Debug bridge (ADB)**, connection help, what is set on the bar itself) and **About Deckhand**.
+- Every device page carries a status strip (what is the device showing? last sent? one fault + one fix). The toolbar shows Deckhand's last action, the link badge ("Connected · n requests answered") and the age of the bar's last request; **Activity** (toolbar) opens Deckhand's own log.
 
 ## Build & run
 
@@ -84,11 +85,13 @@ cd UltraWorkspaceMac
 swift build                               # compile everything
 swift run UltraWorkspaceApp               # run from the build tree (development)
 
-bash packaging/make-app.sh release        # produces dist/Deckhand.app
+bash packaging/make-app.sh release        # produces dist/Deckhand.app (and bundles dist/bar-apps/*.apk when present)
 open dist/Deckhand.app
 
-bash packaging/make-dmg.sh                # produces dist/Deckhand.dmg (app + Applications shortcut + manual)
+bash packaging/make-dmg.sh                # produces dist/Deckhand.dmg (app + Applications shortcut + manual); signs and notarizes when the identity and credentials exist
 ```
+
+The bar apps' APKs come from the Android project (`android/DeckhandMonitor/README.md`); `make-app.sh` copies whatever is in `dist/bar-apps/` into the app bundle, and the Apps page installs them from there.
 
 First launch: press **Look for CoreBars**, then **Pair** next to your CoreBar and tap *Approve* on the CoreBar within 30 seconds. macOS may ask once for **Local Network** permission — allow it.
 
@@ -109,7 +112,7 @@ cd mock-corebar && npm install && npm run dev     # or: docker compose up --buil
 
 ## Limitations
 
-- **Signing depends on the build machine.** `packaging/make-app.sh` signs with a Developer ID Application identity (hardened runtime) when one is in the keychain and `make-dmg.sh` notarizes and staples the DMG (see `docs/RELEASING.md`); without the identity the app is ad-hoc signed and the first launch needs the right-click → Open gesture (see the manual). The first prerelease (v0.1.0) was ad-hoc signed.
+- **Signing depends on the build machine.** `packaging/make-app.sh` signs with a Developer ID Application identity (hardened runtime) when one is in the keychain and `make-dmg.sh` notarizes and staples the DMG (see `docs/RELEASING.md`); without the identity the app is ad-hoc signed and the first launch needs the right-click → Open gesture (see the manual). The first prerelease (v0.1.0) was ad-hoc signed; v0.2.0 and later are signed with a Developer ID and notarized.
 - **Token stored in a file, not the Keychain.** An ad-hoc-signed development build gets a new code signature on every rebuild, which makes the Keychain re-prompt for the login password on every launch. Storing the token in a `0600` file under `~/Library/Application Support/UltraWorkspaceMac/tokens/` avoids that friction. For the notarized release this could move back to the Keychain.
 
 ## Network endpoints this app contacts
@@ -119,7 +122,11 @@ Deckhand talks to the following hosts and nothing else (no telemetry, no account
 - **Your CoreBar on the LAN** — UDP 5319 (discovery), TCP 7431 (TLS control), TCP 8080 (HTTP upload).
 - `api.open-meteo.com` and `geocoding-api.open-meteo.com` — weather and city lookup (Weather widget).
 - `ipwho.is` — approximate location from your public IP, only when macOS Location is unavailable and no manual city is set.
-- `api.coingecko.com` — prices and today's chart for the coins you pick, up to five (Crypto widget).
+- `api.coingecko.com` — prices and today's chart for the coins you pick, up to five (Crypto widget and bar app).
+- `gatewayssl.dev.aiks360.com` — the vendor's app and screensaver catalogue, read when the Apps, Screensavers or Installed page refreshes (the bar downloads the packages itself).
+- Only while **Serve the pages from this Mac** is on (Apps page), for the bar apps: `api.adsb.lol` and `api.adsbdb.com` (Flights), `tile.openstreetmap.org` (the Flights map, darkened and cached on the Mac), `lite.cnn.com` or the RSS feed of the chosen source — BBC, New York Times, The Guardian, NOS, NU.nl — (Headlines), `bible-api.com` (Verse), `api.linear.app` (Tasks, with your personal API key).
+- Inbound, only while that switch is on: the Mac serves the bar apps' pages on TCP 7432 (plain HTTP, LAN only; GET and HEAD, plus a few actions over POST that require the `X-Deckhand: action` header — Music transport, Tasks Done) and sends a UDP beacon on port 5320 every 5 s so the apps find it.
+- With Wi-Fi ADB on (optional): the local `adb` talks to the bar on TCP 5555 for app installs, the presence-aware screen and the launcher restart.
 
 Teams / FaceTime / Mail actions on the People page open deep links in the respective apps; Deckhand itself makes no request to those services.
 
@@ -136,9 +143,11 @@ Teams / FaceTime / Mail actions on the People page open deep links in the respec
   - `DeployPackager` — ustar + gzip multi-layer package builder.
   - `ZipWriter` — minimal zip writer for the big-screen `/upload/zip` route.
   - `Store` — file-based token store plus per-CoreBar metadata (cert pin, last IP) and the gateway-endpoint cache, all in Application Support.
-  - `OpenMeteo`, `SystemStats`, `NetworkStats`, `ClaudeUsage` — data sources for the widgets.
-  - `WireLog` — captures all Mac↔CoreBar protocol traffic for diagnostics (token, Wi-Fi password and API key redacted; 5 MB cap).
-- `Sources/UltraWorkspaceApp` — the SwiftUI app: `AppModel` and its extensions (`+Claude`, `+Doctor`, `+Link`, `+Music`, `+Pages`, `+Themes`, `+VivoWiFi`, `+Weather` — the last one is only `resolveWeather`; there is no weather/music auto-push), `AppSettings` (per-device card lists, `allCoreCards`), `ContentView` (window + connect flow), `SidebarView`, `Nav`, `DeviceStrip`, `Progress`, the pages `CoreBarPageView`, `VivoCubeView`, `ControlsViews`, `SenseCubeView`, `WidgetsView`, `PeopleView`, `StatusView`, `LogsView`, `SettingsView`, `AboutView`, and `WeatherPreview`. `Theme` is the cube card registry (`library` = the seven cards offered; the retired live-feed cases stay so saved settings still decode).
+  - `CoreBarSession+Apps`, `CoreBarSession+Screensaver` — the bar's app store (act 30600: status / install / uninstall) and the screensaver setting (30740/30741 `BASE_SET`).
+  - `MonitorServer` — the small HTTP server on :7432 behind the bar apps (GET/HEAD for pages and data, POST with the `X-Deckhand: action` header for the few actions, request deadline, nothing on disk served) and `MonitorBeacon` (UDP 5320).
+  - `OpenMeteo`, `SystemStats`, `NetworkStats`, `ClaudeUsage`, `Flights`, `SkyMath`, `NewsFeed`, `DailyVerse`, `LinearTasks` — data sources for the widgets and the bar apps.
+  - `WireLog` — captures all Mac↔CoreBar protocol traffic for diagnostics (token, session tokens, Wi-Fi password and API key redacted regardless of key order; `0600` file, 5 MB cap).
+- `Sources/UltraWorkspaceApp` — the SwiftUI app: `AppModel` and its extensions (`+Adb`, `+Apps`, `+Claude`, `+Doctor`, `+Link`, `+Monitor`, `+Music`, `+Pages`, `+Presence`, `+Screensaver`, `+Themes`, `+VivoWiFi`, `+Weather` — the last one is the one cached location resolver plus `resolveWeather`; there is no weather/music auto-push), `AppSettings` (per-device card lists, `allCoreCards`, bar-app settings), `BarPages` (the eleven bar-app pages, their feeds and the POST actions), `BarAppStore` (the vendor catalogue), `MacAudio` (CoreAudio volume for the KnobKey), `MapTiles` (dark OpenStreetMap tiles for Flights), `ContentView` (window, toolbar + connect flow), `SidebarView`, `Nav`, `DeviceStrip`, `Progress`, `LibraryKit` (the pieces the four library pages share), the pages `CoreBarPageView`, `VivoCubeView`, `ControlsViews`, `SenseCubeView`, `InstalledView`, `WidgetsView`, `AppsView`, `ScreensaversView`, `PeopleView`, `StatusView`, `LogsView`, `SettingsView`, `AboutView`, and `WeatherPreview`. `Theme` is the cube card registry (`library` = the seven cards offered; the retired live-feed cases stay so saved settings still decode).
   - `Widgets/` — the per-card renderers (`*Card`) and their data sources (`*Stats` / `*Source`): `WeatherCard`, `NowPlayingCard`, `StatCard` (Claude Code monitor), `CalendarCard` + `CalendarSource`, `CryptoCoinCard` + `CryptoStats`, `DateCard`; `CardKit` is the one bitmap contract (`draw(width:height:)`, context, text and symbol helpers) every card renders through.
   - `Integrations/` — `AppleMusic` (Music.app transport + now-playing), `MacLocation` (CoreLocation), `People` (contacts + deep links).
 - `Sources/kitcheck` — a command-line test tool built from the same `UltraBarKit`:
@@ -146,7 +155,7 @@ Teams / FaceTime / Mail actions on the People page open deep links in the respec
   - `.build/debug/kitcheck discover` — an 8 s UDP scan from the terminal.
   - `.build/debug/kitcheck weather <city>` — geocode + current weather via Open-Meteo.
   - `.build/debug/kitcheck e2e [ip]` — end-to-end test against a CoreBar, the mock at `127.0.0.1` by default: unicast probe, pairing, TOFU pin plus mismatch rejection, module scan (4 modules), provision merge, SenseCube readings (23.5 °C / 54 % / 473 lux), cube Wi-Fi read/write, 240 × 240 image decode and orientation, multi-layer package + property-9 layer switch, big-screen zip + preview, and an unknown act. Takes about 25 s; exits non-zero on failure.
-  - Against a paired bar (the stored token is reused): `linkwatch <ip> <serial> [seconds] [noreply]` prints every push, `switchpage <ip> <serial> <pageId>`, `cubewifi <ip> <serial> <moduleSerial> <ssid> [password]`, `readprop` / `writeprop` for one module property, `upload1` for a single `/upload` POST without retries, `raw <ip> <serial> <act> <json-file>` for any request, `apps <ip> <serial>` lists the bar's installed apps, and `app <ip> <serial> status|install|uninstall <package>` drives the bar's app store (act 30600).
+  - Against a paired bar (the stored token is reused): `linkwatch <ip> <serial> [seconds] [noreply]` prints every push, `switchpage <ip> <serial> <pageId>`, `cubewifi <ip> <serial> <moduleSerial> <ssid> [password]`, `readprop` / `writeprop` for one module property, `upload1` for a single `/upload` POST without retries, `raw <ip> <serial> <act> <json-file>` for any request, `modules <ip> <serial>` runs the module scan, `page <ip> <serial> <pageId>` and `switchpage` switch pages, `apps <ip> <serial>` lists the bar's installed apps, and `app <ip> <serial> status|install|uninstall <package>` drives the bar's app store (act 30600).
 - `mock-corebar/` — the Node/TypeScript CoreBar emulator (see above).
 - `packaging/` — `make-app.sh`, `make-dmg.sh`, `Info.plist`, app icon.
 - `api/` — machine-readable protocol specs (OpenAPI for `:8080`, AsyncAPI for `:7431`).
@@ -174,16 +183,17 @@ Mirrors [`docs/ROADMAP.md`](docs/ROADMAP.md); that file is authoritative.
 - Discovery, pairing, TOFU pinning, live bus scan + provisioning with the asleep-module cache, seven VivoCube cards with per-device switching using the vendor's layer model (one package, property-9 switching), Fix black screen, test picture, cube Wi-Fi setup.
 - **SenseCube** temperature / humidity / light, live on the SenseCube page; all five readings as cards on the bar.
 - **CoreBar pages** via `BATCH_SAVE_PROFILE` (1108): list / switch / publish a Deckhand page made of the bar's own cards (SenseCube, Mac stats, buttons, Open \<app\>) with our image as the clock-card cover; the Deckhand page is the bar's start page — confirmed on hardware.
-- The persistent **`PUSH_MESSAGE` (1000000)** link: Mac stats for the bar's cards, **KnobKey → volume / mute**, **DotKey → cube cards and pages** (fixed bindings, written with every publish).
+- The persistent **`PUSH_MESSAGE` (1000000)** link: Mac stats for the bar's cards, **KnobKey → Mac volume (turn) and play/pause (press)**, **DotKey → cube cards and pages** (fixed bindings, written with every publish).
+- **Full-width pages on the bar** (`android/DeckhandMonitor`, eleven flavors, bar apps 1.7, 2026-11-04) — Monitor, Claude, Crypto, Weather, Music, Calendar, Flights, Sun & Moon, Headlines, Verse and Tasks: tiny Android kiosk apps (one card each) that show full-width live pages served by Deckhand (`BarPages`, `MonitorServer` :7432). They find Deckhand through a UDP beacon on port 5320 (broadcast + unicast) and only load pages on a private LAN address; the Apps page installs them over Wi-Fi ADB.
+- **Library pages** (Installed / Widgets / Apps / Screensavers), marketplace apps and screensavers installed, updated and removed from Deckhand, **Settings → Debug bridge** (Wi-Fi ADB status, turn on over USB, keep on after reboots), the **presence-aware bar screen** (Settings → Bar screen, over ADB: on while the SenseCube sees someone, off after N minutes without anyone).
+- A Developer-ID signed and notarized release (v0.2.0).
 
 **Pending**
 - **Custom KnobKey / DotKey bindings** — today they are fixed; a per-key action editor is planned.
-- **Full-width pages on the bar** (`android/DeckhandMonitor`, six flavors, 2026-11-04) — Monitor, Claude, Crypto, Weather, Music and Calendar: tiny Android kiosk apps (one card each) that show full-width live pages served by Deckhand (`BarPages`, `MonitorServer` :7432). They find Deckhand through a UDP beacon on port 5320 (broadcast + unicast); Settings installs them over ADB.
-- **Presence-aware bar screen** (Settings → Bar screen, 2026-11-04) — over ADB, because the protocol cannot wake the screen: on while the SenseCube sees someone, off after N minutes without anyone.
 - **Presence → wake** via an on-device scene (`BATCH_CREATE_SCENE`) — understood, not implemented.
 - **Module OTA firmware flashing** (`UBX-OTA-FILE` `.bin`, `MODULE_OAT_START` / `DATA` — framing fully specified in `PROTOCOL.md`).
 - ~~VivoCube panel size~~ — resolved: the panel is 240 × 240 (hardware test 2026-11-01).
-- A Stream-Deck-style **widget marketplace** (web/TypeScript widget format, see `docs/WIDGETS.md`), and a notarized / Developer-ID signed release.
+- The next phase of the **OpenBarX marketplace**: installing community apps straight from Deckhand with version checks, and the web/TypeScript widget format (see `docs/WIDGETS.md`).
 
 ## Ecosystem features (reference / backlog)
 

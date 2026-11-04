@@ -62,6 +62,7 @@ final class ContactStore: ObservableObject {
     func save() {
         if let data = try? JSONEncoder().encode(contacts) {
             try? data.write(to: url, options: .atomic)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)   // personal data: user-only
         }
     }
 

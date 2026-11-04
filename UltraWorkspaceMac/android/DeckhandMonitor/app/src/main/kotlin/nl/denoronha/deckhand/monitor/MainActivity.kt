@@ -368,7 +368,9 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
     /**
      * v2 beacons carry `base` (Deckhand's http root): open base + "/" + [BuildConfig.PAGE].
      * v1 beacons only carry `url`: open that as-is. The result must be a LAN http(s) URL
-     * (see [isLocalHttpUrl]); anything else, from whoever sent it, is dropped.
+     * (see [isLocalHttpUrl]) whose host is the address the beacon came from: Deckhand always
+     * names its own address, so a beacon that points elsewhere was not sent by Deckhand and is
+     * dropped, instead of letting any host on the Wi-Fi put its own page on the bar.
      */
     private fun parseBeacon(text: String, from: InetAddress?): String? = try {
         val json = JSONObject(text.trim())
@@ -376,8 +378,9 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
         else {
             val base = json.optString("base").trimEnd('/')
             val url = if (base.isHttp()) "$base/${BuildConfig.PAGE}" else json.optString("url")
-            url.takeIf { isLocalHttpUrl(it) }.also {
-                if (it == null) Log.w(TAG, "Ignoring beacon from $from with a non-LAN url")
+            val sender = from?.hostAddress
+            url.takeIf { isLocalHttpUrl(it) && sender != null && Uri.parse(it).host == sender }.also {
+                if (it == null) Log.w(TAG, "Ignoring beacon from $from: not a LAN url of the sender")
             }
         }
     } catch (_: Exception) {

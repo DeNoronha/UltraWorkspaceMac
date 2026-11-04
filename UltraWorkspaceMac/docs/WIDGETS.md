@@ -8,7 +8,7 @@ Each built-in widget is a tiny, self-contained Swift renderer in `Sources/UltraW
 
 - A renderer `enum XxxCard` with a `static func render(... size: Int) -> [UInt8]?` (the weather card takes `width:height:` because it also draws the 480 × 480 clock cover) that returns row-major RGBA8888 (premultiplied, drawn with CoreGraphics/AppKit) through `CardKit.draw(width:height:)` — the one bitmap contract, with the shared text/symbol/gradient helpers.
 - An optional data source `XxxStats` / `XxxSource` (a small `Sendable` type that samples system/network/API data).
-- Registration: a case in `Theme` (title + SF Symbol), a branch in `AppModel.renderTheme` (`AppModel+Themes.swift`), and a settings/preview block in `WidgetsView`.
+- Registration: a case in `Theme` (title + SF Symbol), a branch in `AppModel.renderTheme` (`AppModel+Themes.swift`), a blurb in `WidgetsView`, and a settings panel in `AddonSettingsPanel` (`WidgetsView.swift`; the Apps page shows the same panel for a bar app that mirrors the card, such as Weather or Crypto).
 
 Deckhand converts the RGBA to the device format: an LVGL v8 image (RGB565, **opaque by default** — `DeviceImage.encode(allowAlpha:)` is opt-in because the vendor encoder expects straight, not premultiplied, alpha) inside a tar/gzip layer package for a VivoCube module, or an ordinary PNG for the CoreBar screen (uploaded as `deckhand/cover.png` in a zip under `subDir=deckhand` and referenced as the TIME card's cover).
 

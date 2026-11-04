@@ -584,13 +584,17 @@ public struct CoreBarSession: Sendable {
             guard let pkg = (d["packageName"] as? String) ?? (d["application"] as? String) else { return nil }
             let cfg = d["config"] as? [String: Any] ?? [:]
             let port = (cfg["port"] as? Int) ?? (d["port"] as? Int)
+            // The icon URL is loaded by the app's image views: only a web URL, never file:// or another scheme the bar picks.
+            let icon = ((d["iconUrl"] as? String) ?? (d["icon"] as? String)).flatMap { u -> String? in
+                let l = u.lowercased(); return l.hasPrefix("http://") || l.hasPrefix("https://") ? u : nil
+            }
             return AppInfo(packageName: pkg, appName: (d["appName"] as? String) ?? pkg,
                            versionName: (d["versionName"] as? String) ?? "",
                            // fastjson names Java `isXxx` booleans without the prefix: `screensaver`, `config`.
                            systemApp: b(d, "systemApp"), allowProfile: b(d, "allowProfile"), isScreensaver: b(d, "isScreensaver") || b(d, "screensaver"),
                            port: (port ?? 0) > 0 ? port : nil,
                            sessionToken: (cfg["sessionToken"] as? String) ?? (d["sessionToken"] as? String),
-                           iconUrl: (d["iconUrl"] as? String) ?? (d["icon"] as? String))
+                           iconUrl: icon)
         }
     }
 
@@ -703,7 +707,9 @@ public struct CoreBarSession: Sendable {
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(serial).tgz\"\r\n".data(using: .utf8)!)
+        // The serial comes from a discovery reply; only plain characters may reach the multipart header.
+        let fileName = serial.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName).tgz\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: application/gzip\r\n\r\n".data(using: .utf8)!)
         body.append(tgz)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)

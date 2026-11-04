@@ -126,7 +126,8 @@ extension AppModel {
             // push these; opening an arbitrary path is code execution. Deckhand's own pages never
             // emit them, so they are refused outright (SECURITY.md).
             say("CoreBar requested “\(action)” — not executed (Deckhand does not open files, start apps, type or run commands on the bar's behalf).")
-            WireLog.shared.event("PC_CONTROL \(action) refused: \(params)")
+            // Only the parameter names: an `inputText` the bar wanted typed could be anything, and the log is kept.
+            WireLog.shared.event("PC_CONTROL \(action) refused (params: \(params.keys.sorted().joined(separator: ",")))")
         default:
             say("CoreBar sent PC_CONTROL \(p.keys.sorted().joined(separator: ",")) — ignored.")
         }
