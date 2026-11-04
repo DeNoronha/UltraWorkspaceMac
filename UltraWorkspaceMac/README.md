@@ -279,3 +279,7 @@ Physical, device-level facts: ABS+PC shell, N52 magnetic cores, 0.3 s magnetic r
 ## License
 
 See the repository `LICENSE`.
+
+## Credits
+
+- The bar-app launcher icons use 3D assets from Microsoft's [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) set, MIT licence (copies and attribution in `android/DeckhandMonitor/tools/fluent/SOURCES.md`).
