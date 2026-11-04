@@ -131,7 +131,12 @@ final class BarPages {
                     }
                     self.flights = ["aircraft": out, "radius": Int(radius), "place": loc.name, "lat": loc.lat, "lon": loc.lon, "at": Int(Date().timeIntervalSince1970)]
                 }
-                try? await Task.sleep(nanoseconds: (open ? 10 : 120) * 1_000_000_000)
+                // 10 s while the page is open; otherwise 2 min, but wake up within 5 s of the page being opened.
+                for _ in 0..<(open ? 2 : 24) {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    if Task.isCancelled { return }
+                    if !open, let t = self.lastHit["flights"], Date().timeIntervalSince(t) < 10 { break }
+                }
             }
         })
         tasks.append(Task { [weak self] in   // sun & moon: every minute, computed locally
@@ -471,6 +476,7 @@ final class BarPages {
           g.fillStyle='#fff'; g.beginPath(); g.arc(cx,cy,4,0,7); g.fill();
           txt('N',cx,cy-rr0+16,12,'#c7cdd8','center','600'); txt(R+' km',cx+rr0-6,cy-6,11,'#9aa3b2','right');
           if(hasMap) txt('© OpenStreetMap',cx,cy+rr0-6,9,'rgba(255,255,255,.5)','center');
+          if(d.at){ const age=Math.max(0,Math.round(Date.now()/1000-d.at)); txt(age<15?'live':ago(age)+' old',cx-rr0+8,cy-6,11,age<30?'#4ade80':'#fbbf24','left','600'); }
           // every aircraft in the circle: the shown ones in their colour with the flight number, the rest grey
           ac.forEach(a=>{ if(a.km>R) return; const i=show.indexOf(a), col=i>=0?COLS[i]:'#8b94a6';
             const rad=a.bearing*Math.PI/180, dd=Math.min(1,a.km/R)*rr0, px=cx+Math.sin(rad)*dd, py=cy-Math.cos(rad)*dd;
