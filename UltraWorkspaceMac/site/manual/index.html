@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deckhand manual · OpenBarX</title>
+<meta name="description" content="The Deckhand user manual: install, connect the UltraBar X, pages on the CoreBar, cards on the VivoCube, bindings, apps, troubleshooting.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,700;0,6..12,900&family=JetBrains+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="../" aria-label="OpenBarX home">
+      <span class="name">OpenBar<i>X</i></span>
+      <span class="tag">Deckhand for macOS</span>
+    </a>
+    <nav class="nav" aria-label="Site">
+      <a href="../deckhand/">Deckhand</a>
+      <a href="../bar-apps/">Bar apps</a>
+      <a href="../marketplace/">Marketplace</a>
+      <a href="./" aria-current="page">Manual</a>
+      <a href="https://github.com/DeNoronha/UltraWorkspaceMac">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero hero-compact">
+    <div class="container">
+      <p class="eyebrow">Manual <span class="sep">·</span> Deckhand 0.1</p>
+      <h1>How to use Deckhand.</h1>
+      <p class="lede">The same text ships inside the repository as <a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/MANUAL.md">MANUAL.md</a>; this page is generated from it. Something missing or wrong? <a href="https://github.com/DeNoronha/UltraWorkspaceMac/issues">Open an issue</a>.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container manual-grid">
+      <nav class="toc" aria-label="Contents">
+        <p class="eyebrow">Contents</p>
+        <ol>
+          <li><a href="#1-install">1. Install</a></li>
+          <li><a href="#2-connect-the-hardware">2. Connect the hardware</a></li>
+          <li><a href="#3-connect-your-corebar">3. Connect your CoreBar</a></li>
+          <li><a href="#4-modules--wake-them-before-looking">4. Modules — wake them before looking</a></li>
+          <li><a href="#5-using-the-app">5. Using the app</a></li>
+          <li><a href="#6-weather">6. Weather</a></li>
+          <li><a href="#7-troubleshooting">7. Troubleshooting</a></li>
+          <li><a href="#8-whats-next-roadmap">8. What's next (roadmap)</a></li>
+        </ol>
+      </nav>
+      <article class="prose">
+<p>Deckhand is an independent, community macOS app for Sanytron <strong>UltraBar X</strong> hardware (CoreBar + QuantumLink modules: VivoCube, SenseCube, KnobKey, DotKey, PC-Boot card). Not affiliated with or endorsed by Sanytron. The vendor's product page, with photos of the bar and each module, is at <a href="https://www.sanytron.com/products/ultrabar-x-the-modular-desktop-command-center">https://www.sanytron.com/products/ultrabar-x-the-modular-desktop-command-center</a>.</p>
+<hr />
+<h2 id="1-install">1. Install</h2>
+<ol type="1">
+<li>Open <strong>Deckhand.dmg</strong> and drag <strong>Deckhand</strong> onto the <strong>Applications</strong> folder.</li>
+<li>A notarized build (the DMG's "Read Me First" says so) opens like any other app. An ad-hoc-signed build — the first prerelease, or one you built yourself without a Developer ID — is blocked by macOS on the first launch. To open it the first time:
+<ul>
+<li>In <strong>Applications</strong>, <strong>right-click</strong> (Control-click) <strong>Deckhand</strong> → <strong>Open</strong> → <strong>Open</strong> in the dialog.</li>
+<li>If that doesn't offer "Open": <strong>System Settings → Privacy &amp; Security</strong>, scroll down, and click <strong>Open Anyway</strong> next to Deckhand.</li>
+<li>You only do this once.</li>
+</ul></li>
+<li>On first scan macOS asks for <strong>Local Network</strong> permission — click <strong>Allow</strong> (the app can't find the CoreBar otherwise). On first use of the Music controls (Widgets → Music) it asks for <strong>Automation</strong> permission to control Music — click <strong>OK</strong>. The Calendar widget asks for <strong>Calendar</strong> access the first time you enable it.</li>
+</ol>
+<p>Deckhand runs on macOS 13 or later. On macOS 26 and later it uses the system's Liquid Glass styling; on older versions it looks like a standard macOS app.</p>
+<hr />
+<h2 id="2-connect-the-hardware">2. Connect the hardware</h2>
+<h3 id="power--the-usb-cable--read-this-first">Power &amp; the USB cable — read this first</h3>
+<p>The CoreBar has <strong>two</strong> USB ports. They are not interchangeable:</p>
+<table>
+<thead>
+<tr>
+<th>Port</th>
+<th>Use it for</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>USB-OTG</strong></td>
+<td><strong>Power / charging</strong> — a fast charger (PD / QC, 9–20 V) or the 12 V adapter.</td>
+<td>Fast charging is OK here.</td>
+</tr>
+<tr>
+<td><strong>PC-LINK</strong></td>
+<td><strong>Connecting to your computer</strong> (and 5 V power from the computer).</td>
+<td><strong>5 V only.</strong> A computer's USB port or a plain 5 V adapter.</td>
+</tr>
+</tbody>
+</table>
+<blockquote class="warn">
+<p>⚠️ <strong>Never plug a phone/MacBook/laptop PD fast-charger into PC-LINK.</strong> PC-LINK is 5 V-only; a 9–20 V charger will permanently damage the mainboard and can overheat. Connecting PC-LINK to a <strong>computer USB port is safe and correct</strong> — that's what it's for. A computer port supplies 5 V and never forces higher voltage into a device.</p>
+</blockquote>
+<p>So: <strong>CoreBar PC-LINK → your Mac's USB port</strong> is the right, safe connection. Leave it on PC-LINK; don't move it to USB-OTG for the Mac link.</p>
+<h3 id="network-how-the-app-actually-talks-to-the-corebar">Network (how the app actually talks to the CoreBar)</h3>
+<p>Deckhand controls the CoreBar over <strong>Wi-Fi / your local network</strong>, not over the USB cable. Make sure:</p>
+<ul>
+<li>The CoreBar is connected to the <strong>same Wi-Fi / LAN</strong> as your Mac (check the CoreBar: <strong>Control Center → Wi-Fi</strong>).</li>
+<li>The USB cable can stay connected for power, but discovery and control run over the network.</li>
+</ul>
+<p>The same guidance is shown in the app under <strong>Settings → Connecting</strong>.</p>
+<hr />
+<h2 id="3-connect-your-corebar">3. Connect your CoreBar</h2>
+<p>The first time, Deckhand shows <strong>Connect your UltraBar</strong>:</p>
+<ol type="1">
+<li><strong>Find the bar</strong> — Deckhand looks on your network for about 8 seconds (a progress bar shows it). Your bar appears with a <strong>Pair</strong> button. macOS asks for <em>Local Network</em> access the first time; if you declined, use <strong>Local Network permission…</strong> to allow it. Can't see the bar (other subnet, VPN)? <strong>Connect by address…</strong> takes its IP address (shown on the bar under Settings → Network).</li>
+<li><strong>Approve on the bar</strong> — press <strong>Pair</strong>; the bar shows an Approve button for 30 seconds (Deckhand shows the countdown). Tap it.</li>
+<li>Deckhand then finds the modules on its own and opens the <strong>CoreBar</strong>.</li>
+</ol>
+<p>The pairing key is stored in a protected, user-only file in Application Support, and the bar's certificate is pinned, so an impostor on the network can't reuse your key. The paired bar is shown at the top of the sidebar; its menu has <strong>Add another CoreBar…</strong>, <strong>Find modules</strong> and <strong>Forget this CoreBar…</strong>.</p>
+<hr />
+<h2 id="4-modules--wake-them-before-looking">4. Modules — wake them before looking</h2>
+<p><strong>Tap the bar's screen and press a DotKey key before you press Find modules.</strong> Finding modules is a live scan of the magnetic bus, and a module that has gone to sleep — usually the <strong>DotKey</strong> — can be missed. Deckhand remembers every module it has ever seen on your bar and keeps it in the bar's configuration, so a one-time sleep won't drop a module; a scan with everything awake just gives the most reliable result.</p>
+<p><strong>Find modules</strong> is in the bar's menu (top of the sidebar), under <strong>Maintenance</strong> on the CoreBar page, and in the sidebar when no modules are known yet. The scan takes about 16 seconds and also registers the modules on the bar so they can be controlled. A module that did not answer is marked <em>asleep</em> in the sidebar.</p>
+<hr />
+<h2 id="5-using-the-app">5. Using the app</h2>
+<p>One window, a sidebar on the left, grouped by what you want to change:</p>
+<ul>
+<li><strong>Screens</strong> — <strong>CoreBar</strong> (the strip on the bar) and <strong>VivoCube</strong> (the small square screen module).</li>
+<li><strong>Controls</strong> — <strong>KnobKey</strong>, <strong>DotKey</strong>: what the knob and keys do.</li>
+<li><strong>Sensors</strong> — <strong>SenseCube</strong>.</li>
+<li><strong>Library</strong> — <strong>Widgets</strong> (the cards Deckhand can draw) and <strong>People</strong>.</li>
+<li><strong>Health</strong> — <strong>Status</strong> and <strong>Logs</strong>.</li>
+</ul>
+<p>Every device page starts with a <strong>status strip</strong>: whether Deckhand is connected and answering the bar, what the device is showing right now (read back from the device, not assumed), when something was last sent, and — only when something is wrong — one sentence and one button that fixes it ("The cube is not on Wi-Fi — Set cube Wi-Fi…", "The cube's screen is off — Turn on", "The Deckhand page is gone from the bar — Publish page"). The <strong>Activity</strong> list (toolbar button) shows what Deckhand did; the strip shows what the device <em>is</em>.</p>
+<h3 id="corebar">CoreBar</h3>
+<p>The bar's big screen shows a page: a row of the bar's own cards. About four fit; more scroll sideways. There is no full-screen picture — Deckhand's own picture (weather &amp; date, free, refreshed hourly) is the <strong>Clock</strong> card's picture.</p>
+<ul>
+<li><strong>Preview</strong> — drawn from your card list, one screenful (four cards) at a time; ◀ ▶ step through the screenfuls the bar scrolls sideways through. It is not read back from the bar.</li>
+<li><strong>Cards on the bar</strong> — drag to reorder, ✕ to remove, <strong>Add a card…</strong> below the list. ⌁ marks cards fed live by this Mac (CPU, memory, storage, network, the two buttons): they update only while Deckhand runs; the others keep running when the Mac is off.</li>
+<li><strong>Weather (bar's own)</strong> is drawn by the bar from <strong>AccuWeather, which is not free</strong> (14-day trial, paid afterwards). Press <strong>Key…</strong> on that row to paste the key; it is sent to the bar with the next publish. Deckhand's own weather on the Clock card costs nothing.</li>
+<li><strong>Publish page</strong> (⌘↩︎) — draws the clock picture, uploads the button icons, writes the pages and shows the Deckhand page; the steps are shown under the button. Deckhand asks for confirmation only when it matters: the first time, or when the bar has pages made in the official app (those would be removed — the bar cannot send pages back). The knob and keys get their bindings with every publish (see Controls).</li>
+<li><strong>Start page</strong> — publishing marks the Deckhand page as the bar's start page, so the bar boots into it; Deckhand also selects it again every time it (re)connects to the bar. Use <strong>Show</strong> in <em>Pages on the bar</em> to switch to Standard Mode for a moment.</li>
+<li><strong>Pages on the bar</strong> / <strong>Maintenance</strong> — the page list, <strong>Find modules</strong>, <strong>Re-read pages</strong>, <strong>Redraw preview</strong>. The official app's Deploy removes Deckhand's pictures; publish again afterwards.</li>
+</ul>
+<h3 id="vivocube">VivoCube</h3>
+<p>Shows one card at a time.</p>
+<ul>
+<li><strong>On the cube now</strong> — the card the cube <em>reports</em> it is on, with the picture Deckhand sent for it, "Card 2 of 4" and ◀ ▶ to step through them from the Mac (the DotKey and the bar's button do the same on the device). A dark picture with "Screen off" means the screen is off; an orange Wi-Fi note means the cube is not connected and may still show an old picture.</li>
+<li><strong>Cards on the cube</strong> — an ordered list of up to 6 cards: drag to reorder, ✕ to remove, <strong>Add a card…</strong> to add (the <strong>Picture</strong> card asks for an image file). The order here is the order on the cube.</li>
+<li><strong>Switching</strong> — <strong>Stay on one card</strong>, <strong>Switch every</strong> 15 s / 30 s / 1 min / 3 min (a timer on this Mac; Deckhand must be open), or <strong>Only with the DotKey or the bar's button</strong>.</li>
+<li><strong>Send to cube</strong> (⌘↩︎) — draws the cards, uploads them as one package, waits about 10 seconds for the cube to apply it and shows card 1. The steps appear under the button; a failure is one sentence with the next thing to do. The cards' contents are redrawn every few minutes while timed switching runs.</li>
+<li><strong>Maintenance</strong> — <strong>Cube screen</strong> switch (off stays off until you turn it on), <strong>Fix black screen</strong> (screen on + card 1; use it when the cube shows black after a reboot), <strong>Restart cube</strong>, <strong>Send test picture</strong>, and <strong>Wi-Fi</strong>: which network the cube is on and whether it is connected. Fresh cubes sit on the bar's own hotspot, which the bar switches off when idle; uploads then cannot reach the cube. <strong>Set cube Wi-Fi…</strong> joins it to your own <strong>2.4 GHz</strong> network (a combined 2.4/5 GHz name may not work; the bar must be on the same network); the password goes to the cube only.</li>
+</ul>
+<h3 id="sensecube">SenseCube</h3>
+<p>Live <strong>temperature</strong>, <strong>humidity</strong> and <strong>light</strong>, read every 5 seconds while the page is open. <strong>Add all five</strong> puts the Temperature, Humidity, Light, Presence and Sound level cards on the CoreBar page (the bar draws them itself). Presence (radar) and sound level are push-only: the bar can show them, Deckhand cannot read them. Vibration is only an event on the bar.</p>
+<h3 id="knobkey-and-dotkey">KnobKey and DotKey</h3>
+<p>What each control does, as it is bound today: knob <strong>turn → Mac volume</strong> (the speakers chosen in System Settings → Sound; the KnobKey page shows which), <strong>press → play / pause in Apple Music</strong>; DotKey <strong>key 1 → previous cube card</strong>, <strong>key 2 → next cube card</strong>, <strong>hold key 3 → Standard page</strong>. These bindings are part of the CoreBar page and are active while that page is on the bar; publish it once to activate them. Changing them is planned.</p>
+<h3 id="widgets">Widgets</h3>
+<p>Two sections: <strong>For the VivoCube</strong> (pictures Deckhand draws — only cards that stay valid for 5 minutes, because the cube gets a new picture every 5 minutes at most; live readings and clocks are deliberately not offered there) and <strong>For the CoreBar</strong> (cards the bar draws itself and updates live; add them to the Deckhand page from here or from the CoreBar page). The cube cards Deckhand can draw, with a preview and settings: <strong>Weather</strong>, <strong>Music (album art)</strong>, <strong>Claude Code monitor</strong>, <strong>Crypto</strong>, <strong>Calendar</strong>, <strong>Date</strong> and <strong>Picture</strong> (your own image). <strong>Add to the cube</strong> puts the selected card in the cube's list. A third section, <strong>Apps on the bar</strong>, lists one <strong>Open <app></strong> card per app installed on the bar (Sonos, UltraNotes, UltraBar Radio, …): on the page it is the app's own icon, and tapping it opens that app on the bar — this works on the hardware (confirmed 2026-11-03). The list is read from the bar when Deckhand connects and after <strong>Re-read pages</strong>; Home Assistant never appears in it (the bar keeps it out of the app list).</p>
+<ul>
+<li><strong>Weather</strong> — location (<strong>Same as this Mac</strong> or <strong>Manual</strong>) and units; current conditions only, no clock. See section 6.</li>
+<li><strong>Music</strong> — play/pause, previous, next and volume for Apple Music.</li>
+</ul>
+<h3 id="two-very-different-screens">Two very different screens</h3>
+<ul>
+<li><strong>VivoCube (240×240).</strong> Deckhand draws every pixel: each card is a picture rendered on the Mac and sent as a package (up to 6 cards). The cube only shows what was last sent. Cards are <strong>redrawn and re-sent every 5 minutes at most</strong> (longer when the switch interval × number of cards exceeds that), so "live" numbers such as CPU, network or token counts are snapshots, not a live meter. Cards that change slowly (weather, calendar, crypto day chart, date) suit the cube; a per-second gauge does not.</li>
+<li><strong>CoreBar (1424×280).</strong> The bar draws its own fixed-size cards (clock, weather, world time, timer, CPU, memory, network, SenseCube, PC buttons, scenes) and updates them live from the data the bar pulls over the link (CPU every 3 s, network every 5 s). Deckhand cannot place its own pictures on the bar; the only picture it can inject is the <strong>cover of the clock card</strong> (a rounded square, with a blurred copy as the card background), which is where the "Clock picture" comes from. A cube card cannot be shown on the bar one-to-one, nor a bar card on the cube. Filling the whole bar screen is only possible through the bar's screensaver app, which Deckhand does not control.</li>
+</ul>
+<h3 id="apps">Apps</h3>
+<p>Four groups, top to bottom: <strong>Installed</strong> (apps you added from the marketplace: version, an orange <em>update x.y</em> tag when the catalogue has a newer one, <strong>Web UI</strong> for apps that have one, <strong>Remove</strong>), <strong>Deckhand apps</strong> (the six full-width apps Deckhand ships: Monitor, Claude, Crypto, Weather, Music, Calendar, each with the version on the bar, <em>up to date</em> / <em>update x.y</em> / <em>not installed</em>, and an <strong>Install</strong> or <strong>Update</strong> button that goes over ADB; the switch <em>Serve the pages from this Mac</em> must be on for them to show anything), <strong>Marketplace</strong> (the vendor's catalogue; the bar downloads and installs by itself) and <strong>Built into the firmware</strong> (system apps: updatable, not removable). <strong>Update all</strong> in the header updates everything that has an update, marketplace and Deckhand apps alike; a line at the top counts the updates available.</p>
+<h3 id="screensavers">Screensavers</h3>
+<p>Sidebar → Library → <strong>Screensavers</strong>, laid out like the macOS screensaver pane: the active screensaver large at the top with the switch (<strong>Start screensaver</strong>) and the idle time (30 s … 5 min, never); below it <strong>All screensavers</strong> as a grid of every screensaver, installed and from the vendor's catalogue (Whale, Spectrum Stream, Black Hole, a flip clock …). Click an installed one to use it (the blue frame and tick mark the active one); a tile with a download badge is not on the bar yet and installs on click (about ten seconds, the bar fetches it itself). Right-click an installed one to remove it from the bar; the active one cannot be removed until another is chosen.</p>
+<h3 id="people">People</h3>
+<p>Save contacts; each gets one-click <strong>Teams chat / call</strong>, <strong>FaceTime</strong>, <strong>Mail</strong>. Stored locally on your Mac.</p>
+<h3 id="status">Status</h3>
+<p>Asks the bar and its modules what they are doing (and again every 30 seconds while open): connection, pages on the bar, the cube's Wi-Fi, screen and current card, the last upload result, SenseCube readings, the KnobKey link, modules seen before but missing now, and whether weather resolves. Problems come first, each with its one button. <strong>Copy report</strong> puts everything — plus your card lists and the last log lines — on the clipboard as text: paste that instead of taking a photo of the device.</p>
+<h3 id="logs">Logs</h3>
+<p>Every message between this Mac and the bar, with the pairing key, the cube Wi-Fi password and the weather key redacted; the file is capped at 5 MB.</p>
+<h3 id="settings-sidebar--deckhand--settings">Settings (sidebar → Deckhand → Settings)</h3>
+<p>Name, serial and address of the bar; the connection and USB-port guidance; what can only be set on the bar itself (time &amp; time zone, Wi-Fi, Bluetooth). Two optional extras live here too:</p>
+<ul>
+<li><strong>Bar screen</strong> — <em>Keep the screen on while someone is at the desk (via ADB)</em>. The bar's protocol cannot wake its screen or change its timeout, so this goes through Android's debug bridge: turn <strong>Wi-Fi ADB</strong> on in the bar's Developer options (Android Settings on the bar → About → tap Build number 7× → Developer options) and have <code>adb</code> on the Mac (<code>brew install --cask android-platform-tools</code>). Deckhand then follows the SenseCube's presence events: while someone is there the screen stays on (a dark screen is woken), after the chosen number of minutes without anyone it goes off. Switching the option off restores the plain timeout. The status line says what Deckhand sees.</li>
+<li><strong>Deckhand apps</strong> (on the <strong>Apps</strong> page, not here) — six small apps for the bar, each its own card and each a full-width, live page served by Deckhand: <strong>Monitor</strong> (this Mac: CPU history, memory, network, disk), <strong>Claude</strong> (which terminal needs you: every Claude Code session of the last hour, the waiting ones pulsing orange, with the project name and what it last said), <strong>Crypto</strong> (your coins with today's chart), <strong>Weather</strong> (now plus three days), <strong>Music</strong> (album art, title, play/pause/next/previous) and <strong>Calendar</strong> (today and two more days). Install each from the Deckhand apps list on the Apps page (over ADB, see Bar screen above); then add its card on the CoreBar page and publish. The apps find Deckhand by themselves through a UDP beacon. ✕ or a long press on the bar returns to the cards. The pages are plain HTTP on your LAN and only exist while the switch is on.</li>
+<li><strong>Monitor (details)</strong> — <em>Serve the pages from this Mac</em> on the Apps page. Deckhand serves a full-width, moving view of this Mac (CPU history, memory, network up/down, disk, clock) on <code>http://&lt;mac&gt;:7432/monitor</code>, plain HTTP on your LAN, read-only, only while the switch is on. The bar's <strong>Monitor</strong> app (<code>android/DeckhandMonitor</code>, install once with <code>adb install -r dist/DeckhandMonitor.apk</code>) finds the page by itself through a UDP beacon and shows it full screen when you tap its card; ✕ or a long press on the bar returns to the cards.</li>
+</ul>
+<h3 id="about">About</h3>
+<p><strong>About Deckhand</strong> (sidebar → Deckhand) shows the version, repository link and license (MIT).</p>
+<hr />
+<h2 id="6-weather">6. Weather</h2>
+<p>The weather widget uses <strong>Open-Meteo</strong> (free, no API key). Set your location in <strong>Widgets → Weather</strong>:</p>
+<ul>
+<li><strong>Same as this Mac</strong> uses macOS Location (macOS will ask for permission). If Location access isn't granted, the app falls back to the manual city if you entered one, and otherwise to approximate <strong>IP geolocation</strong> (ipwho.is) so the widget still works.</li>
+<li><strong>Manual</strong> takes a city name, or latitude/longitude for an exact spot.</li>
+</ul>
+<p>This is independent of the CoreBar's own built-in AccuWeather widget, which needs its own API key set on the device.</p>
+<hr />
+<h2 id="7-troubleshooting">7. Troubleshooting</h2>
+<ul>
+<li><p><strong>Firmware matters.</strong> The bar's launcher version is the <code>ver</code> in the sidebar/discovery (for example <code>1.0.9(9)</code>). Cards added in later releases do not exist on older launchers: on <strong>1.0.3</strong> the five SenseCube cards never appear, on <strong>1.0.9</strong> they do. Settings → About on the bar may show no update even when one exists; the release APKs are on the vendor's GitHub release page and can be installed over ADB (see <code>docs/vendor_docs/</code> and PROTOCOL.md).</p></li>
+<li><p><strong>A hiss or click from the bar when you tap Next card or Play / pause</strong> is the launcher's own tap sound (new in 1.0.9, played at 30 % of the bar's media volume). It ignores the bar's "Click sound" switch; lower the bar's media volume under Settings → Sound on the bar if it bothers you.</p></li>
+<li><p><strong>SenseCube temperature reads several degrees too high</strong> (and humidity too low): the cube warms up on the bar. SenseCube firmware V2 adds a calibration; the OTA file is in the vendor release.</p></li>
+<li><p><strong>"No CoreBars found"</strong> — CoreBar and Mac must be on the same Wi-Fi; grant <strong>Local Network</strong> permission (System Settings → Privacy &amp; Security → Local Network → Deckhand); press <strong>Look again</strong>. If broadcast is blocked, use <strong>Connect by address…</strong>.</p></li>
+<li><p><strong>App won't open (unidentified developer)</strong> — right-click → Open (see Install), once.</p></li>
+<li><p><strong>A module is missing after a scan</strong> — tap the CoreBar screen to wake everything, make sure the module is attached and powered, then press <strong>Find modules</strong> (see section 4).</p></li>
+<li><p><strong>"Module not accepted" on an image push</strong> — the app auto-provisions and retries; if it still fails, re-scan modules first.</p></li>
+<li><p><strong>VivoCube upload is refused ("error 4")</strong> — the cube itself says it is not on Wi-Fi, usually because it is stuck at "still connecting" (the strip and Maintenance → Wi-Fi show this). Deckhand now re-sends the cube's own Wi-Fi settings before every upload when it sees that state, which completes the join; you can also press <strong>Set cube Wi-Fi…</strong> and send the same network again. Wait until the status reads "connected", then send the cards again.</p></li>
+<li><p><strong>VivoCube upload says "busy" or "hotspot has no IP"</strong> — the bar's hotspot is down, so it has no path to the cube. Wake the bar (press a key) or check its hotspot, then try again; wait at least 10 seconds between uploads.</p></li>
+<li><p><strong>The bar's screen goes black after a few minutes</strong> — that is the bar's own screen timeout (bar: Settings → Screen timeout, 30 s to 5 min or Never), not Deckhand; the screensaver (Screensavers page) runs separately after its own idle time. "Keep the bar's screen on" in Deckhand's Settings cannot wake a screen that is already off: a page switch does not count as activity on the bar (checked 2026-11-04). For a time between 5 min and Never, set it over ADB: <code>adb shell settings put system screen_off_timeout 600000</code> (10 min). The bar itself does not use the SenseCube's presence sensor for this, but Deckhand can: Settings → Bar screen.</p></li>
+<li><p><strong>The cube stops taking new cards after a day or so</strong> ("the bar's launcher has used up its upload slots") — a leak in the bar's firmware: after about 100 uploads since the bar started, every further one fails. With Wi-Fi ADB on, Deckhand restarts the bar's launcher by itself and sends again (the bar's screen reloads for a few seconds); without it, use <strong>Restart bar launcher</strong> under VivoCube → Maintenance once ADB is on, or restart the bar.</p></li>
+<li><p><strong>KnobKey / DotKey do something else than the Controls pages say</strong> — the bindings travel with the CoreBar page; after updating Deckhand press <strong>Publish bindings</strong> (Controls pages) or <strong>Publish page</strong> (CoreBar) once.</p></li>
+<li><p><strong>VivoCube stays black</strong> — open the VivoCube page: the status strip names the cause (screen off, not on Wi-Fi, or pointing at a card that no longer exists) with a button that fixes it; <strong>Maintenance → Fix black screen</strong> does the same by hand (then re-publish if needed). Avoid <strong>Screen Off</strong> while a rotation runs. If it is still black, press <strong>Restart cube</strong> under Maintenance on the VivoCube page and publish again.</p></li>
+<li><p><strong>Pushed image looks off</strong> — re-publish the widget; if a custom image still looks wrong, try a square source image (Deckhand renders 240 × 240; transparency is flattened).</p></li>
+<li><p><strong>The Deckhand page shows no picture on the clock card</strong> — press <strong>Update picture</strong> on the Clock card (re-uploads <code>deckhand/cover.png</code>); if the official app deployed in between, its Deploy deleted Deckhand's images — publish the page again. There is no error message because the CoreBar does not acknowledge previews.</p></li>
+<li><p><strong>My CoreBar images / pages disappeared</strong> — most likely the official UltraWorkSpace app deployed in between; it erases other apps' files. Re-publish from Deckhand.</p></li>
+<li><p><strong>CoreBar clock wrong</strong> — set time/timezone on the CoreBar itself (it uses NTP); the Mac app can't push time.</p></li>
+<li><p><strong>Weather shows the wrong place</strong> — allow Location access, or set a manual city in <strong>Widgets → Weather</strong>.</p></li>
+</ul>
+<hr />
+<h2 id="8-whats-next-roadmap">8. What's next (roadmap)</h2>
+<p>Choosing your own KnobKey and DotKey bindings (today they are fixed), presence-based wake, module OTA firmware updates, installing apps on the bar from Deckhand (today only from the bar's own Marketplace or the <code>kitcheck app</code> tool), a notarized release, and a Stream-Deck-style widget marketplace. This section can lag behind the code; the current status is in <code>docs/ROADMAP.md</code> in the repository.</p>
+<p>Support: this is community software — file issues at <a href="https://github.com/DeNoronha/UltraWorkspaceMac/issues">https://github.com/DeNoronha/UltraWorkspaceMac/issues</a>.</p>
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="cols">
+      <div class="dnc">
+        <img src="../assets/img/dnc-logo-white.svg" alt="De Noronha Consulting">
+        <p>Deckhand and OpenBarX are made by De Noronha Consulting in Sassenheim, the Netherlands.</p>
+        <a href="https://denoronha.consulting">denoronha.consulting <span class="arrow">→</span></a>
+      </div>
+      <div>
+        <h4>Deckhand</h4>
+        <ul>
+          <li><a href="../download/Deckhand.dmg">Download the DMG</a></li>
+          <li><a href="../deckhand/">The Mac app</a></li>
+          <li><a href="../deckhand/#security">Security and privacy</a></li>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/docs/ROADMAP.md">Roadmap</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>For builders</h4>
+        <ul>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac">Source on GitHub</a></li>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/PROTOCOL.md">The CoreBar protocol</a></li>
+          <li><a href="../bar-apps/#build">Build a bar app</a></li>
+          <li><a href="../marketplace/registry.json">Marketplace registry (JSON)</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="fine">Deckhand is independent, community software under the MIT license. UltraBar X, CoreBar, VivoCube, SenseCube, KnobKey and DotKey are names of Sanytron products; this project is not affiliated with or endorsed by Sanytron.</p>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bar apps — full-width live pages for the CoreBar · OpenBarX</title>
+<meta name="description" content="Six apps for the UltraBar X's 1424 × 280 screen, fed by your Mac: Monitor, Claude, Crypto, Weather, Music, Calendar. How they work, how to install them, how to build your own.">
+<meta property="og:title" content="Bar apps for the UltraBar X">
+<meta property="og:description" content="Full-width, near real time, served by your Mac. Six ship with Deckhand; build your own from the template.">
+<meta property="og:image" content="../assets/img/screens/bar-monitor.png">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,700;0,6..12,900&family=JetBrains+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="../" aria-label="OpenBarX home">
+      <span class="name">OpenBar<i>X</i></span>
+      <span class="tag">Deckhand for macOS</span>
+    </a>
+    <nav class="nav" aria-label="Site">
+      <a href="../deckhand/">Deckhand</a>
+      <a href="./" aria-current="page">Bar apps</a>
+      <a href="../marketplace/">Marketplace</a>
+      <a href="../manual/">Manual</a>
+      <a href="https://github.com/DeNoronha/UltraWorkspaceMac">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero hero-compact">
+    <div class="container">
+      <p class="eyebrow">Bar apps <span class="sep">·</span> version 1.2 <span class="sep">·</span> ship with Deckhand</p>
+      <h1>The whole bar, moving.</h1>
+      <p class="lede">The CoreBar's own cards are small and static. A bar app takes the full 1424 × 280 screen and refreshes as often as once a second, because the hard part does not run on the bar at all: the Mac serves a page, the bar only draws it.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">How they work</p>
+        <h2>A kiosk window and a beacon.</h2>
+      </div>
+      <ol class="steps">
+        <li><b>Deckhand serves the pages.</b><span>With <em>Serve the pages from this Mac</em> on, Deckhand listens on port 7432 and serves one page per app plus a small JSON feed next to it, refreshed on the app's own cadence: Mac stats every second, Claude sessions and Music every two seconds, the calendar every minute, prices every two minutes, weather every fifteen.</span></li>
+        <li><b>The bar finds the Mac by itself.</b><span>Every five seconds Deckhand sends a UDP beacon on port 5320 with the address of the pages. Each app listens for it, so there is nothing to configure on the bar; change networks and it follows.</span></li>
+        <li><b>One card per app on the page.</b><span>Each app is an ordinary Android app on the bar with an icon, so the CoreBar page gets an Open card for it. Tap the card and the app opens its page full screen; ✕ or a long press returns to the cards.</span></li>
+        <li><b>Nothing goes to the internet from the bar.</b><span>The pages are plain HTTP on your LAN and only exist while the switch is on. Weather and prices are fetched by the Mac, not the bar.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="apps">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">The six</p>
+        <h2>What ships with Deckhand 0.1.</h2>
+        <p class="lede">Renders at the bar's real size. The Claude and Calendar pictures use demo data.</p>
+      </div>
+      <div class="apps apps-wide">
+        <article class="app" id="monitor">
+          <div class="icon"><img src="../assets/img/icons/monitor.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Monitor</h3><span class="badge">1.2</span></div>
+            <p>Your Mac, live across the whole bar: CPU with a two-minute history as an area chart, network up and down as sparklines, memory and disk as bars, the host name and the time. Polled once a second.</p>
+            <p class="meta">nl.denoronha.deckhand.monitor · the original bar app</p>
+          </div>
+          <div class="shot"><img src="../assets/img/screens/bar-monitor.png" alt="Monitor app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app" id="claude">
+          <div class="icon"><img src="../assets/img/icons/claude.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Claude</h3><span class="badge">1.2</span></div>
+            <p>Which terminal needs you. Every Claude Code session on the Mac from the last hour becomes a card with the project, the first prompt and what it last said; the ones waiting for an answer pulse orange, with how long they have waited. Tokens used today in the corner.</p>
+            <p class="meta">nl.denoronha.deckhand.claude · reads ~/.claude/projects, nothing leaves the Mac</p>
+          </div>
+          <div class="shot"><img src="../assets/img/screens/bar-claude.png" alt="Claude app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app" id="crypto">
+          <div class="icon"><img src="../assets/img/icons/crypto.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Crypto</h3><span class="badge">1.2</span></div>
+            <p>Up to five coins in your currency, each with a sparkline of the day and the change since midnight. Coins and currency are set on the Widgets page; prices come from CoinGecko through the Mac, no API key.</p>
+            <p class="meta">nl.denoronha.deckhand.crypto</p>
+          </div>
+          <div class="shot"><img src="../assets/img/screens/bar-crypto.png" alt="Crypto app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app" id="weather">
+          <div class="icon"><img src="../assets/img/icons/weather.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Weather</h3><span class="badge">1.2</span></div>
+            <p>Now plus three days for the Mac's location: condition, temperature, humidity, wind and the chance of rain, from Open-Meteo. Free, no account, no key, unlike the bar's own AccuWeather card.</p>
+            <p class="meta">nl.denoronha.deckhand.weather</p>
+          </div>
+          <div class="shot"><img src="../assets/img/screens/bar-weather.png" alt="Weather app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app" id="music">
+          <div class="icon"><img src="../assets/img/icons/music.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Music</h3><span class="badge">1.2</span></div>
+            <p>Apple Music with album art, title, artist and album, and a level meter while it plays. Previous, play or pause and next work from the bar's touch screen, through the Mac.</p>
+            <p class="meta">nl.denoronha.deckhand.music</p>
+          </div>
+          <div class="shot"><img src="../assets/img/screens/bar-music.png" alt="Music app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app" id="calendar">
+          <div class="icon"><img src="../assets/img/icons/calendar.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Calendar</h3><span class="badge">1.2</span></div>
+            <p>Today, tomorrow and the day after from the Mac's calendars, in the colours you already use. Past events fade; all-day events sit on top. Which calendars show is set on the Widgets page.</p>
+            <p class="meta">nl.denoronha.deckhand.calendar · asks for Calendar access once</p>
+          </div>
+          <div class="shot"><img src="../assets/img/screens/bar-calendar.png" alt="Calendar app on the bar" loading="lazy"></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="install">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Install</p>
+        <h2>From the Apps page, over Wi-Fi ADB.</h2>
+        <p class="lede">The APKs are inside Deckhand; installing them is the one thing the bar's protocol cannot do, so it goes through Android's debug bridge.</p>
+      </div>
+      <ol class="steps">
+        <li><b>Turn on Wi-Fi ADB on the bar, once.</b><span>On the bar: Settings → About → tap Build number seven times → Developer options → Wi-Fi ADB. It gives anyone on your LAN a shell on the bar while it is on, so switch it off again when you are done.</span></li>
+        <li><b>Put adb on the Mac.</b><span><code>brew install --cask android-platform-tools</code>. Deckhand finds it in the usual places.</span></li>
+        <li><b>Deckhand → Apps → Deckhand apps → Install.</b><span>Each app shows the version on the bar, whether an update is waiting, and one button. Update all takes care of the rest.</span></li>
+        <li><b>Add the card and publish.</b><span>CoreBar page → Add a card → the app → Publish page. The card shows the app's own icon; tap it on the bar to open the page.</span></li>
+      </ol>
+      <div class="callout" style="margin-top:2.5rem">
+        <p class="eyebrow">Note</p>
+        <p>The pages only show while <em>Serve the pages from this Mac</em> is on and Deckhand is running. Close Deckhand and the apps show "Waiting for the Mac…" until it is back.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="build">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Build your own</p>
+        <h2>A bar app is a page and a beacon listener.</h2>
+        <p class="lede">The six apps are one Android project with six flavors, in the repository under <a href="https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor">android/DeckhandMonitor</a>. Fork it, or write the same thing in anything that runs on Android.</p>
+      </div>
+      <ol class="steps">
+        <li><b>Draw for 1424 × 280 at 160 dpi.</b><span>One screenful, no scrolling, large type: the bar is read from arm's length. Plain HTML and canvas work well; the bar's WebView is a current Chromium.</span></li>
+        <li><b>Listen for the beacon on UDP 5320.</b><span>Deckhand broadcasts and unicasts <code>{"deckhand":"monitor","url":"http://&lt;mac&gt;:7432/monitor","base":"http://&lt;mac&gt;:7432","v":2}</code> every five seconds. Open <code>base + "/" + yourPage</code>. Serve that page yourself if you are not using Deckhand.</span></li>
+        <li><b>Give the bar a way back.</b><span>A ✕ in the corner and a long press should return to the cards: the apps call <code>finish()</code> through a small JavaScript bridge.</span></li>
+        <li><b>List it.</b><span>Add an entry to the marketplace registry and open a pull request. A screenshot at 1424 × 280 and a link to the source are the only hard requirements.</span></li>
+      </ol>
+      <div class="hero-actions" style="margin-top:2rem">
+        <a class="btn btn-primary" href="../marketplace/#submit">Submit to the marketplace <span class="arrow">→</span></a>
+        <a class="btn" href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/PROTOCOL.md">The CoreBar protocol <span class="arrow">→</span></a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="cols">
+      <div class="dnc">
+        <img src="../assets/img/dnc-logo-white.svg" alt="De Noronha Consulting">
+        <p>Deckhand and OpenBarX are made by De Noronha Consulting in Sassenheim, the Netherlands.</p>
+        <a href="https://denoronha.consulting">denoronha.consulting <span class="arrow">→</span></a>
+      </div>
+      <div>
+        <h4>Deckhand</h4>
+        <ul>
+          <li><a href="../download/Deckhand.dmg">Download the DMG</a></li>
+          <li><a href="../manual/">Manual</a></li>
+          <li><a href="../deckhand/#security">Security and privacy</a></li>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/docs/ROADMAP.md">Roadmap</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>For builders</h4>
+        <ul>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac">Source on GitHub</a></li>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/PROTOCOL.md">The CoreBar protocol</a></li>
+          <li><a href="#build">Build a bar app</a></li>
+          <li><a href="../marketplace/registry.json">Marketplace registry (JSON)</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="fine">Deckhand is independent, community software under the MIT license. UltraBar X, CoreBar, VivoCube, SenseCube, KnobKey and DotKey are names of Sanytron products; this project is not affiliated with or endorsed by Sanytron.</p>
+  </div>
+</footer>
+</body>
+</html>

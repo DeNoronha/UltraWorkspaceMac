@@ -3,3 +3,4 @@ dist/
 *.dmg
 .DS_Store
 .swiftpm/
+site/download/

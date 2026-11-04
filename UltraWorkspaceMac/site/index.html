@@ -23,10 +23,10 @@
       <span class="tag">Deckhand for macOS</span>
     </a>
     <nav class="nav" aria-label="Site">
-      <a href="#deckhand">Deckhand</a>
-      <a href="#apps">Bar apps</a>
+      <a href="deckhand/">Deckhand</a>
+      <a href="bar-apps/">Bar apps</a>
       <a href="marketplace/">Marketplace</a>
-      <a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/MANUAL.md">Manual</a>
+      <a href="manual/">Manual</a>
       <a href="https://github.com/DeNoronha/UltraWorkspaceMac">GitHub</a>
     </nav>
   </div>
@@ -41,7 +41,7 @@
           <h1>Your UltraBar X, run from the Mac.</h1>
           <p class="lede">Deckhand is a native macOS app for the Sanytron UltraBar X. It finds the CoreBar on your network, puts your own pages on its 5:1 screen, draws cards on the VivoCube, binds the KnobKey and DotKey, and runs full-width live apps on the bar itself. Open source, no account, nothing leaves your LAN.</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="https://github.com/DeNoronha/UltraWorkspaceMac/releases/latest/download/Deckhand.dmg">Download Deckhand for Mac <small>DMG · 2 MB</small> <span class="arrow">→</span></a>
+            <a class="btn btn-primary" href="download/Deckhand.dmg">Download Deckhand for Mac <small data-dmg="download/latest.json">DMG · 2 MB</small> <span class="arrow">→</span></a>
             <a class="btn" href="https://github.com/DeNoronha/UltraWorkspaceMac/releases">All releases <span class="arrow">→</span></a>
           </div>
           <p class="meta hero-note">Signed with a Developer ID and notarized, so it opens without a Gatekeeper warning. MIT licensed. Independent software, not affiliated with Sanytron.</p>
@@ -171,6 +171,9 @@
         </article>
       </div>
       <p class="meta" style="margin-top:1.5rem">Installed from Deckhand's Apps page over Wi-Fi ADB. Each app opens a page the Mac serves on your LAN (port 7432); the bar never talks to the internet for them.</p>
+      <div class="hero-actions" style="margin-top:1.5rem">
+        <a class="btn" href="bar-apps/">How they work, install, build your own <span class="arrow">→</span></a>
+      </div>
     </div>
   </section>
 
@@ -184,6 +187,10 @@
       <div class="screens">
         <figure><img src="assets/img/screens/app-corebar.png" width="3022" height="1928" alt="Deckhand's CoreBar page: a preview of the bar's cards, the list of cards to publish, and the pages on the bar" loading="lazy"><figcaption class="meta">CoreBar page · cards and preview</figcaption></figure>
         <figure><img src="assets/img/screens/app-apps.png" width="3022" height="1928" alt="Deckhand's Apps page: installed apps, the six Deckhand bar apps with their versions, the marketplace and the firmware's built-in apps" loading="lazy"><figcaption class="meta">Apps page · install and update the bar apps</figcaption></figure>
+      </div>
+      <div class="hero-actions" style="margin-top:1.5rem">
+        <a class="btn" href="deckhand/">Every page, requirements, security and privacy <span class="arrow">→</span></a>
+        <a class="btn" href="manual/">The manual <span class="arrow">→</span></a>
       </div>
     </div>
   </section>
@@ -225,7 +232,7 @@
       </div>
       <div class="hero-actions" style="margin-top:0">
         <a class="btn btn-primary" href="marketplace/">Browse the marketplace <span class="arrow">→</span></a>
-        <a class="btn" href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/docs/WIDGETS.md">Build your own <span class="arrow">→</span></a>
+        <a class="btn" href="bar-apps/#build">Build your own <span class="arrow">→</span></a>
       </div>
     </div>
   </section>
@@ -242,9 +249,9 @@
       <div>
         <h4>Deckhand</h4>
         <ul>
-          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/releases/latest/download/Deckhand.dmg">Download the DMG</a></li>
-          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/MANUAL.md">Manual</a></li>
-          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/docs/SECURITY.md">Security notes</a></li>
+          <li><a href="download/Deckhand.dmg">Download the DMG</a></li>
+          <li><a href="manual/">Manual</a></li>
+          <li><a href="deckhand/#security">Security and privacy</a></li>
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/docs/ROADMAP.md">Roadmap</a></li>
         </ul>
       </div>
@@ -253,7 +260,7 @@
         <ul>
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac">Source on GitHub</a></li>
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/PROTOCOL.md">The CoreBar protocol</a></li>
-          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/docs/WIDGETS.md">Widget format</a></li>
+          <li><a href="bar-apps/#build">Build a bar app</a></li>
           <li><a href="marketplace/registry.json">Marketplace registry (JSON)</a></li>
         </ul>
       </div>
@@ -274,6 +281,16 @@
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     timer = setInterval(function () { show(tabs[(i + 1) % tabs.length].dataset.page); }, 4000);
   }
+})();
+</script>
+<script>
+(function () {
+  var els = document.querySelectorAll('[data-dmg]'); if (!els.length) return;
+  fetch(els[0].getAttribute('data-dmg'), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    if (!j || !j.tag) return;
+    var mb = j.size ? (j.size / 1048576).toFixed(1) + ' MB' : '';
+    els.forEach(function (e) { e.textContent = 'DMG · ' + j.tag.replace(/^v/, '') + (mb ? ' · ' + mb : ''); });
+  }).catch(function () {});
 })();
 </script>
 </body>

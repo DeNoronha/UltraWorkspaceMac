@@ -159,3 +159,41 @@ a:hover .arrow, .btn:hover .arrow, .card:hover .arrow { transform:translateX(4px
 .screens img { display:block; width:100%; height:auto }
 .screens figcaption { padding:.75rem 1rem; border-top:1px solid var(--border) }
 @media (min-width:64rem) { .screens { grid-template-columns:1fr 1fr } }
+
+/* Inner pages */
+.hero-compact { padding-block:3.5rem 2.5rem; border-bottom:1px solid var(--border) }
+.hero-compact h1 { font-size:clamp(2rem,3.6vw,3.25rem); line-height:1.08; letter-spacing:-0.02em; font-weight:900; max-width:44rem }
+.hero-compact .lede { margin-top:1rem }
+.kv { border-collapse:collapse; width:100%; max-width:60rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm) }
+.kv th, .kv td { text-align:left; vertical-align:top; padding:.9rem 1.25rem; border-bottom:1px solid var(--paper-rule) }
+.kv tr:last-child th, .kv tr:last-child td { border-bottom:0 }
+.kv th { width:11rem; font-family:var(--font-mono); font-weight:400; font-size:.75rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); padding-top:1.05rem }
+.kv td { color:var(--ink-500) }
+.apps-wide { grid-template-columns:1fr }
+
+/* Manual: a contents column and long-form prose generated from MANUAL.md */
+.manual-grid { display:grid; gap:2.5rem; align-items:start }
+.toc ol { list-style:none; margin:.75rem 0 0; padding:0; display:grid; gap:.4rem; font-size:.875rem }
+.toc a { color:var(--text); text-decoration:none; border-bottom:1px solid transparent }
+.toc a:hover { border-color:var(--accent) }
+.prose { max-width:70ch; min-width:0 }
+.prose h2 { font-size:1.75rem; line-height:2.25rem; font-weight:900; margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--border) }
+.prose h2:first-child { margin-top:0; padding-top:0; border-top:0 }
+.prose h3 { font-size:1.25rem; line-height:1.75rem; font-weight:700; margin-top:2rem }
+.prose h4 { font-size:1rem; margin-top:1.5rem }
+.prose p, .prose ul, .prose ol, .prose table, .prose blockquote, .prose pre { margin-top:1rem }
+.prose li { margin-top:.35rem }
+.prose li > p { margin-top:.25rem }
+.prose hr { border:0; height:0; margin:0 }
+.prose table { border-collapse:collapse; width:100%; font-size:.9375rem; display:block; overflow-x:auto }
+.prose th, .prose td { text-align:left; vertical-align:top; padding:.5rem .75rem .5rem 0; border-bottom:1px solid var(--paper-rule) }
+.prose th { font-family:var(--font-mono); font-weight:400; font-size:.75rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); border-bottom:2px solid var(--paper-rule) }
+.prose blockquote { margin-left:0; padding:1rem 1.25rem; background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:var(--radius-sm); color:var(--ink-500) }
+.prose blockquote.warn { border-left-color:var(--error) }
+.prose blockquote p { margin-top:0 }
+.prose code { word-break:break-word }
+.prose img { border:1px solid var(--border); border-radius:var(--radius-sm) }
+@media (min-width:64rem) {
+  .manual-grid { grid-template-columns:15rem minmax(0,1fr) }
+  .toc { position:sticky; top:1.5rem }
+}
