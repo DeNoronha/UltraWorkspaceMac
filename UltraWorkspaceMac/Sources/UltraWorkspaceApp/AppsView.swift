@@ -4,7 +4,11 @@ import UltraBarKit
 /// Apps: what is installed on the bar (update / remove / web UI) and what the marketplace still offers.
 /// The bar does the downloading itself (APP_MANAGER 30600); Deckhand only asks and watches.
 struct AppsView: View {
+    static func barAppIcon(_ page: String) -> String {
+        switch page { case "claude": return "sparkles"; case "crypto": return "bitcoinsign.circle"; case "weather": return "cloud.sun"; case "music": return "music.note"; case "calendar": return "calendar"; default: return "waveform.path.ecg" }
+    }
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var settings: AppSettings
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,6 +26,30 @@ struct AppsView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if let e = model.appStoreError {
                         Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Panel("Deckhand apps", footer: "Six small apps for the bar, one card each, showing full-width live pages served by this Mac: Monitor (this Mac live), Claude (which terminal needs you), Crypto, Weather (3 days), Music (album art + transport) and Calendar (3 days). Installing goes over ADB (Wi-Fi ADB on in the bar's Developer options). After installing: CoreBar page → Add a card → Publish page. ✕ or a long press on the bar returns to the cards. The pages are plain HTTP on this network and only exist while the switch is on.") {
+                        HStack(spacing: 12) {
+                            Toggle("Serve the pages from this Mac", isOn: $settings.monitorServe)
+                                .onChange(of: settings.monitorServe) { _ in model.startMonitor(settings: settings) }
+                            if let url = model.monitorURL { Text(String(url.dropLast("/monitor".count))).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
+                            if let e = model.monitorError { Text(e).foregroundStyle(.red).font(.caption) }
+                        }
+                        ForEach(AppModel.barAppPages, id: \.page) { app in
+                            HStack(spacing: 10) {
+                                Image(systemName: Self.barAppIcon(app.page)).frame(width: 22).foregroundStyle(.secondary)
+                                Text(app.label).fontWeight(.medium).frame(width: 90, alignment: .leading)
+                                if let v = model.barAppVersion(app.page) { Text("on the bar · \(v)").font(.caption).foregroundStyle(.secondary) }
+                                else { Text("not on the bar").font(.caption).foregroundStyle(.secondary) }
+                                Spacer()
+                                if model.barAppBusy == app.page { ProgressView().controlSize(.small) }
+                                else {
+                                    Button(model.barAppVersion(app.page) == nil ? "Install" : "Update") { model.installBarApp(app.page) }
+                                        .buttonStyle(.bordered).tint(.blue)
+                                        .disabled(model.barAppBusy != nil || AppModel.bundledAPK(app.apk) == nil)
+                                }
+                            }
+                            Divider()
+                        }
                     }
                     Panel("Installed", footer: "Everything the bar reports as installed. Apps the bar offers as a page card appear under Widgets → Apps on the bar; add them to the page from there or from the CoreBar page.") {
                         if model.barApps.isEmpty { Text(model.link.isConnected ? "Press Refresh." : "Connect to the bar first.").foregroundStyle(.secondary) }
