@@ -30,6 +30,9 @@ struct AppsView: View {
                     if let e = model.appStoreError {
                         Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                     }
+                    if let e = model.barAppError {
+                        Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                    }
                     let updates = pendingUpdates.count + deckhandUpdates.count
                     if updates > 0 {
                         Label(updates == 1 ? "1 update available" : "\(updates) updates available", systemImage: "arrow.down.circle.fill").foregroundStyle(.orange).fontWeight(.medium)

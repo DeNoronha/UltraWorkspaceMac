@@ -83,15 +83,23 @@ extension AppModel {
 
     @discardableResult
     func performInstallBarApp(_ page: String) async -> Bool {
-        guard let entry = Self.barAppPages.first(where: { $0.page == page }), let apk = Self.bundledAPK(entry.apk) else { say("No APK for \(page) in this build."); return false }
-        guard let adb = AdbBridge.find() else { say("adb not found — brew install --cask android-platform-tools."); return false }
-        guard let ip = ipForSelected() else { return false }
+        func fail(_ msg: String) -> Bool { barAppError = msg; say(msg); return false }
+        guard let entry = Self.barAppPages.first(where: { $0.page == page }), let apk = Self.bundledAPK(entry.apk) else { return fail("No APK for \(page) in this build.") }
+        guard let adb = AdbBridge.find() else { return fail("adb not found — brew install --cask android-platform-tools.") }
+        guard let ip = ipForSelected() else { return fail("No CoreBar selected.") }
         barAppBusy = page; defer { barAppBusy = nil }
         let bridge = AdbBridge(path: adb, ip: ip)
-        guard await bridge.connect() else { say("The bar refuses ADB — turn Wi-Fi ADB on in its Developer options."); return false }
+        guard await bridge.connect() else {
+            return fail("The bar refuses ADB on \(ip):5555 — Wi-Fi ADB is off (it turns off on every reboot unless made persistent). Plug the bar in over USB and run `adb tcpip 5555`, or make it stick with `adb shell setprop persist.adb.tcp.port 5555`.")
+        }
         let out = await bridge.install(apkPath: apk.path)
         let ok = out.contains("Success")
-        say(ok ? "\(entry.label) \(Self.barAppsVersion) is on the bar — add its card on the CoreBar page if it is not there yet." : "Install of \(entry.label) failed: \(out.trimmingCharacters(in: .whitespacesAndNewlines))")
+        if ok {
+            barAppError = nil
+            say("\(entry.label) \(Self.barAppsVersion) is on the bar — add its card on the CoreBar page if it is not there yet.")
+        } else {
+            _ = fail("Install of \(entry.label) failed: \(out.trimmingCharacters(in: .whitespacesAndNewlines))")
+        }
         return ok
     }
 
