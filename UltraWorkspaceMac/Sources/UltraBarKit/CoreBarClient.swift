@@ -269,16 +269,44 @@ public actor CoreBarClient {
         let deadline = Date().addingTimeInterval(approvalWindow)
         while Date() < deadline {
             guard let line = await readLineWithTimeout(until: deadline) else { break }
-            guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
-            let act = intValue(obj["act"])
-            guard act == Proto.actPair else { continue }
-            if let data = obj["data"] as? [String: Any], let t = data["token"] as? String, !t.isEmpty {
-                return t
+            switch Self.classifyPairReply(line) {
+            case .token(let t): return t
+            case .rejected(let code, let message): throw UltraBarError.pairingRejected(code: code, message: message)
+            case .pending: continue   // request shown on the CoreBar, keep waiting for approval
+            case .unrelated: continue
             }
-            if let t = obj["token"] as? String, !t.isEmpty { return t }
-            // else: request shown on the CoreBar, keep waiting for approval.
         }
         throw UltraBarError.pairingTimedOut
+    }
+
+    /// What one inbound frame means to a pending PAIR request.
+    public enum PairReply: Equatable, Sendable {
+        /// `act` 101 carrying a token (in `data.token` or top-level `token`): paired.
+        case token(String)
+        /// `act` 101 with a non-200 `code` (-1 when Reject is tapped, or a device error): refused — stop waiting.
+        case rejected(code: Int, message: String?)
+        /// `act` 101 without a token and without a failure code: the request is on screen, approval pending.
+        case pending
+        /// Not a PAIR frame (a heartbeat, a push, unparsable bytes).
+        case unrelated
+    }
+
+    /// Classifies a raw reply line for `pair`. Exposed so the mapping can be checked with fake frames.
+    public nonisolated static func classifyPairReply(_ line: Data) -> PairReply {
+        guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+              intOf(obj["act"]) == Proto.actPair else { return .unrelated }
+        if let data = obj["data"] as? [String: Any], let t = data["token"] as? String, !t.isEmpty { return .token(t) }
+        if let t = obj["token"] as? String, !t.isEmpty { return .token(t) }
+        // A missing `code` is the "request shown" acknowledgement (the mock sends none); 200 without a token
+        // is the same. Anything else is a verdict.
+        if obj["code"] != nil {
+            let code = intOf(obj["code"])
+            if code != 200 {
+                let msg = (obj["msg"] as? String) ?? (obj["message"] as? String)
+                return .rejected(code: code, message: msg.flatMap { $0.isEmpty ? nil : $0 })
+            }
+        }
+        return .pending
     }
 
     /// Authenticate an existing token. Returns true if accepted.
@@ -366,7 +394,9 @@ public actor CoreBarClient {
         await readLine(until: deadline)
     }
 
-    private nonisolated func intValue(_ v: Any?) -> Int {
+    private nonisolated func intValue(_ v: Any?) -> Int { Self.intOf(v) }
+
+    private nonisolated static func intOf(_ v: Any?) -> Int {
         if let i = v as? Int { return i }
         if let n = v as? NSNumber { return n.intValue }
         if let s = v as? String, let i = Int(s) { return i }

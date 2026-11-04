@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1424,height=280,initial-scale=1">
+<title>Deckhand {{TITLE}}</title>
+<style>
+  html,body{margin:0;background:#1c2029;color:#fff;font:18px -apple-system,Roboto,Helvetica,Arial,sans-serif;overflow:hidden;width:1424px;height:280px;-webkit-user-select:none}
+  canvas{display:block}
+  #x{position:absolute;right:14px;top:10px;width:40px;height:40px;border-radius:20px;background:rgba(255,255,255,.16);color:#e5e9f0;font-size:22px;line-height:40px;text-align:center}
+  #wait{position:absolute;left:0;top:0;width:1424px;height:280px;display:flex;align-items:center;justify-content:center;color:#8b94a6;font-size:20px;background:#1c2029}
+  .btn{position:absolute;top:200px;width:64px;height:64px;border-radius:32px;background:rgba(255,255,255,.14);color:#fff;font-size:28px;line-height:64px;text-align:center}
+</style></head><body>
+<canvas id="c" width="1424" height="280"></canvas><div id="x">✕</div><div id="wait">Waiting for the Mac…</div>
+<script>
+const c=document.getElementById('c'),g=c.getContext('2d'); let D=null, okAt=0;
+document.getElementById('x').onclick=()=>{ if(window.Deckhand) Deckhand.close(); };
+async function poll(){ try{ const r=await fetch(location.pathname.replace(/\/$/,'')+'/data.json',{cache:'no-store'}); D=await r.json(); okAt=Date.now();
+    document.getElementById('wait').style.display='none'; }catch(e){ if(Date.now()-okAt>8000) document.getElementById('wait').style.display='flex'; } }
+function act(p){ return fetch(p,{method:'POST',headers:{'X-Deckhand':'action'}}).catch(()=>{}); }
+function bg(){ g.fillStyle='#1c2029'; g.fillRect(0,0,1424,280); }
+function txt(s,x,y,size,col,align,weight){ g.fillStyle=col||'#fff'; g.font=(weight||'400')+' '+size+'px -apple-system,Roboto,Helvetica,Arial,sans-serif'; g.textAlign=align||'left'; g.fillText(s,x,y); }
+function rr(x,y,w,h,r,col){ g.fillStyle=col; g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fill(); }
+function clip(s,n){ s=s||''; return s.length>n? s.slice(0,n-1)+'…':s; }
+function ago(s){ return s<60? s+' s' : s<3600? Math.round(s/60)+' min' : Math.round(s/3600)+' h'; }
+function frame(){ bg(); if(D) render(D); requestAnimationFrame(frame); }
+{{JS}}
+setInterval(poll, POLL); poll(); frame();
+</script></body></html>

@@ -19,7 +19,9 @@ struct UltraWorkspaceApp: App {
             ContentView()
                 .environmentObject(model)
                 // Wider minimum when the Activity column is on, so page text never gets measured at a sliver.
-                .frame(minWidth: model.showActivity ? 1100 : 820, minHeight: 540)
+                // Budget: sidebar up to 320 + divider + Activity 260 + the widest page (Apps / Screensavers:
+                // list 240 + detail 360 = 600) = 1181; at 1100 the detail pane clipped (2026-11-05).
+                .frame(minWidth: model.showActivity ? 1200 : 820, minHeight: 540)
         }
         .windowStyle(.titleBar)
         .commands {

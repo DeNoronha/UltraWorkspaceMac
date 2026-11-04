@@ -109,6 +109,8 @@ public enum UltraBarError: Error, LocalizedError, Sendable {
     case authRejected
     case pairingTimedOut
     case pairingNoToken
+    /// The bar answered the PAIR request with a failure code: Reject was tapped, or the device could not pair.
+    case pairingRejected(code: Int, message: String?)
     case timeout
     case protocolError(String)
     case uploadRejected(String)
@@ -122,6 +124,8 @@ public enum UltraBarError: Error, LocalizedError, Sendable {
         case .authRejected: return "The CoreBar rejected the pairing token."
         case .pairingTimedOut: return "Pairing timed out — no Approve was tapped on the CoreBar."
         case .pairingNoToken: return "The CoreBar did not return a pairing token."
+        case .pairingRejected(let code, let m):
+            return "The CoreBar refused the pairing (code \(code)\(m.map { ": " + $0 } ?? ""))."
         case .timeout: return "The CoreBar did not reply in time."
         case .protocolError(let m): return "Protocol error: \(m)"
         case .uploadRejected(let b): return "The module did not accept the upload: \(b)"

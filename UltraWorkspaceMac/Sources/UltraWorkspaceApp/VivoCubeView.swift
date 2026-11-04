@@ -107,10 +107,7 @@ struct VivoCubeView: View {
                         if i + 1 == showingLayer, !model.vivoLayerNames.isEmpty, i < model.vivoLayerNames.count {
                             Tag("now", .green).help("The card the cube shows right now")
                         }
-                        Button { settings.removeVivoCard(t) } label: {
-                            Image(systemName: "xmark.circle").frame(width: 32, height: 24).contentShape(Rectangle())
-                        }
-                        .buttonStyle(.borderless).help("Remove \(t.title)").accessibilityLabel("Remove \(t.title)")
+                        RemoveMark(title: t.title) { settings.removeVivoCard(t) }
                     }
                     .listRowSeparator(.visible).listRowSeparatorTint(Color.primary.opacity(0.12))
                     .accessibilityActions {

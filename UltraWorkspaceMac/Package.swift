@@ -12,7 +12,8 @@ let package = Package(
         .target(name: "UltraBarKit"),
         .executableTarget(
             name: "UltraWorkspaceApp",
-            dependencies: ["UltraBarKit"]
+            dependencies: ["UltraBarKit"],
+            resources: [.copy("Resources/pages")]
         ),
         .executableTarget(name: "kitcheck", dependencies: ["UltraBarKit"]),
     ]

@@ -40,4 +40,4 @@ Privacy usage descriptions to keep in mind for a signed build: local network (Co
 
 ## Versioning
 
-Bump `CFBundleShortVersionString` / `CFBundleVersion` in `packaging/Info.plist` before tagging. The About panel reads these at runtime. The bar apps have their own version: `versionCode` / `versionName` in `android/DeckhandMonitor/app/build.gradle.kts`, `AppModel.barAppsVersion` (what the Apps page compares the bar's copy against) and the `version` fields in `site/marketplace/registry.json` move together (1.7 / versionCode 8 today).
+Bump `CFBundleShortVersionString` / `CFBundleVersion` in `packaging/Info.plist` before tagging. The About panel reads these at runtime. The bar apps have their own version: `versionCode` / `versionName` in `android/DeckhandMonitor/app/build.gradle.kts`, `AppModel.barAppsVersion` (what the Apps page compares the bar's copy against) and the `version` fields in `site/marketplace/registry.json` move together (1.8 / versionCode 9 today).

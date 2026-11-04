@@ -202,7 +202,8 @@
   fetch(els[0].getAttribute('data-dmg'), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
     if (!j || !j.tag) return;
     var mb = j.size ? (j.size / 1048576).toFixed(1) + ' MB' : '';
-    els.forEach(function (e) { e.textContent = 'DMG · ' + j.tag.replace(/^v/, '') + (mb ? ' · ' + mb : ''); });
+    var sha = (typeof j.sha256 === 'string' && /^[0-9a-f]{64}$/.test(j.sha256)) ? ' · SHA-256 ' + j.sha256.slice(0, 12) + '…' : '';
+    els.forEach(function (e) { e.textContent = 'DMG · ' + j.tag.replace(/^v/, '') + (mb ? ' · ' + mb : '') + sha; if (sha) e.title = 'SHA-256 ' + j.sha256; });
   }).catch(function () {});
 })();
 </script>

@@ -46,6 +46,72 @@ struct InstalledToggle: View {
     }
 }
 
+// MARK: Taking things off
+//
+// Rule (2026-11-04) — two looks for "take this off", chosen by what the click does:
+//  • `RemoveButton`: a red, bordered "Remove" that asks first. For every row where removing acts on a device
+//    at once (an uninstall over ADB or the bar's installer) or sits out of sight of the button that makes a
+//    list change real — that is the whole Installed page, card rows included.
+//  • `RemoveMark`: a borderless ✕, no question. Only in the drag-to-reorder card lists on the CoreBar and
+//    VivoCube pages: the click takes a row out of a list edited in place next to "Add a card…", and nothing
+//    reaches a device until Publish page / Send to cube. A labelled red button on every row of a reorderable
+//    list would outweigh the names. The ✕ has the same hit area (32 × 24), help and accessibility label
+//    everywhere; do not hand-roll it.
+
+/// Red, bordered "Remove" that asks first. `confirm` is the question ("Remove Sonos from the bar?").
+struct RemoveButton: View {
+    let confirm: String
+    var help: String? = nil
+    var disabled = false
+    let action: () -> Void
+    @State private var asking = false
+    var body: some View {
+        Button { asking = true } label: { Label("Remove", systemImage: "trash") }
+            .buttonStyle(.bordered).tint(.red).disabled(disabled)
+            .help(help ?? confirm)
+            .alert(confirm, isPresented: $asking) {
+                Button("Remove", role: .destructive) { action() }
+                Button("Cancel", role: .cancel) {}
+            }
+    }
+}
+
+/// Borderless ✕ at the end of a reorderable card row — see the rule above.
+struct RemoveMark: View {
+    let title: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) { Image(systemName: "xmark.circle").frame(width: 32, height: 24).contentShape(Rectangle()) }
+            .buttonStyle(.borderless)
+            .help("Remove \(title) from the list").accessibilityLabel("Remove \(title)")
+    }
+}
+
+/// Non-scrolling strip under the Header of the Installed, Apps and Screensavers pages (like DeviceStrip): a
+/// catalogue or install/remove error stays in view however far down the list the row that caused it is.
+struct LibraryErrorStrip: View {
+    @EnvironmentObject var model: AppModel
+    var includeBarApps = true     // Screensavers has no Deckhand apps, so no barAppError
+    var body: some View {
+        let errors = [model.appStoreError, includeBarApps ? model.barAppError : nil].compactMap { $0 }
+        if !errors.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(errors, id: \.self) { e in
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        // No fixedSize(vertical:) here, as in DeviceStrip: a flexible frame wraps the text instead.
+                        Text(e).font(.callout).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                    }
+                    .padding(8).background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
+                }
+            }
+            .padding(.horizontal, 20).padding(.vertical, 8)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .accessibilityElement(children: .contain).accessibilityLabel("Errors")
+        }
+    }
+}
+
 /// Title row of a detail pane: icon, name, version and status tag.
 struct DetailTitle<Icon: View>: View {
     let title: String; var version: String? = nil; var tag: (String, Color)? = nil; var subtitle: String? = nil

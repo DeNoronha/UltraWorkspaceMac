@@ -1,4 +1,5 @@
 import Foundation
+import UltraBarKit
 
 /// Inline progress for a multi-step device action (render → upload → apply → show).
 /// Replaces narration in the status bar with state the page can draw.
@@ -45,18 +46,63 @@ struct StepProgress: Equatable {
 }
 
 /// Plain-English version of an upload / request error.
+///
+/// `UltraBarError` cases map by type (`text(_ error:)`); only errors from outside the kit (URLSession,
+/// POSIX) and bare reply strings go through the word table in `fallback`, which used to match "host"
+/// inside "hotspot" and route a module-link error to "could not reach the bar".
 enum FriendlyError {
-    static func text(_ error: Error) -> String { text(error.localizedDescription) }
+    // The eight sentences, each used from exactly one place below.
+    static let cubeNoLink = "The cube is not on Wi-Fi, so the upload could not reach it. Set the cube's Wi-Fi (Maintenance) or detach and re-attach the cube."
+    static let cubeOffWiFi = "The cube says it is not on Wi-Fi (it is usually stuck “connecting”). Send its Wi-Fi settings again under Maintenance, wait until it shows “connected”, then send the cards again."
+    static let launcherExhausted = "The bar's launcher has used up its upload slots — a leak in its firmware, one per upload, 100 per start. Deckhand restarts the launcher over Wi-Fi ADB when it can; otherwise restart the bar."
+    static let uploadRefused = "The cube did not take the upload (it may be busy or off Wi-Fi). Try again in a minute or check the cube's Wi-Fi."
+    static let noAnswer = "The bar did not answer in time. Is it on the same Wi-Fi?"
+    static let pairAgain = "The bar no longer accepts this Mac — pair again."
+    static let certChanged = "The bar's certificate changed — pair again."
+    static let unreachable = "Could not reach the bar at its last address. Is it on and on the same Wi-Fi?"
+
+    static func text(_ error: Error) -> String {
+        guard let e = error as? UltraBarError else { return fallback(error.localizedDescription) }
+        switch e {
+        case .uploadRejected(let body): return uploadText(body)
+        case .timeout, .pairingTimedOut: return noAnswer
+        case .authRejected, .pairingNoToken: return pairAgain
+        case .certPinMismatch: return certChanged
+        case .notConnected: return unreachable
+        // Already a plain sentence (Reject was tapped, or the bar's own reason).
+        case .pairingRejected: return e.localizedDescription
+        // Free text from the kit: a TLS message or a protocol note ("Set a city …", "bad upload URL").
+        case .tlsFailed, .protocolError: return fallback(e.localizedDescription)
+        }
+    }
+
+    /// A bare string: an upload reply as `UploadDiag` kept it, or an already-described error.
     static func text(_ raw: String) -> String {
+        if raw.contains("reply error") || raw.contains("\"state\":") || raw.contains("hotspotIp") { return uploadText(raw) }
+        return fallback(raw)
+    }
+
+    /// The body of an `uploadRejected`, read the way `CoreBarSession.upload` reads the bar's reply.
+    private static func uploadText(_ body: String) -> String {
+        if body == CoreBarSession.launcherExhaustedText { return launcherExhausted }
+        if body.contains("hotspot has no IP") { return cubeNoLink }   // the kit's own sentence for `hotspotNoIp` after its retries
+        switch CoreBarSession.UploadReply(accepted: false, text: body) {
+        case .accepted: return body
+        case .hotspotNoIp: return cubeNoLink
+        case .cubeOffline: return cubeOffWiFi
+        case .launcherExhausted: return launcherExhausted
+        case .moduleNotFound, .other: return body.contains("\"state\":-") || body.contains("\"state\": -") || body.contains("reply error") ? uploadRefused : fallback(body)
+        }
+    }
+
+    /// Word table for text that did not come from the kit's typed errors (URLSession, POSIX, Process).
+    private static func fallback(_ raw: String) -> String {
         let l = raw.lowercased()
-        if l.contains("hotspotip") { return "The cube is not on Wi-Fi, so the upload could not reach it. Set the cube's Wi-Fi (Maintenance) or detach and re-attach the cube." }
-        if l.contains("reply error:4") || l.contains("reply error:2") { return "The cube says it is not on Wi-Fi (it is usually stuck “connecting”). Send its Wi-Fi settings again under Maintenance, wait until it shows “connected”, then send the cards again." }
-        if l.contains("out of upload slots") { return "The bar's launcher has used up its upload slots — a leak in its firmware, one per upload, 100 per start. Deckhand restarts the launcher over Wi-Fi ADB when it can; otherwise restart the bar." }
-        if l.contains("reply error") || l.contains("state\":-") || l.contains("state\": -") { return "The cube did not take the upload (it may be busy or off Wi-Fi). Try again in a minute or check the cube's Wi-Fi." }
-        if l.contains("timed out") || l.contains("timeout") { return "The bar did not answer in time. Is it on the same Wi-Fi?" }
-        if l.contains("token") || l.contains("auth") { return "The bar no longer accepts this Mac — pair again." }
-        if l.contains("certificate") || l.contains("pin") { return "The bar's certificate changed — pair again." }
-        if l.contains("connection refused") || l.contains("unreachable") || l.contains("host") { return "Could not reach the bar at its last address. Is it on and on the same Wi-Fi?" }
+        if l.contains("out of upload slots") { return launcherExhausted }
+        if l.contains("timed out") || l.contains("timeout") { return noAnswer }
+        if l.contains("token") || l.contains("unauthori") || l.contains("authentication") { return pairAgain }
+        if l.contains("certificate") || l.contains("pinned") || l.contains("pin mismatch") { return certChanged }
+        if l.contains("connection refused") || l.contains("unreachable") || l.contains("hostname") || l.contains("route to host") || l.contains("host is down") { return unreachable }
         return raw
     }
 }

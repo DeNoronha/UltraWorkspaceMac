@@ -4,8 +4,6 @@ import Foundation
 /// golden hour, moon phase and the next full and new moon. Low-precision algorithms (Meeus; NOAA for the
 /// sun), good to about a minute for rise/set and a degree for positions — plenty for a card on the bar.
 public enum SkyMath {
-    public struct Airport {}
-
     public struct Position: Sendable { public var elevation: Double; public var azimuth: Double }
 
     public struct SunDay: Sendable {
@@ -33,7 +31,6 @@ public enum SkyMath {
     // MARK: - Time helpers
 
     static func julianDay(_ d: Date) -> Double { d.timeIntervalSince1970 / 86400 + 2440587.5 }
-    static func date(jd: Double) -> Date { Date(timeIntervalSince1970: (jd - 2440587.5) * 86400) }
     static func rad(_ d: Double) -> Double { d * .pi / 180 }
     static func deg(_ r: Double) -> Double { r * 180 / .pi }
     static func norm(_ d: Double) -> Double { var x = d.truncatingRemainder(dividingBy: 360); if x < 0 { x += 360 }; return x }

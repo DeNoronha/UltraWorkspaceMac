@@ -118,8 +118,12 @@ extension AppModel {
         let params = (p["params"] as? [String: Any]) ?? [:]
         switch action {
         case "openBrowser":
-            if let s = params["url"] as? String, let u = URL(string: s), ["http", "https"].contains(u.scheme ?? "") {
-                NSWorkspace.shared.open(u); say("Opened \(s) (from the CoreBar).")
+            // Never silently: whoever can speak to :7431 could push a phishing or drive-by URL. Deckhand asks
+            // first (host and full URL, Open / Ignore), http(s) only, and remembers nothing (SECURITY.md, path 3).
+            if let s = params["url"] as? String, let u = URL(string: s), ["http", "https"].contains(u.scheme?.lowercased() ?? ""), u.host != nil {
+                confirmOpenBrowser(u)
+            } else {
+                say("CoreBar asked to open a link that is not http(s) — ignored.")
             }
         case "openFile", "startApp", "inputText", "execCmd":
             // Anything that can speak to :7431 (the vendor TLS key is shared across devices) could
@@ -130,6 +134,39 @@ extension AppModel {
             WireLog.shared.event("PC_CONTROL \(action) refused (params: \(params.keys.sorted().joined(separator: ",")))")
         default:
             say("CoreBar sent PC_CONTROL \(p.keys.sorted().joined(separator: ",")) — ignored.")
+        }
+    }
+
+    /// "The CoreBar wants to open a web page": an alert with the host and the URL. One at a time — a second
+    /// request while one is showing is dropped and logged, so a hostile bar cannot stack dialogs. Nothing is
+    /// remembered: the next request asks again.
+    private func confirmOpenBrowser(_ url: URL) {
+        let host = url.host ?? "?"
+        let text = url.absoluteString
+        guard browserRequestPending == nil else {
+            say("CoreBar asked to open \(host) while another request is still open — ignored.")
+            return
+        }
+        browserRequestPending = text
+        say("CoreBar wants to open \(host) — waiting for your answer.")
+        // Off the push handler's call chain: the bar gets its reply first, then the window asks.
+        Task { @MainActor in
+            let alert = NSAlert()
+            alert.messageText = "Open a web page the CoreBar asked for?"
+            alert.informativeText = "The bar \(self.selectedCoreBar?.name ?? "") asks this Mac to open\n\n\(host)\n\(text.count > 300 ? String(text.prefix(300)) + "…" : text)\n\nOnly open it if you expect it (an app card on the bar you tapped, for instance)."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Ignore")
+            alert.addButton(withTitle: "Open")
+            NSApp.activate(ignoringOtherApps: true)
+            let open: Bool
+            if let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible }) {
+                open = await alert.beginSheetModal(for: window) == .alertSecondButtonReturn
+            } else {
+                open = alert.runModal() == .alertSecondButtonReturn
+            }
+            self.browserRequestPending = nil
+            if open { NSWorkspace.shared.open(url); self.say("Opened \(host) (from the CoreBar).") }
+            else { self.say("Did not open \(host) (from the CoreBar).") }
         }
     }
 

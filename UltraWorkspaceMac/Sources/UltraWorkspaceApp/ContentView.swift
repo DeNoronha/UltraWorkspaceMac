@@ -14,7 +14,7 @@ struct ContentView: View {
                 DetailRouter()
                 if model.showActivity {
                     Divider()
-                    ActivityLog().frame(width: 280)
+                    ActivityLog().frame(width: 260)
                 }
             }
         }
@@ -23,7 +23,7 @@ struct ContentView: View {
         .onAppear {
             // The cube keeps its last package across restarts: let DotKey "next" wrap at that count.
             model.lastPublishedVivoLayers = max(model.lastPublishedVivoLayers, settings.vivoLayerCount)
-            model.startMusicPolling(); model.startDailyCoverRefresh(settings: settings); model.startClaudeWatch(settings: settings); model.startMonitor(settings: settings); model.startPresence(settings: settings)
+            model.startMusicPolling(settings: settings); model.startDailyCoverRefresh(settings: settings); model.startClaudeWatch(settings: settings); model.startMonitor(settings: settings); model.startPresence(settings: settings)
             // Resume timed switching if it was on when the app last quit.
             if settings.vivoRotationOn, settings.vivoSwitchMode == .timed, !model.themeRunning { model.sendToCube(settings: settings) }
         }
@@ -113,7 +113,7 @@ struct ConnectView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(asSheet ? "Add a CoreBar" : "Connect your UltraBar").font(.title2).bold()
+                    Text(asSheet ? "Add a CoreBar" : "Connect your CoreBar").font(.title2).bold()
                     Text("The bar and this Mac must be on the same Wi-Fi. The USB cable only powers the bar.").foregroundStyle(.secondary)
                 }
                 Panel("1 · Find the bar") {
@@ -168,7 +168,7 @@ struct ConnectView: View {
 struct ConnectionHelp: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Connecting your UltraBar", systemImage: "cable.connector").font(.headline)
+            Label("Connecting your CoreBar", systemImage: "cable.connector").font(.headline)
             Text("Deckhand controls the CoreBar over your **Wi-Fi / local network** — the Mac and the CoreBar must be on the same network. The USB cable is only for power; there is no USB data link.")
                 .font(.callout).fixedSize(horizontal: false, vertical: true)
             GroupBox {
@@ -275,6 +275,28 @@ struct EmptyState<Actions: View>: View {
             actions
         }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(28)
     }
+}
+
+/// The one "Replace the bar's pages?" question, asked before a publish that would remove pages made in the
+/// official app — Publish page (CoreBar) and Publish bindings (Controls) share it, so the words are identical.
+/// Callers set `isPresented` when `model.publishNeedsConfirmation(settings:)` says so; "Replace pages" publishes.
+struct PublishConfirmation: ViewModifier {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var settings: AppSettings
+    @Binding var isPresented: Bool
+    func body(content: Content) -> some View {
+        content.alert("Replace the bar's pages?", isPresented: $isPresented) {
+            Button("Replace pages", role: .destructive) { model.publishDeckhandPage(settings: settings) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(model.foreignPages.isEmpty
+                 ? "The bar will have two pages: its Standard page and the Deckhand page (the knob and key bindings travel with it). The bar cannot send pages back, so pages made in the official app would be removed — none were found right now."
+                 : "These pages were made in the official app and will be removed: \(model.foreignPages.map(\.name).joined(separator: ", ")). Re-deploy them from that app if you still need them.")
+        }
+    }
+}
+extension View {
+    func publishConfirmation(isPresented: Binding<Bool>) -> some View { modifier(PublishConfirmation(isPresented: isPresented)) }
 }
 
 /// Inline stepper under a Send / Publish button.

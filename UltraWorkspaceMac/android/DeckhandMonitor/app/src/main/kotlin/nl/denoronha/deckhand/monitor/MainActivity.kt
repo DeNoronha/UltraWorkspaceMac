@@ -18,6 +18,7 @@ import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -36,6 +37,10 @@ import kotlin.math.abs
  * Deckhand broadcasts on port 5320, or the last URL remembered in SharedPreferences.
  * Whatever the source, only http(s) URLs whose host is a private (LAN) IPv4 address are
  * loaded, and the WebView never navigates away from that host.
+ *
+ * A page that cannot be loaded (transport error or an HTTP error status on the main frame)
+ * gives way to the "Looking for Deckhand…" page and is retried; a page whose beacons stop
+ * for [BEACON_LOST_MS] gives way to it too, and the next beacon loads the page again.
  */
 class MainActivity : Activity() {
 
@@ -46,6 +51,7 @@ class MainActivity : Activity() {
         private const val PREF_URL = "lastUrl"
         private const val FALLBACK_DELAY_MS = 4_000L
         private const val RETRY_DELAY_MS = 5_000L
+        private const val BEACON_LOST_MS = 60_000L   // Deckhand beacons every 5 s
         private const val LONG_PRESS_MS = 700L
         private const val LOOKING_HTML = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -83,6 +89,20 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
         }
     }
 
+    /**
+     * No beacon for [BEACON_LOST_MS] while a page is shown: Deckhand is gone (quit, asleep,
+     * other network), so show "Looking for Deckhand…" instead of a frozen page. The URL stays
+     * remembered; the next beacon loads it again at once (see [onBeacon]). Armed by every
+     * beacon and by onResume, cancelled in onPause/onDestroy.
+     */
+    private val beaconLost = Runnable {
+        if (isFinishing || isDestroyed) return@Runnable
+        if (currentUrl != null && !showingLookingPage) {
+            Log.i(TAG, "No beacon for ${BEACON_LOST_MS / 1000} s, looking for Deckhand again")
+            showLookingPage()
+        }
+    }
+
     private val longPressFinish = Runnable { finish() }
 
     // ---- lifecycle ---------------------------------------------------------------------------
@@ -94,11 +114,12 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
 
         web = WebView(this).apply {
             setBackgroundColor(Color.BLACK)
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
-                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                // The pages are plain http on the LAN (cleartext is allowed in the manifest);
+                // nothing legitimately mixes https and http, so never allow it.
+                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 cacheMode = WebSettings.LOAD_NO_CACHE
                 mediaPlaybackRequiresUserGesture = false
                 useWideViewPort = true
@@ -148,11 +169,13 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
             main.removeCallbacks(retry)
             main.post(retry)
         }
+        armBeaconLost()
     }
 
     override fun onPause() {
         main.removeCallbacks(fallbackToRemembered)
         main.removeCallbacks(retry)
+        main.removeCallbacks(beaconLost)
         main.removeCallbacks(longPressFinish)
         stopBeaconListener()
         releaseMulticastLock()
@@ -197,15 +220,25 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
 
     private fun showLookingPage() {
         showingLookingPage = true
+        main.removeCallbacks(beaconLost)
         web.loadDataWithBaseURL(null, LOOKING_HTML, "text/html", "utf-8", null)
     }
 
-    /** Load [url] now (or re-load it if it previously failed) and remember it. */
+    /** (Re)start the beacon-loss clock while a page is shown; a no-op on the looking page. */
+    private fun armBeaconLost() {
+        main.removeCallbacks(beaconLost)
+        if (currentUrl != null && !showingLookingPage) main.postDelayed(beaconLost, BEACON_LOST_MS)
+    }
+
+    /**
+     * Load [url] now and remember it. A no-op when [url] is already on screen; a page that
+     * failed, or gave way to the looking page, is loaded again.
+     */
     private fun load(url: String) {
         main.removeCallbacks(fallbackToRemembered)
         main.removeCallbacks(retry)
-        prefs().edit().putString(PREF_URL, url).apply()
         if (url == currentUrl && !lastLoadFailed && !showingLookingPage) return
+        if (url != currentUrl) prefs().edit().putString(PREF_URL, url).apply()
         currentUrl = url
         lastLoadFailed = false
         showingLookingPage = false
@@ -214,12 +247,9 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
 
     private fun onBeacon(url: String) {
         if (isFinishing || isDestroyed) return
-        if (url != currentUrl) {
-            Log.i(TAG, "Beacon url $url")
-            load(url)
-        } else if (lastLoadFailed) {
-            load(url)
-        }
+        if (url != currentUrl) Log.i(TAG, "Beacon url $url")
+        load(url)          // no-op while that page is already up; otherwise (re)load it now
+        armBeaconLost()
     }
 
     private inner class Client : WebViewClient() {
@@ -247,7 +277,22 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (!request.isForMainFrame) return
-            Log.w(TAG, "Main frame error ${error.errorCode} ${error.description} for ${request.url}")
+            mainFrameFailed("error ${error.errorCode} ${error.description}", request.url)
+        }
+
+        /**
+         * An HTTP error status on the main frame (403 from a Mac that refuses us, 503 while
+         * "Serve the pages" is off, 404 for a page this Deckhand does not have) is a failure
+         * like any other: show the looking page instead of the server's error body and retry.
+         * Sub-resource errors (a 404 for data.json, a tile) are the page's own business.
+         */
+        override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
+            if (!request.isForMainFrame) return
+            mainFrameFailed("HTTP ${errorResponse.statusCode} ${errorResponse.reasonPhrase}", request.url)
+        }
+
+        private fun mainFrameFailed(what: String, url: Uri) {
+            Log.w(TAG, "Main frame $what for $url")
             errorInThisLoad = true
             lastLoadFailed = true
             showLookingPage()

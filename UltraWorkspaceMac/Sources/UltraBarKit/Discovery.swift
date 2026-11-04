@@ -49,15 +49,21 @@ public enum Discovery {
         let deadline = Date().addingTimeInterval(timeout)
         var lastProbe = Date.distantPast
 
+        // 255.255.255.255 leaves on the primary interface only; a bar on a second interface (Ethernet next to
+        // Wi-Fi, a USB adapter, a hotspot) only hears its own subnet's directed broadcast. Replies from a bar
+        // reached twice collapse on the serial in `found`.
+        let targets = [INADDR_BROADCAST] + broadcastAddresses().filter { $0 != INADDR_BROADCAST }
         func broadcast() {
-            var dst = sockaddr_in()
-            dst.sin_family = sa_family_t(AF_INET)
-            dst.sin_port = Proto.discoveryPort.bigEndian
-            dst.sin_addr.s_addr = INADDR_BROADCAST
-            probe.withUnsafeBufferPointer { buf in
-                _ = withUnsafePointer(to: &dst) { p in
-                    p.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                        sendto(fd, buf.baseAddress, buf.count, 0, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
+            for target in targets {
+                var dst = sockaddr_in()
+                dst.sin_family = sa_family_t(AF_INET)
+                dst.sin_port = Proto.discoveryPort.bigEndian
+                dst.sin_addr.s_addr = target
+                probe.withUnsafeBufferPointer { buf in
+                    _ = withUnsafePointer(to: &dst) { p in
+                        p.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                            sendto(fd, buf.baseAddress, buf.count, 0, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
+                        }
                     }
                 }
             }
@@ -94,6 +100,28 @@ public enum Discovery {
             }
         }
         return Array(found.values).sorted { $0.name < $1.name }
+    }
+
+    /// The directed broadcast address (network byte order) of every up, non-loopback IPv4 interface that has
+    /// one, de-duplicated. Used alongside 255.255.255.255 so a probe reaches every attached subnet.
+    static func broadcastAddresses() -> [in_addr_t] {
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return [] }
+        defer { freeifaddrs(ifaddr) }
+        var out: [in_addr_t] = []
+        var ptr: UnsafeMutablePointer<ifaddrs>? = first
+        while let p = ptr {
+            let ifa = p.pointee
+            ptr = ifa.ifa_next
+            let flags = Int32(bitPattern: ifa.ifa_flags)
+            guard flags & IFF_UP != 0, flags & IFF_LOOPBACK == 0, flags & IFF_BROADCAST != 0,
+                  let addr = ifa.ifa_addr, addr.pointee.sa_family == UInt8(AF_INET),
+                  let bcast = ifa.ifa_dstaddr, bcast.pointee.sa_family == UInt8(AF_INET) else { continue }
+            // On BSD `ifa_dstaddr` is the broadcast address when IFF_BROADCAST is set (`ifa_broadaddr` is a macro for it).
+            let a = bcast.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee.sin_addr.s_addr }
+            if a != 0, !out.contains(a) { out.append(a) }
+        }
+        return out
     }
 
     /// Targeted (unicast) discovery of a single CoreBar at a known IP — used by

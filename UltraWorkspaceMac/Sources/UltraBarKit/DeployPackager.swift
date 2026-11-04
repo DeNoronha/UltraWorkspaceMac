@@ -82,20 +82,48 @@ public enum DeployPackager {
     // MARK: gzip
 
     public static func gzip(_ input: [UInt8]) -> Data {
-        var deflated = [UInt8](repeating: 0, count: input.count + 4096)
-        let written = input.withUnsafeBufferPointer { src in
-            deflated.withUnsafeMutableBufferPointer { dst in
-                compression_encode_buffer(dst.baseAddress!, dst.count,
-                                          src.baseAddress!, src.count,
-                                          nil, COMPRESSION_ZLIB)
-            }
-        }
         var out = Data([0x1f, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0x00, 0xFF])
-        out.append(contentsOf: deflated[0..<written])
+        out.append(contentsOf: deflate(input))
         var crc = crc32(input).littleEndian
         withUnsafeBytes(of: &crc) { out.append(contentsOf: $0) }
         var isize = UInt32(truncatingIfNeeded: input.count).littleEndian
         withUnsafeBytes(of: &isize) { out.append(contentsOf: $0) }
+        return out
+    }
+
+    /// Raw DEFLATE of `input`. `compression_encode_buffer` returns 0 when its output buffer is too small,
+    /// which happens for incompressible input of some size (random bytes past about 13 MB with the old
+    /// `count + 4096` buffer); an empty body then made a corrupt tgz. Try a buffer with headroom, once more
+    /// with half again as much, and otherwise emit stored (uncompressed) blocks, which always fit.
+    public static func deflate(_ input: [UInt8]) -> [UInt8] {
+        if input.isEmpty { return [0x01, 0x00, 0x00, 0xFF, 0xFF] } // one final stored block of length 0
+        for capacity in [input.count + 4096, input.count + input.count / 2 + 65536] {
+            var deflated = [UInt8](repeating: 0, count: capacity)
+            let written = input.withUnsafeBufferPointer { src in
+                deflated.withUnsafeMutableBufferPointer { dst in
+                    compression_encode_buffer(dst.baseAddress!, dst.count, src.baseAddress!, src.count, nil, COMPRESSION_ZLIB)
+                }
+            }
+            if written > 0 { return Array(deflated[0..<written]) }
+        }
+        return storedBlocks(input)
+    }
+
+    /// DEFLATE stored blocks (BTYPE 00): 5 bytes of header per up to 65 535 bytes of payload, last one final.
+    public static func storedBlocks(_ input: [UInt8]) -> [UInt8] {
+        var out: [UInt8] = []
+        out.reserveCapacity(input.count + input.count / 65535 * 5 + 5)
+        var off = 0
+        repeat {
+            let n = min(65535, input.count - off)
+            let final: UInt8 = off + n >= input.count ? 1 : 0
+            let len = UInt16(n)
+            out.append(final)
+            out.append(UInt8(len & 0xFF)); out.append(UInt8(len >> 8))
+            out.append(UInt8(~len & 0xFF)); out.append(UInt8(~len >> 8))
+            out.append(contentsOf: input[off..<(off + n)])
+            off += n
+        } while off < input.count
         return out
     }
 

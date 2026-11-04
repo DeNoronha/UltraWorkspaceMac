@@ -27,10 +27,19 @@ final class BarPages {
     private var linear: [String: Any] = ["issues": [], "hasKey": false]
     /// When each page's data was last asked for: the flights poll runs fast only while the page is open.
     private var lastHit: [String: Date] = [:]
+    /// Seconds since a page last asked for its data (nil: never) — `AppModel.musicWanted` slows the Music poll on it.
+    func secondsSinceHit(_ page: String) -> TimeInterval? { lastHit[page].map { Date().timeIntervalSince($0) } }
     private var tasks: [Task<Void, Never>] = []
+
+    /// The resource self-check reports once per launch, not on every settings change that restarts the feeds.
+    private static var reportedMissing = false
 
     func start(model: AppModel, settings: AppSettings) {
         stop()
+        if !Self.reportedMissing, !Self.missingResources.isEmpty {
+            Self.reportedMissing = true
+            model.say("Bar pages missing from the app's resource bundle: \(Self.missingResources.joined(separator: ", ")). Those pages show 'Page missing' on the bar; rebuild with packaging/make-app.sh.")
+        }
         startFeeds(model: model, settings: settings)
         tasks.append(Task { [weak self] in   // Claude sessions + Music: 2 s
             while !Task.isCancelled {
@@ -306,327 +315,65 @@ final class BarPages {
 
     // MARK: pages
 
+    /// The pages live in `Resources/pages/` (`shell.html` with `{{TITLE}}` and `{{JS}}`, one `<page>.js` per
+    /// app, `monitor.html` on its own), read once at startup into `resources`. A page whose file is absent
+    /// gets a plain "page missing" HTML with the file name, never a crash; `start()` reports the gap once.
+    nonisolated static let resourceNames = ["shell.html", "monitor.html"] + pages.filter { $0 != "monitor" }.map { "\($0).js" }
+
+    nonisolated static let resources: [String: String] = {
+        var out: [String: String] = [:]
+        for name in resourceNames {
+            guard let url = resourceURL(name), var s = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            if s.hasSuffix("\n") { s.removeLast() }   // the files end in a newline; the shell adds its own
+            out[name] = s
+        }
+        return out
+    }()
+
+    nonisolated static var missingResources: [String] { resourceNames.filter { resources[$0] == nil } }
+
+    /// `Bundle.module` without its fatalError: the SwiftPM resource bundle sits next to the binary under
+    /// `.build/<conf>/` and in `Contents/Resources/` inside Deckhand.app (packaging/make-app.sh copies it).
+    nonisolated static func resourceURL(_ name: String) -> URL? {
+        let bundleName = "UltraWorkspaceMac_UltraWorkspaceApp.bundle"
+        let roots = [Bundle.main.resourceURL, Bundle.main.bundleURL, Bundle.main.executableURL?.deletingLastPathComponent()]
+        let ext = (name as NSString).pathExtension, base = (name as NSString).deletingPathExtension
+        for root in roots.compactMap({ $0 }) {
+            if let bundle = Bundle(url: root.appendingPathComponent(bundleName)),
+               let url = bundle.url(forResource: base, withExtension: ext, subdirectory: "pages") { return url }
+            let flat = root.appendingPathComponent("pages").appendingPathComponent(name)   // `swift run` from a checkout
+            if FileManager.default.fileExists(atPath: flat.path) { return flat }
+        }
+        return nil
+    }
+
     nonisolated static func html(_ page: String) -> String {
         switch page {
-        case "monitor": return AppModel.monitorPage
-        case "claude": return wrap("Claude", claudeJS)
-        case "crypto": return wrap("Crypto", cryptoJS)
-        case "weather": return wrap("Weather", weatherJS)
-        case "music": return wrap("Music", musicJS)
-        case "calendar": return wrap("Calendar", calendarJS)
-        case "flights": return wrap("Flights", flightsJS)
-        case "sky": return wrap("Sun & Moon", skyJS)
-        case "news": return wrap("Headlines", newsJS)
-        case "verse": return wrap("Verse", verseJS)
-        case "tasks": return wrap("Tasks", tasksJS)
+        case "monitor": return resources["monitor.html"] ?? missing("monitor.html")
+        case "claude": return wrap("Claude", "claude.js")
+        case "crypto": return wrap("Crypto", "crypto.js")
+        case "weather": return wrap("Weather", "weather.js")
+        case "music": return wrap("Music", "music.js")
+        case "calendar": return wrap("Calendar", "calendar.js")
+        case "flights": return wrap("Flights", "flights.js")
+        case "sky": return wrap("Sun & Moon", "sky.js")
+        case "news": return wrap("Headlines", "news.js")
+        case "verse": return wrap("Verse", "verse.js")
+        case "tasks": return wrap("Tasks", "tasks.js")
         default: return wrap(page, "")
         }
     }
 
-    /// Shared shell: dark grey 1424×280 canvas, a ✕, a "waiting" overlay, and a poll loop that calls `render(d)`.
-    nonisolated static func wrap(_ title: String, _ js: String) -> String {
-        #"""
-        <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1424,height=280,initial-scale=1">
-        <title>Deckhand </title>
-        <style>
-          html,body{margin:0;background:#1c2029;color:#fff;font:18px -apple-system,Roboto,Helvetica,Arial,sans-serif;overflow:hidden;width:1424px;height:280px;-webkit-user-select:none}
-          canvas{display:block}
-          #x{position:absolute;right:14px;top:10px;width:40px;height:40px;border-radius:20px;background:rgba(255,255,255,.16);color:#e5e9f0;font-size:22px;line-height:40px;text-align:center}
-          #wait{position:absolute;left:0;top:0;width:1424px;height:280px;display:flex;align-items:center;justify-content:center;color:#8b94a6;font-size:20px;background:#1c2029}
-          .btn{position:absolute;top:200px;width:64px;height:64px;border-radius:32px;background:rgba(255,255,255,.14);color:#fff;font-size:28px;line-height:64px;text-align:center}
-        </style></head><body>
-        <canvas id="c" width="1424" height="280"></canvas><div id="x">✕</div><div id="wait">Waiting for the Mac…</div>
-        <script>
-        const c=document.getElementById('c'),g=c.getContext('2d'); let D=null, okAt=0;
-        document.getElementById('x').onclick=()=>{ if(window.Deckhand) Deckhand.close(); };
-        async function poll(){ try{ const r=await fetch(location.pathname.replace(/\/$/,'')+'/data.json',{cache:'no-store'}); D=await r.json(); okAt=Date.now();
-            document.getElementById('wait').style.display='none'; }catch(e){ if(Date.now()-okAt>8000) document.getElementById('wait').style.display='flex'; } }
-        function act(p){ return fetch(p,{method:'POST',headers:{'X-Deckhand':'action'}}).catch(()=>{}); }
-        function bg(){ g.fillStyle='#1c2029'; g.fillRect(0,0,1424,280); }
-        function txt(s,x,y,size,col,align,weight){ g.fillStyle=col||'#fff'; g.font=(weight||'400')+' '+size+'px -apple-system,Roboto,Helvetica,Arial,sans-serif'; g.textAlign=align||'left'; g.fillText(s,x,y); }
-        function rr(x,y,w,h,r,col){ g.fillStyle=col; g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fill(); }
-        function clip(s,n){ s=s||''; return s.length>n? s.slice(0,n-1)+'…':s; }
-        function ago(s){ return s<60? s+' s' : s<3600? Math.round(s/60)+' min' : Math.round(s/3600)+' h'; }
-        function frame(){ bg(); if(D) render(D); requestAnimationFrame(frame); }
-        JS
-        setInterval(poll, POLL); poll(); frame();
-        </script></body></html>
-        """#.replacingOccurrences(of: "<title>Deckhand </title>", with: "<title>Deckhand \(title)</title>").replacingOccurrences(of: "\nJS\n", with: "\n" + js + "\n")
+    /// Shared shell (`shell.html`): dark grey 1424×280 canvas, a ✕, a "waiting" overlay, and a poll loop that
+    /// calls `render(d)` from the page's script. `script` is the resource name; "" gives the bare shell.
+    nonisolated static func wrap(_ title: String, _ script: String) -> String {
+        guard let shell = resources["shell.html"] else { return missing("shell.html") }
+        let js: String
+        if script.isEmpty { js = "" } else if let s = resources[script] { js = s } else { return missing(script) }
+        return shell.replacingOccurrences(of: "{{TITLE}}", with: title).replacingOccurrences(of: "\n{{JS}}\n", with: "\n" + js + "\n")
     }
 
-    nonisolated static let claudeJS = #"""
-        const POLL=2000;
-        function render(d){
-          const w=d.waiting||0;
-          txt('Claude Code',40,46,20,'#d6dbe6','left','600');
-          txt(w? (w===1?'1 terminal needs you':w+' terminals need you') : 'Nothing waiting', 40,100,40,w?'#fbbf24':'#9aa3b2','left','700');
-          txt((d.active||0)+' active · '+(d.tokens||'0')+' tokens today',40,136,17,'#8b94a6');
-          const list=(d.sessions||[]).slice().sort((a,b)=> (a.state!=='working')===(b.state!=='working') ? 0 : (a.state!=='working'? -1:1)).slice(0,4);
-          const pulse=0.5+0.5*Math.sin(Date.now()/350);
-          list.forEach((s,i)=>{ const x=470+i*235, y=28, W=222, H=224;
-            const wait=s.state!=='working';
-            rr(x,y,W,H,14, wait? 'rgba(251,191,36,'+(0.22+0.18*pulse)+')' : 'rgba(255,255,255,.07)');
-            if(wait){ g.strokeStyle='rgba(251,191,36,'+(0.6+0.4*pulse)+')'; g.lineWidth=3; g.strokeRect(x+1.5,y+1.5,W-3,H-3); }
-            txt(clip(s.project,16),x+16,y+40,24,'#fff','left','700');
-            txt(s.state==='question'?'asks a question': wait?'waiting for you':'working…', x+16,y+68,16, wait?'#fde68a':'#8b94a6','left','600');
-            // Two lines each: the first line is cut without an ellipsis (the text goes on below), the second is clipped.
-            const ti=s.title||'', la=s.last||'';
-            txt(ti.slice(0,25),x+16,y+100,15,'#c7cdd8'); const t2=clip(ti,52).slice(25); if(t2) txt(t2,x+16,y+122,15,'#c7cdd8');
-            txt(la.slice(0,29),x+16,y+170,14,'#8b94a6'); const l2=clip(la,60).slice(29); if(l2) txt(l2,x+16,y+190,14,'#8b94a6');
-            txt(ago(s.ago)+' ago',x+16,y+H-16,14,'#6b7280');
-          });
-          if(!list.length) txt('No Claude Code session in the last hour.',470,150,20,'#6b7280');
-        }
-        """#
-
-    nonisolated static let cryptoJS = #"""
-        const POLL=15000;
-        function render(d){
-          const coins=d.coins||[], n=Math.max(1,Math.min(5,coins.length)), W=Math.floor((1424-80-(n-1)*20)/n);
-          coins.slice(0,5).forEach((c,i)=>{ const x=40+i*(W+20), y=24, H=232; rr(x,y,W,H,16,'rgba(255,255,255,.07)');
-            const up=(c.change||0)>=0, col=up?'#4ade80':'#f87171';
-            txt(c.symbol,x+18,y+42,26,'#fff','left','700');
-            txt((up?'+':'')+(c.change||0).toFixed(2)+'%',x+W-18,y+42,22,col,'right','700');
-            const p=c.price||0; txt(p.toLocaleString(undefined,{maximumFractionDigits:p<10?4:2})+' '+(d.suffix||''),x+18,y+84,34,'#fff','left','700');
-            const pts=c.points||[]; if(pts.length>1){ const lo=Math.min(...pts,c.open||Infinity), hi=Math.max(...pts,c.open||-Infinity), gx=x+18, gy=y+104, gw=W-36, gh=100;
-              const Y=v=> gy+gh-(hi>lo?(v-lo)/(hi-lo):0.5)*gh;
-              if(c.open){ g.strokeStyle='rgba(255,255,255,.25)'; g.setLineDash([4,4]); g.beginPath(); g.moveTo(gx,Y(c.open)); g.lineTo(gx+gw,Y(c.open)); g.stroke(); g.setLineDash([]); }
-              g.beginPath(); pts.forEach((v,j)=>{ const px=gx+j*gw/(pts.length-1); j?g.lineTo(px,Y(v)):g.moveTo(px,Y(v)); });
-              g.lineTo(gx+gw,gy+gh); g.lineTo(gx,gy+gh); g.closePath(); const gr=g.createLinearGradient(0,gy,0,gy+gh); gr.addColorStop(0,col+'c0'); gr.addColorStop(1,col+'20'); g.fillStyle=gr; g.fill();
-              g.beginPath(); pts.forEach((v,j)=>{ const px=gx+j*gw/(pts.length-1); j?g.lineTo(px,Y(v)):g.moveTo(px,Y(v)); }); g.strokeStyle=col; g.lineWidth=3; g.stroke();
-              txt('today',gx,y+H-14,13,'#8b94a6'); }
-          });
-          if(!coins.length) txt('No coins set — Widgets → Crypto in Deckhand.',40,150,22,'#8b94a6');
-        }
-        """#
-
-    nonisolated static let weatherJS = #"""
-        const POLL=60000;
-        function icon(sky,x,y,r,isDay){ // simple canvas glyphs
-          const sun=()=>{ g.fillStyle='#fbbf24'; g.beginPath(); g.arc(x,y,r*.55,0,7); g.fill(); g.strokeStyle='#fbbf24'; g.lineWidth=r*.12; for(let a=0;a<8;a++){ g.beginPath(); g.moveTo(x+Math.cos(a*Math.PI/4)*r*.75,y+Math.sin(a*Math.PI/4)*r*.75); g.lineTo(x+Math.cos(a*Math.PI/4)*r,y+Math.sin(a*Math.PI/4)*r); g.stroke(); } };
-          const moon=()=>{ g.fillStyle='#e5e7eb'; g.beginPath(); g.arc(x,y,r*.6,0,7); g.fill(); g.fillStyle='#1c2029'; g.beginPath(); g.arc(x+r*.3,y-r*.2,r*.5,0,7); g.fill(); };
-          const cloud=(dx,dy,s,col)=>{ g.fillStyle=col; g.beginPath(); g.arc(x+dx-s*.5,y+dy,s*.45,0,7); g.arc(x+dx,y+dy-s*.3,s*.6,0,7); g.arc(x+dx+s*.55,y+dy,s*.45,0,7); g.fill(); g.fillRect(x+dx-s*.5,y+dy,s*1.05,s*.45); };
-          const drops=(col,len)=>{ g.strokeStyle=col; g.lineWidth=r*.1; g.lineCap='round'; for(let i=-1;i<=1;i++){ g.beginPath(); g.moveTo(x+i*r*.35,y+r*.5); g.lineTo(x+i*r*.35-r*.1,y+r*.5+len); g.stroke(); } };
-          switch(sky){
-            case 'clear': isDay?sun():moon(); break;
-            case 'partlyCloudy': isDay?sun():moon(); cloud(r*.15,r*.25,r*.75,'#cbd5e1'); break;
-            case 'cloudy': case 'fog': cloud(0,r*.1,r*.9,'#cbd5e1'); break;
-            case 'drizzle': case 'rain': case 'showers': cloud(0,-r*.1,r*.85,'#94a3b8'); drops('#60a5fa',r*.4); break;
-            case 'snow': cloud(0,-r*.1,r*.85,'#cbd5e1'); drops('#fff',r*.3); break;
-            case 'thunder': cloud(0,-r*.1,r*.85,'#64748b'); g.fillStyle='#fbbf24'; g.beginPath(); g.moveTo(x,y+r*.3); g.lineTo(x-r*.25,y+r*.8); g.lineTo(x+r*.05,y+r*.7); g.lineTo(x-r*.1,y+r*1.1); g.lineTo(x+r*.3,y+r*.55); g.lineTo(x,y+r*.65); g.closePath(); g.fill(); break;
-            default: cloud(0,r*.1,r*.9,'#94a3b8');
-          }
-        }
-        const names={clear:'Clear',partlyCloudy:'Partly cloudy',cloudy:'Cloudy',fog:'Fog',drizzle:'Drizzle',rain:'Rain',showers:'Showers',snow:'Snow',thunder:'Thunderstorm',unknown:''};
-        function render(d){
-          if(!d.place && !d.days){ txt('Waiting for the weather…',40,150,22,'#8b94a6'); return; }
-          icon(d.sky,130,130,80,d.isDay);
-          txt(Math.round(d.temp)+(d.unit||'°'),250,150,96,'#fff','left','700');
-          txt(d.place||'',250,46,22,'#d6dbe6','left','600');
-          txt((names[d.sky]||'')+'  ·  '+d.humidity+' %  ·  wind '+d.wind+' '+(d.windUnit||''),250,200,19,'#8b94a6');
-          const days=(d.days||[]).slice(1,4); days.forEach((day,i)=>{ const x=760+i*215, y=24, W=200, H=232; rr(x,y,W,H,16,'rgba(255,255,255,.07)');
-            const dt=new Date(day.date+'T12:00:00'); txt(i===0?'Tomorrow':dt.toLocaleDateString(undefined,{weekday:'long'}),x+16,y+36,20,'#fff','left','700');
-            icon(day.sky,x+W/2,y+110,46,true);
-            txt(Math.round(day.max)+'°',x+16,y+205,30,'#fff','left','700'); txt(Math.round(day.min)+'°',x+W-16,y+205,24,'#8b94a6','right','600');
-            if(day.rain>0) txt(day.rain+' % rain',x+W/2,y+H-16,14,'#60a5fa','center');
-          });
-          const today=(d.days||[])[0]; if(today) txt('Today '+Math.round(today.max)+'° / '+Math.round(today.min)+'°'+(today.rain>0?'  ·  '+today.rain+' % rain':''),250,236,17,'#b4bccb');
-        }
-        """#
-
-    nonisolated static let musicJS = #"""
-        const POLL=2000; let artKey=null, img=null;
-        document.body.insertAdjacentHTML('beforeend','<div class="btn" id="p" style="left:330px">⏮</div><div class="btn" id="pp" style="left:410px">⏯</div><div class="btn" id="n" style="left:490px">⏭</div>');
-        for(const [id,cmd] of [['p','previous'],['pp','play'],['n','next']]) document.getElementById(id).onclick=()=>act('/music/cmd/'+cmd).then(poll);
-        function render(d){
-          if(d.hasTrack && d.artKey!==artKey){ artKey=d.artKey; const i=new Image(); i.onload=()=>{img=i}; i.onerror=()=>{img=null}; i.src='/music/art.jpg?k='+encodeURIComponent(artKey); }
-          // Forget the art key too, so the same track coming back after a stop reloads its cover.
-          if(!d.hasTrack){ txt('Nothing playing in Music',330,140,30,'#8b94a6','left','600'); img=null; artKey=null; }
-          if(img){ g.save(); rr(40,20,240,240,18,'#000'); g.clip(); g.drawImage(img,40,20,240,240); g.restore(); } else { rr(40,20,240,240,18,'rgba(255,255,255,.08)'); txt('♪',160,170,90,'#4b5363','center'); }
-          if(d.hasTrack){ txt(clip(d.title,40),330,70,38,'#fff','left','700'); txt(clip(d.artist,50),330,112,26,'#d6dbe6'); txt(clip(d.album,60),330,146,20,'#8b94a6');
-            txt(d.playing?'Playing':'Paused',330,182,17,d.playing?'#4ade80':'#fbbf24','left','600'); }
-          const t=Date.now()/1000; if(d.playing){ for(let i=0;i<24;i++){ const h=18+Math.abs(Math.sin(t*2+i*.7))*60; rr(820+i*24,150-h/2,14,h,5,'#4f8cff'); } }
-          document.getElementById('pp').textContent=d.playing?'⏸':'▶';
-        }
-        """#
-
-    nonisolated static let calendarJS = #"""
-        const POLL=30000;
-        function render(d){
-          if(d.authorized===false){ txt('Calendar access is off — allow it in Deckhand (Widgets → Calendar).',40,150,22,'#8b94a6'); return; }
-          (d.days||[]).forEach((day,i)=>{ const x=40+i*455, y=20, W=435, H=240; rr(x,y,W,H,16,'rgba(255,255,255,.07)');
-            txt(day.name,x+18,y+38,24,'#fff','left','700'); txt(day.date,x+W-18,y+38,18,'#8b94a6','right');
-            const evs=day.events||[]; if(!evs.length) txt('Nothing planned',x+18,y+90,18,'#6b7280');
-            evs.slice(0,5).forEach((e,j)=>{ const ey=y+66+j*34; rr(x+18,ey,6,24,3,e.color||'#4f8cff');
-              txt(e.time,x+34,ey+18,15,e.past?'#6b7280':'#b4bccb','left','600'); txt(clip(e.title,34),x+150,ey+18,17,e.past?'#6b7280':'#fff'); });
-            if(evs.length>5) txt('+'+(evs.length-5)+' more',x+18,y+H-14,14,'#8b94a6');
-          });
-        }
-        """#
-
-    // MARK: newer pages (2026-11-04)
-
-    nonisolated static let flightsJS = #"""
-        const POLL=5000;
-        // Radar on the left (one card wide, a dark map underneath), up to four flights beside it, each in its own
-        // colour that also marks its plane and flight number on the radar.
-        const COLS=['#4ade80','#fbbf24','#60a5fa','#f472b6'];
-        const tiles={};
-        // A tile that failed (OSM unreachable, Mac busy) is dropped from the cache after 30 s so it is asked for again,
-        // instead of staying a blank hole until the page is reopened.
-        function tile(z,x,y){ const k=z+'/'+x+'/'+y; if(tiles[k]) return tiles[k]; const im=new Image(); im.onerror=()=>setTimeout(()=>{ if(tiles[k]===im) delete tiles[k]; },30000); im.src='/flights/tile/'+z+'/'+x+'/'+y+'.png'; tiles[k]=im; return im; }
-        // OpenStreetMap tiles, darkened and cached by the Mac (see MapTiles.swift), scaled so the circle is exactly R km across.
-        function map(cx,cy,r,lat,lon,R){ if(lat==null||lon==null) return false;
-          const mpp=R*1000/r, zf=Math.log2(156543.03*Math.cos(lat*Math.PI/180)/mpp), z=Math.max(2,Math.min(17,Math.floor(zf))), s=Math.pow(2,zf-z), n=Math.pow(2,z);
-          const wx=(lon+180)/360*n*256, lr=lat*Math.PI/180, wy=(1-Math.log(Math.tan(lr)+1/Math.cos(lr))/Math.PI)/2*n*256;
-          let drew=false; g.save(); g.beginPath(); g.arc(cx,cy,r,0,7); g.clip(); g.globalAlpha=0.9;
-          const x0=Math.floor((wx-r/s)/256), x1=Math.floor((wx+r/s)/256), y0=Math.floor((wy-r/s)/256), y1=Math.floor((wy+r/s)/256);
-          for(let tx=x0;tx<=x1;tx++) for(let ty=y0;ty<=y1;ty++){ const im=tile(z,tx,ty); if(im.complete&&im.naturalWidth){ g.drawImage(im,cx+(tx*256-wx)*s,cy+(ty*256-wy)*s,256*s+0.5,256*s+0.5); drew=true; } }
-          g.restore(); return drew; }
-        function plane(x,y,r,heading,col){ g.save(); g.translate(x,y); g.rotate((heading||0)*Math.PI/180); g.fillStyle=col; g.beginPath();
-          g.moveTo(0,-r); g.lineTo(r*.35,r*.25); g.lineTo(r*.12,r*.15); g.lineTo(r*.12,r*.6); g.lineTo(r*.3,r*.8); g.lineTo(0,r*.65); g.lineTo(-r*.3,r*.8); g.lineTo(-r*.12,r*.6); g.lineTo(-r*.12,r*.15); g.lineTo(-r*.35,r*.25); g.closePath(); g.fill(); g.restore(); }
-        function render(d){
-          const R=d.radius||3, ac=d.aircraft||[], inside=ac.filter(a=>a.inside), show=(inside.length?inside:ac.slice(0,1)).slice(0,4);
-          // radar: 250 px circle, full height
-          const cx=140,cy=140,rr0=122;
-          g.fillStyle='#141821'; g.beginPath(); g.arc(cx,cy,rr0,0,7); g.fill();
-          const hasMap=map(cx,cy,rr0,d.lat,d.lon,R);
-          g.strokeStyle='rgba(255,255,255,'+(hasMap?'.22':'.14')+')'; g.lineWidth=1.5;
-          [1/3,2/3,1].forEach(f=>{ g.beginPath(); g.arc(cx,cy,rr0*f,0,7); g.stroke(); });
-          g.beginPath(); g.moveTo(cx-rr0,cy); g.lineTo(cx+rr0,cy); g.moveTo(cx,cy-rr0); g.lineTo(cx,cy+rr0); g.stroke();
-          const sweep=(Date.now()/4000*Math.PI*2)%(Math.PI*2);
-          g.save(); g.beginPath(); g.moveTo(cx,cy); g.arc(cx,cy,rr0,sweep-0.9,sweep); g.closePath(); g.fillStyle='rgba(74,222,128,.12)'; g.fill(); g.restore();
-          g.fillStyle='#fff'; g.beginPath(); g.arc(cx,cy,4,0,7); g.fill();
-          txt('N',cx,cy-rr0+16,12,'#c7cdd8','center','600'); txt(R+' km',cx+rr0-6,cy-6,11,'#9aa3b2','right');
-          if(hasMap) txt('© OpenStreetMap',cx,cy+rr0-6,9,'rgba(255,255,255,.5)','center');
-          if(d.at){ const age=Math.max(0,Math.round(Date.now()/1000-d.at)); txt(age<15?'live':ago(age)+' old',cx-rr0+8,cy-6,11,age<30?'#4ade80':'#fbbf24','left','600'); }
-          // every aircraft in the circle: the shown ones in their colour with the flight number, the rest grey
-          ac.forEach(a=>{ if(a.km>R) return; const i=show.indexOf(a), col=i>=0?COLS[i]:'#8b94a6';
-            const rad=a.bearing*Math.PI/180, dd=Math.min(1,a.km/R)*rr0, px=cx+Math.sin(rad)*dd, py=cy-Math.cos(rad)*dd;
-            plane(px,py,i>=0?13:9,a.track,col);
-            if(i>=0){ const lab=a.callsign||a.reg||''; if(lab){ g.save(); g.shadowColor='rgba(0,0,0,.9)'; g.shadowBlur=4; txt(lab,px+(px<cx?-12:12),py+5,12,col,px<cx?'right':'left','700'); g.restore(); } } });
-          // panels
-          const X0=296, GAP=12, N=4, W=Math.floor((1424-X0-20-(N-1)*GAP)/N), y=16, H=248;
-          if(!show.length){ txt('Nothing within '+R+' km',X0+10,120,34,'#9aa3b2','left','700');
-            txt(ac.length? ac.length+' aircraft within 25 km, nearest '+ac[0].km+' km '+ac[0].dir:'Clear skies for 25 km around.',X0+10,160,18,'#6b7280');
-            txt(d.place||'',X0+10,200,15,'#6b7280'); return; }
-          show.forEach((a,i)=>{ const x=X0+i*(W+GAP), col=COLS[i]; rr(x,y,W,H,14, a.inside?'rgba(255,255,255,.07)':'rgba(255,255,255,.04)');
-            g.fillStyle=col; g.fillRect(x,y+18,5,H-36);
-            txt(a.callsign||a.reg||'—',x+18,y+40,30,col,'left','700'); plane(x+W-30,y+30,15,a.track,col);
-            txt(clip(a.airline||(a.type||'')+(a.reg?' · '+a.reg:''),30),x+18,y+64,14,'#b4bccb');
-            if(a.from||a.to){ const f=a.from?a.from.iata:'?', t=a.to?a.to.iata:'?'; txt(f+' → '+t,x+18,y+104,26,'#fff','left','700');
-              txt(clip((a.from?a.from.city||a.from.name:'?')+' → '+(a.to?a.to.city||a.to.name:'?'),34),x+18,y+128,13,'#8b94a6'); }
-            else txt('route unknown',x+18,y+104,18,'#6b7280');
-            const alt=a.ground?'on the ground':(a.alt!=null? Math.max(0,a.alt).toLocaleString()+' m':'—'), vs=a.vs==null?'':(a.vs>1?' ↑':a.vs<-1?' ↓':' →');
-            txt(alt+vs+(a.speed!=null?'  ·  '+a.speed+' km/h':''),x+18,y+168,16,'#d6dbe6');
-            if(a.airline) txt((a.type||'')+(a.reg?'  ·  '+a.reg:''),x+18,y+192,13,'#8b94a6');
-            txt(a.km+' km '+a.dir+(a.inside?'':'  ·  outside the circle'),x+18,y+H-16,14,a.inside?col:'#6b7280','left','600');
-          });
-          if(inside.length>4) txt('+'+(inside.length-4)+' more',1424-24,y+H-16,13,'#6b7280','right');
-        }
-        """#
-
-    nonisolated static let skyJS = #"""
-        const POLL=20000;
-        function hm(t){ if(!t) return '—'; const d=new Date(t*1000); return d.toTimeString().slice(0,5); }
-        function dur(s){ return Math.floor(s/3600)+' h '+String(Math.round(s%3600/60)).padStart(2,'0')+' min'; }
-        function moonDisc(cx,cy,r,ill,waxing){
-          g.fillStyle='#2a3140'; g.beginPath(); g.arc(cx,cy,r,0,7); g.fill();
-          g.fillStyle='#f3f4f6'; g.beginPath(); g.arc(cx,cy,r,-Math.PI/2,Math.PI/2, !waxing); g.fill();   // lit half (right when waxing)
-          const rx=r*Math.abs(1-2*ill); g.fillStyle= ill>0.5? '#f3f4f6':'#2a3140'; g.beginPath(); g.ellipse(cx,cy,Math.max(0.01,rx),r,0,0,7); g.fill();
-          g.strokeStyle='rgba(255,255,255,.18)'; g.lineWidth=1.5; g.beginPath(); g.arc(cx,cy,r,0,7); g.stroke();
-          // a few craters for texture
-          g.fillStyle='rgba(0,0,0,.08)'; [[-.3,-.2,.18],[.25,.1,.12],[-.05,.35,.09],[.1,-.45,.07]].forEach(c=>{ g.beginPath(); g.arc(cx+c[0]*r,cy+c[1]*r,c[2]*r,0,7); g.fill(); });
-        }
-        function render(d){
-          const s=d.sun, m=d.moon; if(!s||!m){ txt('Working out the sky for '+(d.place||'your location')+'…',40,150,22,'#8b94a6'); return; }
-          // --- sun arc (left 700 px)
-          const x0=60, x1=660, hy=190, top=50, now=d.now;
-          g.strokeStyle='rgba(255,255,255,.18)'; g.lineWidth=1.5; g.beginPath(); g.moveTo(x0-20,hy); g.lineTo(x1+20,hy); g.stroke();
-          g.strokeStyle='rgba(251,191,36,.35)'; g.setLineDash([5,6]); g.beginPath(); g.ellipse((x0+x1)/2,hy,(x1-x0)/2,hy-top,0,Math.PI,2*Math.PI); g.stroke(); g.setLineDash([]);
-          const rise=s.rise, set=s.set;
-          if(rise&&set){ const f=Math.min(1.08,Math.max(-0.08,(now-rise)/(set-rise))); const a=Math.PI+f*Math.PI; const sx=(x0+x1)/2+Math.cos(a)*(x1-x0)/2, sy=hy+Math.sin(a)*(hy-top);
-            if(f>=0&&f<=1){ const gl=g.createRadialGradient(sx,sy,4,sx,sy,40); gl.addColorStop(0,'rgba(251,191,36,.9)'); gl.addColorStop(1,'rgba(251,191,36,0)'); g.fillStyle=gl; g.beginPath(); g.arc(sx,sy,40,0,7); g.fill(); }
-            g.fillStyle= f>=0&&f<=1?'#fbbf24':'#6b7280'; g.beginPath(); g.arc(sx,Math.min(sy,hy+6),11,0,7); g.fill(); }
-          txt('↑ '+hm(rise),x0,hy+28,20,'#fff','left','700'); txt('↓ '+hm(set),x1,hy+28,20,'#fff','right','700');
-          txt('sunrise',x0,hy+48,13,'#8b94a6','left'); txt('sunset',x1,hy+48,13,'#8b94a6','right');
-          txt('noon '+hm(s.noon),(x0+x1)/2,top-16,14,'#8b94a6','center');
-          txt(d.place||'',x0,30,15,'#8b94a6','left','600'); txt(s.elevation>0? 'sun '+s.elevation+'° up':'sun below the horizon',x1,30,15,'#8b94a6','right');
-          txt('day '+dur(s.dayLength)+'  ·  golden '+hm(s.goldenStart)+'  ·  dusk '+hm(s.dusk)+'  ·  dawn '+hm(s.dawn),(x0+x1)/2,hy+76,15,'#b4bccb','center');
-          // --- moon (right)
-          moonDisc(860,140,92,m.illumination,m.waxing);
-          txt(m.name,990,70,34,'#fff','left','700');
-          txt(Math.round(m.illumination*100)+' % lit  ·  '+Math.round(m.age)+' days old',990,104,18,'#d6dbe6');
-          txt('↑ '+hm(m.rise)+'   ↓ '+hm(m.set)+(m.elevation>0?'   ·  up now, '+Math.round(m.elevation)+'°':''),990,146,18,'#b4bccb');
-          const fmt=t=> t? new Date(t*1000).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}) : '—';
-          txt('full '+fmt(m.nextFull)+'   ·   new '+fmt(m.nextNew),990,180,17,'#8b94a6');
-          txt(Math.round(m.distanceKm/1000)+' thousand km away',990,214,15,'#6b7280');
-        }
-        """#
-
-    nonisolated static let newsJS = #"""
-        const POLL=60000; let start=0, tick=Math.floor(Date.now()/15000);   // tick starts "now", so the page opens on headline 1
-        function wrapText(s,max){ const words=(s||'').split(' '), lines=[]; let cur=''; for(const w of words){ const t=cur?cur+' '+w:w; if(t.length>max&&cur){ lines.push(cur); cur=w; } else cur=t; } if(cur) lines.push(cur); return lines; }
-        function render(d){
-          const items=d.items||[]; if(!items.length){ txt(d.error||'Loading '+(d.source||'headlines')+'…',40,150,22,'#8b94a6'); return; }
-          const t=Math.floor(Date.now()/15000); if(t!==tick){ tick=t; start=(start+4)%items.length; }
-          if(start>=items.length) start=0;   // the list shrank since the last page turn
-          txt(d.source||'',40,34,15,'#8b94a6','left','600'); txt(d.at? 'updated '+ago(Math.floor(Date.now()/1000-d.at))+' ago':'',1384,34,13,'#6b7280','right');
-          for(let i=0;i<Math.min(4,items.length);i++){ const it=items[(start+i)%items.length]; const col=i%2, row=Math.floor(i/2); const x=40+col*700, y=70+row*105;
-            rr(x,y,660,90,12,'rgba(255,255,255,.06)');
-            const lines=wrapText(it.title,52).slice(0,2); lines.forEach((l,j)=> txt(l,x+18,y+34+j*28,22,'#fff','left',j?'400':'600'));
-            if(it.ago!=null) txt(ago(it.ago)+' ago',x+642,y+78,13,'#8b94a6','right'); else if(it.day) txt(it.day,x+642,y+78,13,'#8b94a6','right'); }
-          txt((start+1)+'–'+Math.min(items.length,start+4)+' of '+items.length,712,272,12,'#4b5363','center');
-        }
-        """#
-
-    nonisolated static let verseJS = #"""
-        const POLL=600000;
-        function wrapText(s,max){ const words=(s||'').split(' '), lines=[]; let cur=''; for(const w of words){ const t=cur?cur+' '+w:w; if(t.length>max){ lines.push(cur); cur=w; } else cur=t; } if(cur) lines.push(cur); return lines; }
-        function render(d){
-          const gr=g.createLinearGradient(0,0,1424,280); gr.addColorStop(0,'#1f2433'); gr.addColorStop(1,'#2b2340'); g.fillStyle=gr; g.fillRect(0,0,1424,280);
-          if(!d.text){ txt('Fetching today’s verse…',712,150,22,'#8b94a6','center'); return; }
-          const long=d.text.length>230, size=long?24:(d.text.length>150?28:32), lines=wrapText(d.text, long?95:(size>28?70:80)).slice(0,4);
-          const lh=size*1.25, y0=140-(lines.length-1)*lh/2-10;
-          lines.forEach((l,i)=> txt(l,712,y0+i*lh,size,'#fff','center',i===0?'600':'400'));
-          txt('— '+d.reference,712,y0+lines.length*lh+14,20,'#fbbf24','center','700');
-          txt((d.date||'')+'  ·  '+(d.translation||''),712,264,13,'#6b7280','center');
-        }
-        """#
-
-    nonisolated static let tasksJS = #"""
-        const POLL=30000;
-        // Tap an issue to get a Done button; tap Done to close it in Linear (Deckhand does the call).
-        let hit=[], sel=null, selAt=0, pending={};
-        // The Done button lies inside its issue's row, so buttons are tested before rows (the first hit wins).
-        c.addEventListener('click',e=>{ const x=e.offsetX, y=e.offsetY, inside=h=> x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h;
-          for(const h of hit){ if(h.btn&&inside(h)){ pending[h.uid]=Date.now(); sel=null; act('/tasks/done/'+h.uid).then(()=>setTimeout(poll,1500)); return; } }
-          for(const h of hit){ if(!h.btn&&inside(h)){ sel= sel===h.uid? null : h.uid; selAt=Date.now(); return; } }
-          sel=null; });
-        function bars(x,y,p,col){ for(let i=0;i<4;i++){ g.fillStyle= (p&&i<5-p)?col:'rgba(255,255,255,.14)'; g.fillRect(x+i*6,y+12-(i+1)*3,4,(i+1)*3); } }
-        // Local calendar date as YYYY-MM-DD (toISOString would give the UTC date, a day off in the evening east of Greenwich).
-        function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-        function render(d){
-          hit=[]; if(sel&&Date.now()-selAt>8000) sel=null;
-          if(!d.hasKey){ txt('Add your Linear API key in Deckhand',40,130,32,'#9aa3b2','left','700'); txt('Apps → Tasks. The key stays on the Mac.',40,172,19,'#6b7280'); return; }
-          const items=(d.issues||[]).filter(i=>!(pending[i.uid]&&Date.now()-pending[i.uid]<20000)); if(d.error&&!items.length){ txt(d.error,40,150,22,'#f87171'); return; }
-          const today=ymd(new Date()), week=ymd(new Date(Date.now()+7*86400000));
-          const due=items.filter(i=>i.due&&i.due<=week).length, over=items.filter(i=>i.due&&i.due<today).length;
-          txt((d.me?d.me+' · ':'')+items.length+' open',40,34,15,'#8b94a6','left','600');
-          txt((over? over+' overdue':'')+(over&&due?' · ':'')+(due? due+' due this week':''),1340,34,15,over?'#f87171':'#8b94a6','right','600');
-          if(d.error) txt(clip(d.error,80),712,34,13,'#f87171','center');
-          if(!items.length){ txt('Nothing assigned to you. Enjoy it.',40,150,30,'#9aa3b2','left','700'); return; }
-          const pc={1:'#f87171',2:'#fbbf24',3:'#60a5fa',4:'#8b94a6'};
-          items.slice(0,6).forEach((it,i)=>{ const col=i%2, row=Math.floor(i/2); const x=40+col*700, y=60+row*70, W=660, H=60, isSel=sel===it.uid;
-            rr(x,y,W,H,10, isSel?'rgba(74,222,128,.14)':it.stateType==='started'?'rgba(96,165,250,.12)':'rgba(255,255,255,.06)');
-            hit.push({x,y,w:W,h:H,uid:it.uid});
-            bars(x+16,y+22,it.priority,pc[it.priority]||'#8b94a6'); txt(it.id,x+50,y+26,14,'#8b94a6','left','600');
-            txt(clip(it.title,isSel?34:46),x+50,y+48,19,'#fff','left','600');
-            if(isSel){ rr(x+W-150,y+10,138,40,20,'#4ade80'); txt('✓  Done',x+W-81,y+37,18,'#0b2e17','center','700'); hit.push({x:x+W-150,y:y+10,w:138,h:40,uid:it.uid,btn:true}); }
-            else { rr(x+520,y+14,120,22,11,it.color||'#4b5363'); txt(clip(it.state,14),x+580,y+30,12,'#fff','center','700');
-              if(it.due){ const late=it.due<today; txt((late?'overdue ':'due ')+it.due.slice(5),x+640,y+52,13,late?'#f87171':'#8b94a6','right'); } } });
-          if(items.length>6) txt('+'+(items.length-6)+' more',712,272,12,'#4b5363','center');
-          if(!sel) txt('tap an issue to mark it done',40,272,12,'#4b5363','left');
-        }
-        """#
+    nonisolated static func missing(_ name: String) -> String {
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Deckhand</title></head><body style=\"margin:0;background:#1c2029;color:#fff;font:20px -apple-system,sans-serif;display:flex;align-items:center;justify-content:center;width:1424px;height:280px\">Page missing: \(name) is not in the Deckhand resource bundle. Rebuild with packaging/make-app.sh.</body></html>"
+    }
 }

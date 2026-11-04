@@ -43,6 +43,7 @@ struct ScreensaversView: View {
                     UpdateAllButton()
                 }
             }
+            LibraryErrorStrip(includeBarApps: false)
             Divider()
             HSplitView {
                 List(selection: $ui.selected) {
@@ -59,7 +60,6 @@ struct ScreensaversView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        if let e = model.appStoreError { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
                         if let sel = ui.selected, let t = tiles.first(where: { $0.package == sel }) { detail(t) }
                         else { Text("Pick a screensaver on the left.").foregroundStyle(.secondary) }
                         Divider()

@@ -31,26 +31,33 @@ public final class NetworkStats: @unchecked Sendable {
     /// The CoreBar's NETWORK card wants these totals and derives rates itself.
     public func totals() -> (received: UInt64, sent: UInt64) { counters() }
 
+    /// Interfaces whose traffic is not "the network": loopback, bridges, tunnels, Apple's peer-to-peer links.
+    public static func isCounted(_ name: String) -> Bool {
+        !name.hasPrefix("lo") && !name.hasPrefix("bridge") && !name.hasPrefix("utun")
+            && !name.hasPrefix("awdl") && !name.hasPrefix("llw") && !name.hasPrefix("gif") && !name.hasPrefix("stf")
+    }
+
+    /// 64-bit per-interface counters from the interface MIB (`net.link.generic.ifdata.<index>.general`, a
+    /// `struct ifmibdata` whose `ifmd_data` is an `if_data64`): the same source `netstat -ib` prints.
+    /// `getifaddrs` hands out `if_data`, whose byte counters are 32-bit on Darwin and wrap every 4 GB (the
+    /// totals sent to the bar then jumped backwards), and `NET_RT_IFLIST2` was found to report the low
+    /// 32 bits as well on macOS 26 (checked against netstat, 2026-11-05).
     private func counters() -> (UInt64, UInt64) {
-        var ifaddr: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return (0, 0) }
-        defer { freeifaddrs(ifaddr) }
+        guard let list = if_nameindex() else { return (0, 0) }
+        defer { if_freenameindex(list) }
         var totalIn: UInt64 = 0, totalOut: UInt64 = 0
-        var ptr: UnsafeMutablePointer<ifaddrs>? = first
-        while let p = ptr {
-            let ifa = p.pointee
-            if let addr = ifa.ifa_addr, addr.pointee.sa_family == UInt8(AF_LINK) {
-                let name = String(cString: ifa.ifa_name)
-                // Skip loopback and virtual/bridge interfaces.
-                if !name.hasPrefix("lo") && !name.hasPrefix("bridge") && !name.hasPrefix("utun")
-                    && !name.hasPrefix("awdl") && !name.hasPrefix("llw") && !name.hasPrefix("gif") && !name.hasPrefix("stf") {
-                    if let data = ifa.ifa_data?.assumingMemoryBound(to: if_data.self) {
-                        totalIn &+= UInt64(data.pointee.ifi_ibytes)
-                        totalOut &+= UInt64(data.pointee.ifi_obytes)
-                    }
-                }
-            }
-            ptr = ifa.ifa_next
+        var p = list
+        while p.pointee.if_index != 0, let cname = p.pointee.if_name {
+            defer { p = p.advanced(by: 1) }
+            let name = String(cString: cname)
+            guard Self.isCounted(name) else { continue }
+            var mib: [Int32] = [CTL_NET, PF_LINK, NETLINK_GENERIC, IFMIB_IFDATA, Int32(p.pointee.if_index), IFDATA_GENERAL]
+            var md = ifmibdata()
+            var len = MemoryLayout<ifmibdata>.size
+            guard sysctl(&mib, UInt32(mib.count), &md, &len, nil, 0) == 0, len >= MemoryLayout<ifmibdata>.size else { continue }
+            if Int32(bitPattern: md.ifmd_flags) & IFF_LOOPBACK != 0 { continue }
+            totalIn &+= md.ifmd_data.ifi_ibytes
+            totalOut &+= md.ifmd_data.ifi_obytes
         }
         return (totalIn, totalOut)
     }

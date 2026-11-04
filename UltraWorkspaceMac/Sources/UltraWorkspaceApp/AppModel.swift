@@ -119,6 +119,11 @@ final class AppModel: ObservableObject {
     /// Last resolved "here" (AppModel+Weather): the bar pages ask every few seconds, CoreLocation and the
     /// reverse geocoder must not be hit that often.
     var locationCache: (key: String, at: Date, loc: (lat: Double, lon: Double, name: String))?
+    /// URL of the bar's `openBrowser` request the user has not answered yet (AppModel+Link); one at a time.
+    var browserRequestPending: String?
+    /// "serial@ip" of discovered addresses that differ from the stored one and that a pinned AUTH is checking
+    /// or has refused since the last scan — each candidate is tried once per scan, never in a loop.
+    var addressChecks: Set<String> = []
 
     struct LogEntry: Identifiable {
         let id = UUID()
@@ -162,13 +167,50 @@ final class AppModel: ObservableObject {
     }
 
     func ipForSelected() -> String? {
-        if let d = discovered.first(where: { $0.serialNo == selectedSerial }) { return d.ip }
-        return selectedCoreBar?.lastIp
+        guard let serial = selectedSerial else { return nil }
+        return address(for: serial)
+    }
+
+    /// The address Deckhand uses for a bar. A discovery reply is unauthenticated, so for a paired bar a reply
+    /// that names its serial at a *new* address does not move anything (uploads, ADB, the beacon, the action
+    /// peers) until a pinned AUTH on that address with the stored token has succeeded (`confirmAddress`);
+    /// until then the stored `lastIp` is used. An unpaired bar (first pairing: nothing to pin yet) and a paired
+    /// bar without a token or a pin (nothing to verify with) use the discovered address, as before 2026-11-04.
+    func address(for serial: String) -> String? {
+        let seen = discovered.first { $0.serialNo == serial }?.ip
+        guard let bar = paired.first(where: { $0.serialNo == serial }) else { return seen }
+        guard let seen, seen != bar.lastIp else { return bar.lastIp }
+        guard bar.certSHA256 != nil, Store.shared.loadToken(serial: serial) != nil else { return seen }
+        confirmAddress(seen, for: bar)
+        return bar.lastIp
+    }
+
+    /// Connect to `candidate` with the pin and the token; adopt the address only when both are accepted.
+    /// A wrong certificate or a refused token leaves the stored address alone (and is logged once per scan).
+    private func confirmAddress(_ candidate: String, for bar: Store.PairedCoreBar) {
+        let key = "\(bar.serialNo)@\(candidate)"
+        guard !addressChecks.contains(key), let token = Store.shared.loadToken(serial: bar.serialNo) else { return }
+        addressChecks.insert(key)
+        let session = CoreBarSession(ip: candidate, token: token, certPin: Store.shared.certPin(for: bar.serialNo))
+        Task {
+            let r = await session.checkToken(timeout: 6)
+            guard r.accepted, !r.mismatch else {
+                let why = r.mismatch ? "its certificate is not the pinned one" : (r.presentedCert == nil ? "it did not answer a pinned connection" : "it did not accept the stored token")
+                WireLog.shared.event("address \(candidate) claimed for \(bar.serialNo) by discovery not adopted: \(why) — keeping \(bar.lastIp)")
+                self.say("A discovery reply names \(bar.name) at \(candidate), but \(why) — still using \(bar.lastIp).")
+                return
+            }
+            Store.shared.upsert(serial: bar.serialNo, name: bar.name, ip: candidate, certSHA256: nil)
+            self.paired = Store.shared.pairedCoreBars
+            self.addressChecks.remove(key)
+            self.say("CoreBar moved to \(candidate) (was \(bar.lastIp); confirmed by its pinned certificate and the stored token).")
+            if self.selectedSerial == bar.serialNo { self.startLink() }
+        }
     }
 
     func session(for bar: Store.PairedCoreBar) -> CoreBarSession? {
         guard let token = Store.shared.loadToken(serial: bar.serialNo) else { return nil }
-        let ip = discovered.first(where: { $0.serialNo == bar.serialNo })?.ip ?? bar.lastIp
+        let ip = address(for: bar.serialNo) ?? bar.lastIp
         return CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: bar.serialNo))
     }
 
@@ -178,6 +220,7 @@ final class AppModel: ObservableObject {
         guard !isScanning else { return }
         isScanning = true
         scanStartedAt = Date()
+        addressChecks.removeAll()   // a new scan may try a refused address once more
         say("Looking for CoreBars on your network…")
         Task {
             let found = await Discovery.listen(timeout: 8)

@@ -4,6 +4,12 @@ import AppKit
 /// Controls the local Music.app via Apple Events (AppleScript). First use
 /// triggers the macOS Automation permission prompt; the app declares
 /// NSAppleEventsUsageDescription for it.
+///
+/// Everything here runs on the main thread on purpose: Apple documents `NSAppleScript` as usable
+/// from the main thread only (Threading Programming Guide, "Thread-Unsafe Classes"; the compile and
+/// execute go through the shared OSA component), so the script cannot be moved to a detached task.
+/// The cost is kept down by asking less often instead: `AppModel.startMusicPolling` polls every 3 s
+/// only while something shows the result and every 30 s otherwise.
 @MainActor
 enum AppleMusic {
     struct NowPlaying: Equatable {

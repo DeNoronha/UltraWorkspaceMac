@@ -45,6 +45,7 @@ enum CryptoStats {
         private var days: [String: (CoinDay, Date)] = [:]
         private var prices: [String: ([Coin], Date)] = [:]
         private var inflight: [String: Task<CoinDay?, Never>] = [:]
+        private var inflightPrices: [String: Task<[Coin], Never>] = [:]
         private var lastRequest = Date.distantPast
 
         /// Wait so that calls are at least 1.5 s apart, then fetch; retry once on a 429. Returns the raw body.
@@ -74,11 +75,18 @@ enum CryptoStats {
             return days[key]?.0   // stale beats "no data"
         }
 
+        /// Same shape as `day`: the cube render and the bar's crypto feed ask for the same `simple/price`
+        /// set within seconds of each other; the second caller joins the first request instead of spending
+        /// another of CoinGecko's few calls a minute.
         func prices(key: String, maxAge: TimeInterval, fetch: @escaping @Sendable () async -> [Coin]) async -> [Coin] {
             if let (c, at) = prices[key], Date().timeIntervalSince(at) < maxAge { return c }
-            let result = await fetch()
+            if let t = inflightPrices[key] { return await t.value }
+            let t = Task { await fetch() }
+            inflightPrices[key] = t
+            let result = await t.value
+            inflightPrices[key] = nil
             if !result.isEmpty { prices[key] = (result, Date()); return result }
-            return prices[key]?.0 ?? []
+            return prices[key]?.0 ?? []   // stale beats "no data"
         }
     }
 

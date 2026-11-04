@@ -391,6 +391,9 @@ do {
     check(MonitorServer.peerMayAct("10.0.0.5", peers: ["10.0.0.5"]) && MonitorServer.peerMayAct("::ffff:10.0.0.5", peers: ["10.0.0.5"]), "action peers: the listed bar may (also IPv4-mapped)")
     check(!MonitorServer.peerMayAct("10.0.0.6", peers: ["10.0.0.5"]) && !MonitorServer.peerMayAct(nil, peers: nil), "action peers: another host may not; unknown peer may not")
     check(MonitorServer.peerMayAct("10.0.0.6", peers: nil), "action peers: nil = any peer (default)")
+    check(MonitorServer.peerMayRead("10.0.0.6", peers: ["10.0.0.5"], pagesOnly: false), "pages only for the bar: off → any peer may read")
+    check(MonitorServer.peerMayRead("10.0.0.5", peers: ["10.0.0.5"], pagesOnly: true) && MonitorServer.peerMayRead("127.0.0.1", peers: [], pagesOnly: true), "pages only for the bar: on → the bar and loopback may read")
+    check(!MonitorServer.peerMayRead("10.0.0.6", peers: ["10.0.0.5"], pagesOnly: true) && !MonitorServer.peerMayRead("10.0.0.6", peers: [], pagesOnly: true), "pages only for the bar: on → another host may not, nor anyone when no bar is selected")
     // Discovery replies are unauthenticated LAN data.
     let spoof = Discovery.parse(Data(#"{"serialNo":"S9","tcpPort":7431,"ip":"evil.example"}"#.utf8), from: "10.0.0.9")
     check(spoof?.ip == "10.0.0.9", "discovery: an ip that is not an IPv4 literal → sender address", spoof?.ip ?? "nil")
@@ -471,11 +474,150 @@ do {
         check(forged.text.hasPrefix("HTTP/1.1 403"), "monitor server: the marker inside another header does not count", forged.text.prefix(30).description)
         let wrong = raw("POST /act HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Deckhand: nope\r\nContent-Length: 0\r\n\r\n", timeout: 5)
         check(wrong.text.hasPrefix("HTTP/1.1 403"), "monitor server: X-Deckhand with another value → 403", wrong.text.prefix(30).description)
+        // "Pages only for the bar" (2026-11-04): GET is answered to the action peers and loopback only.
+        MonitorServer.shared.setPagesOnlyForPeers(true)
+        check(MonitorServer.shared.isPagesOnlyForPeers, "monitor server: pages-only flag set")
+        let own = await get("/j")
+        check(own.0 == 200, "monitor server: pages only for the bar → loopback still reads", "\(own.0)")
+        // From this Mac's LAN address the peer is not loopback: 403 unless that address is the bar's.
+        if let lan = LocalIP.address(reaching: "192.168.255.254"), !lan.hasPrefix("127.") {
+            func lanGet(_ path: String) async -> Int {
+                var r = URLRequest(url: URL(string: "http://\(lan):\(MonitorServer.shared.port)\(path)")!); r.timeoutInterval = 5
+                guard let (_, resp) = try? await URLSession.shared.data(for: r) else { return -1 }
+                return (resp as? HTTPURLResponse)?.statusCode ?? -1
+            }
+            let other = await lanGet("/j")
+            check(other == 403, "monitor server: pages only for the bar → another address gets 403", "\(other) via \(lan)")
+            MonitorServer.shared.setActionPeers([lan])
+            let bar = await lanGet("/j")
+            check(bar == 200, "monitor server: pages only for the bar → the bar's address reads", "\(bar) via \(lan)")
+            MonitorServer.shared.setPagesOnlyForPeers(false)
+            MonitorServer.shared.setActionPeers(["10.9.9.9"])
+            let open = await lanGet("/j")
+            check(open == 200, "monitor server: pages-only off → any address reads again", "\(open) via \(lan)")
+        } else {
+            print("  (skipped the LAN-address checks for pages-only: no LAN address on this Mac)")
+        }
+        MonitorServer.shared.setPagesOnlyForPeers(false)
         MonitorServer.shared.setActionPeers(nil)
         MonitorServer.shared.stop()
         check(!MonitorServer.shared.isRunning, "monitor server: stopped")
     } catch { check(false, "monitor server: start", "\(error)") }
     MonitorServer.requestTimeout = 15
+}
+
+
+// ============================================================================================
+// Library review round, 4 November 2026 (left-as-recommendations items): pairing reject, gzip
+// on incompressible input, private file writes in Store, Linear 400 vs 401, 64-bit counters.
+// ============================================================================================
+
+// A rejected pairing (act 101, code -1) must end the wait at once; the mock's token reply and the
+// bare "request shown" acknowledgement must keep working.
+do {
+    func frame(_ s: String) -> CoreBarClient.PairReply { CoreBarClient.classifyPairReply(Data(s.utf8)) }
+    check(frame(#"{"act":101,"id":"x","code":-1,"msg":"user reject"}"#) == .rejected(code: -1, message: "user reject"), "pair: code -1 (Reject tapped) is a rejection")
+    check(frame(#"{"act":"101","code":"-1"}"#) == .rejected(code: -1, message: nil), "pair: numeric strings still parse")
+    check(frame(#"{"act":101,"id":"x","code":500,"msg":"device error"}"#) == .rejected(code: 500, message: "device error"), "pair: a device error code is a rejection")
+    check(frame(#"{"act":101,"id":"x","code":200,"data":{"token":"tok-1"},"msg":"ok"}"#) == .token("tok-1"), "pair: mock-style token reply")
+    check(frame(#"{"act":101,"token":"tok-2"}"#) == .token("tok-2"), "pair: top-level token")
+    check(frame(#"{"act":101,"id":"x"}"#) == .pending, "pair: ack without code or token keeps waiting")
+    check(frame(#"{"act":101,"id":"x","code":200,"data":null}"#) == .pending, "pair: code 200 without a token keeps waiting")
+    check(frame(#"{"act":20,"id":"1"}"#) == .unrelated, "pair: a heartbeat is unrelated")
+    check(frame("not json") == .unrelated, "pair: garbage is unrelated")
+    let msg = UltraBarError.pairingRejected(code: -1, message: "user reject").errorDescription ?? ""
+    check(msg.contains("refused") && msg.contains("-1"), "pair: rejection error text names the refusal", msg)
+}
+
+// gzip of 20 MB of random bytes (incompressible) must still inflate back to the input, and the ISIZE
+// and CRC trailers must match. Before: an empty deflate body above about 13 MB.
+do {
+    var rng = SystemRandomNumberGenerator()
+    var input = [UInt8](repeating: 0, count: 20 * 1024 * 1024)
+    input.withUnsafeMutableBytes { raw in
+        let words = raw.bindMemory(to: UInt64.self)
+        for i in words.indices { words[i] = rng.next() }
+    }
+    func inflate(_ gz: Data, expect: Int) -> [UInt8] {
+        let body = gz.subdata(in: 10..<(gz.count - 8))
+        var dst = [UInt8](repeating: 0, count: expect + 1)
+        let n = body.withUnsafeBytes { (src: UnsafeRawBufferPointer) -> Int in
+            dst.withUnsafeMutableBufferPointer { d in
+                compression_decode_buffer(d.baseAddress!, d.count, src.bindMemory(to: UInt8.self).baseAddress!, body.count, nil, COMPRESSION_ZLIB)
+            }
+        }
+        return Array(dst[0..<n])
+    }
+    let gz = DeployPackager.gzip(input)
+    check(gz.count > 18, "gzip: 20 MB random bytes produce a body", "\(gz.count) B")
+    let back = inflate(gz, expect: input.count)
+    check(back == input, "gzip: 20 MB random bytes inflate back to the input", "\(back.count) B back")
+    let isize = UInt32(gz[gz.count-4]) | UInt32(gz[gz.count-3]) << 8 | UInt32(gz[gz.count-2]) << 16 | UInt32(gz[gz.count-1]) << 24
+    check(Int(isize) == input.count, "gzip: ISIZE trailer for 20 MB")
+    let crc = UInt32(gz[gz.count-8]) | UInt32(gz[gz.count-7]) << 8 | UInt32(gz[gz.count-6]) << 16 | UInt32(gz[gz.count-5]) << 24
+    check(crc == DeployPackager.crc32(input), "gzip: CRC32 trailer for 20 MB")
+    // The stored-block fallback on its own, and the empty input.
+    let small = Array("stored block fallback".utf8)
+    let stored = DeployPackager.storedBlocks(small)
+    var fake = Data([0x1f, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0x00, 0xFF]); fake.append(contentsOf: stored); fake.append(contentsOf: [UInt8](repeating: 0, count: 8))
+    check(inflate(fake, expect: small.count) == small, "gzip: stored-block fallback inflates")
+    let big = DeployPackager.storedBlocks([UInt8](repeating: 7, count: 70_000))
+    check(big.count == 70_000 + 10 && big[0] == 0 && big[5 + 65535] == 1, "gzip: stored blocks split at 65 535 with the final bit on the last")
+    check(inflate(DeployPackager.gzip([]), expect: 0).isEmpty && DeployPackager.gzip([]).count == 23, "gzip: empty input is a valid 23-byte gzip")
+}
+
+// Store: secrets land in files that are 0600 from the moment they exist (created by open(2) with that
+// mode, then renamed into place), and forgetting a bar removes its endpoint caches too.
+do {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kitcheck-store-\(UUID().uuidString.prefix(8))", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = Store(directory: dir)
+    func mode(_ url: URL) -> Int { ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.posixPermissions] as? Int) ?? -1 }
+    func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path) }
+    let serial = "KC-STORE-1"
+    store.upsert(serial: serial, name: "check", ip: "10.0.0.9", certSHA256: "AB")
+    store.setHotspot(serial: serial, ssid: "cube", password: "hunter2")
+    let corebars = dir.appendingPathComponent("corebars.json")
+    check(exists(corebars) && mode(corebars) == 0o600, "store: corebars.json is 0600", String(mode(corebars), radix: 8))
+    store.saveToken("tok", serial: serial)
+    let token = dir.appendingPathComponent("tokens/KCSTORE1.token")
+    check(mode(token) == 0o600 && store.loadToken(serial: serial) == "tok", "store: token file is 0600 and reads back", String(mode(token), radix: 8))
+    check(mode(dir.appendingPathComponent("tokens")) == 0o700, "store: tokens directory is 0700")
+    store.saveSecret("key-1", name: "linear")
+    let secret = dir.appendingPathComponent("tokens/secretlinear.token")
+    check(mode(secret) == 0o600 && store.loadSecret(name: "linear") == "key-1", "store: secret file is 0600 and reads back")
+    store.saveToken("tok-2", serial: serial)   // overwrite keeps the mode and the new content
+    check(mode(token) == 0o600 && store.loadToken(serial: serial) == "tok-2", "store: overwriting a token keeps 0600")
+    let leftovers = (try? FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("tokens").path))?.filter { $0.hasSuffix(".tmp") } ?? []
+    check(leftovers.isEmpty, "store: no temporary files left behind", leftovers.joined(separator: ","))
+    store.saveEndpoints(Data("[]".utf8), serial: serial)
+    store.rememberModules([["serialNumber": "M1", "ip": "10.0.0.2"]], corebar: serial)
+    let ep = dir.appendingPathComponent("endpoints/KCSTORE1.json"), known = dir.appendingPathComponent("endpoints/KCSTORE1.known.json")
+    check(exists(ep) && exists(known), "store: endpoint caches written")
+    store.remove(serial: serial)
+    check(!exists(token) && !exists(ep) && !exists(known) && store.pairedCoreBars.isEmpty, "store: remove(serial:) deletes the token and both endpoint caches")
+    store.saveSecret("", name: "linear")
+    check(!exists(secret), "store: an empty secret deletes the file")
+    // Write into a directory that does not exist: must fail quietly, not crash.
+    check(!Store.writePrivate(Data("x".utf8), to: dir.appendingPathComponent("missing/dir/file")), "store: writePrivate reports failure instead of crashing")
+}
+
+// Linear: HTTP 400 is the query, 401 is the key.
+do {
+    check(LinearTasks.httpErrorMessage(401).contains("API key"), "linear: 401 blames the key")
+    check(LinearTasks.httpErrorMessage(400) == "Linear rejected the request (HTTP 400).", "linear: 400 blames the request", LinearTasks.httpErrorMessage(400))
+}
+
+// Network counters come from the interface MIB (64-bit, what netstat -ib prints): monotonic across two
+// samples and non-zero. (NET_RT_IFLIST2 and getifaddrs both gave the low 32 bits on this Mac.)
+do {
+    let ns = NetworkStats()
+    let a = ns.totals()
+    _ = ns.sample()
+    let b = ns.totals()
+    check(b.received >= a.received && b.sent >= a.sent, "network: totals never go backwards between samples", "\(a) -> \(b)")
+    check(a.received > 0 || a.sent > 0, "network: counters are non-zero on a machine with traffic", "\(a)")
+    check(NetworkStats.isCounted("en0") && !NetworkStats.isCounted("lo0") && !NetworkStats.isCounted("utun3") && !NetworkStats.isCounted("awdl0"), "network: interface filter")
 }
 
 print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")

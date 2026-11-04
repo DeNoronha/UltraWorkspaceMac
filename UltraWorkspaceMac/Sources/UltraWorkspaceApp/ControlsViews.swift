@@ -48,14 +48,7 @@ private struct PublishBindings: View {
         .keyboardShortcut(.return, modifiers: .command)
         .disabled(model.isWorking || model.pageProgress.isRunning || settings.coreCards.isEmpty)
         .help("Bindings are part of the CoreBar page — this publishes the page again with the bindings shown here (⌘↩)")
-        .alert("Replace the bar's pages?", isPresented: $ui.confirm) {
-            Button("Replace pages", role: .destructive) { model.publishDeckhandPage(settings: settings) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(model.foreignPages.isEmpty
-                 ? "The bar will have two pages: its Standard page and the Deckhand page (with these bindings)."
-                 : "These pages were made in the official app and will be removed: \(model.foreignPages.map(\.name).joined(separator: ", ")).")
-        }
+        .publishConfirmation(isPresented: $ui.confirm)
     }
 }
 

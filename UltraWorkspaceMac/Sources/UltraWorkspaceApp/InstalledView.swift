@@ -6,8 +6,6 @@ import UltraBarKit
 struct InstalledView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
-    @State private var confirmRemove: (title: String, action: () -> Void)? = nil
-    @State private var showConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,11 +15,11 @@ struct InstalledView: View {
                     UpdateAllButton()
                 }
             }
+            // Errors stay put above the scroll, so a failed Remove far down the list is still seen (2026-11-04).
+            LibraryErrorStrip()
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if let e = model.appStoreError { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
-                    if let e = model.barAppError { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true).textSelection(.enabled) }
                     let n = model.updatesAvailable
                     if n > 0 { Label(n == 1 ? "1 update available" : "\(n) updates available", systemImage: "arrow.down.circle.fill").foregroundStyle(.orange).fontWeight(.medium) }
 
@@ -45,7 +43,7 @@ struct InstalledView: View {
                                 Image(systemName: t.icon).frame(width: 32, height: 32)
                                 Text(t.title).fontWeight(.medium)
                                 Spacer()
-                                Button { settings.removeVivoCard(t) } label: { Label("Remove", systemImage: "trash") }.buttonStyle(.bordered).tint(.red)
+                                RemoveButton(confirm: "Remove \(t.title) from the cube's cards?", help: "Takes the card out of the cube's list; the cube changes at the next Send to cube.") { settings.removeVivoCard(t) }
                             }.padding(.vertical, 4)
                             Divider()
                         }
@@ -56,7 +54,7 @@ struct InstalledView: View {
                             HStack(spacing: 12) {
                                 if let c = model.coreCard(id) { CardIcon(card: c, size: 32); Text(c.title).fontWeight(.medium) } else { Image(systemName: "questionmark.square").frame(width: 32, height: 32); Text(id).fontWeight(.medium) }
                                 Spacer()
-                                Button { settings.coreCards.removeAll { $0 == id } } label: { Label("Remove", systemImage: "trash") }.buttonStyle(.bordered).tint(.red)
+                                RemoveButton(confirm: "Remove \(model.coreCard(id)?.title ?? id) from the CoreBar page?", help: "Takes the card off the page; the bar changes at the next Publish page.") { settings.coreCards.removeAll { $0 == id } }
                             }.padding(.vertical, 4)
                             Divider()
                         }
@@ -65,13 +63,7 @@ struct InstalledView: View {
             }
         }
         .onAppear { if model.storeApps.isEmpty { model.refreshAppStore() } }
-        .alert(confirmRemove?.title ?? "", isPresented: $showConfirm) {
-            Button("Remove", role: .destructive) { confirmRemove?.action() }
-            Button("Cancel", role: .cancel) {}
-        }
     }
-
-    private func ask(_ title: String, _ action: @escaping () -> Void) { confirmRemove = (title, action); showConfirm = true }
 
     private func deckhandRow(_ app: (page: String, label: String, apk: String)) -> some View {
         let v = model.barAppVersion(app.page), stale = model.barAppNeedsUpdate(app.page), busy = model.barAppBusy == app.page
@@ -91,8 +83,7 @@ struct InstalledView: View {
             if stale {
                 Button { model.installBarApp(app.page) } label: { Label("Update", systemImage: "arrow.down.circle") }.buttonStyle(.borderedProminent).disabled(model.barAppBusy != nil)
             }
-            Button { ask("Remove \(app.label) from the bar?") { model.uninstallBarApp(app.page) } } label: { Label("Remove", systemImage: "trash") }
-                .buttonStyle(.bordered).tint(.red).disabled(model.barAppBusy != nil)
+            RemoveButton(confirm: "Remove \(app.label) from the bar?", help: "Uninstalls the app from the bar over ADB.", disabled: model.barAppBusy != nil) { model.uninstallBarApp(app.page) }
         }.padding(.vertical, 4)
     }
 
@@ -103,7 +94,7 @@ struct InstalledView: View {
         let busy = model.appBusy == a.packageName, active = a.isScreensaver && model.isActiveScreensaver(a)
         let webUI: URL? = {
             guard let port = a.port, let tok = a.sessionToken, let bar = model.selectedCoreBar else { return nil }
-            let ip = model.discovered.first(where: { $0.serialNo == bar.serialNo })?.ip ?? bar.lastIp
+            let ip = model.address(for: bar.serialNo) ?? bar.lastIp
             return URL(string: "http://\(ip):\(port)/?sessionToken=\(tok)")
         }()
         return HStack(spacing: 12) {
@@ -128,8 +119,7 @@ struct InstalledView: View {
             if a.systemApp {
                 Text("part of the firmware").font(.caption).foregroundStyle(.secondary).help("Built into the bar's system image; it cannot be removed, only updated.")
             } else {
-                Button { ask("Remove \(a.appName) from the bar?") { model.uninstallApp(a.packageName, name: a.appName) } } label: { Label("Remove", systemImage: "trash") }
-                    .buttonStyle(.bordered).tint(.red).disabled(model.appBusy != nil || active)
+                RemoveButton(confirm: "Remove \(a.appName) from the bar?", help: active ? "The screensaver in use cannot be removed; pick another on the Screensavers page first." : "The bar uninstalls the app.", disabled: model.appBusy != nil || active) { model.uninstallApp(a.packageName, name: a.appName) }
             }
         }.padding(.vertical, 4)
     }

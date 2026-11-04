@@ -26,9 +26,13 @@ public final class Store: @unchecked Sendable {
     private struct Persisted: Codable { var coreBars: [PairedCoreBar] = [] }
     private var state = Persisted()
 
-    private init() {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("UltraWorkspaceMac", isDirectory: true)
+    private convenience init() {
+        self.init(directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("UltraWorkspaceMac", isDirectory: true))
+    }
+
+    /// A store rooted at `directory` (the app uses `shared`, in Application Support; checks use a temporary folder).
+    public init(directory base: URL) {
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         fileURL = base.appendingPathComponent("corebars.json")
         if let data = try? Data(contentsOf: fileURL),
@@ -95,20 +99,44 @@ public final class Store: @unchecked Sendable {
         }
     }
 
+    /// Forgets a CoreBar: its entry, its token and the per-serial endpoint caches.
     public func remove(serial: String) {
         queue.sync {
             state.coreBars.removeAll { $0.serialNo == serial }
             persist()
         }
         deleteToken(serial: serial)
+        try? FileManager.default.removeItem(at: endpointsURL(serial))
+        try? FileManager.default.removeItem(at: knownURL(serial))
     }
 
     private func persist() {
-        if let data = try? JSONEncoder().encode(state) {
-            try? data.write(to: fileURL, options: .atomic)
-            // Holds hotspot passwords since 2026-11-03: user-only.
-            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        // Holds hotspot passwords since 2026-11-03: user-only.
+        if let data = try? JSONEncoder().encode(state) { Self.writePrivate(data, to: fileURL) }
+    }
+
+    /// Writes `data` to `url` so that no other user can ever read it: the temporary file is created with
+    /// mode 0600 by `open(2)` itself (`Data.write(.atomic)` creates it with the umask, 0644 by default, and a
+    /// later chmod leaves a window), then renamed over the target. Returns false if any step failed.
+    @discardableResult
+    public static func writePrivate(_ data: Data, to url: URL) -> Bool {
+        let tmp = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString.prefix(8)).tmp")
+        let fd = open(tmp.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
+        guard fd >= 0 else { return false }
+        var ok = data.withUnsafeBytes { raw -> Bool in
+            var off = 0
+            while off < raw.count {
+                let n = write(fd, raw.baseAddress! + off, raw.count - off)
+                if n <= 0 { return false }
+                off += n
+            }
+            return true
         }
+        if ok { ok = fsync(fd) == 0 }
+        ok = close(fd) == 0 && ok
+        if ok { ok = rename(tmp.path, url.path) == 0 }
+        if !ok { unlink(tmp.path) }
+        return ok
     }
 
     // MARK: Tokens
@@ -128,9 +156,7 @@ public final class Store: @unchecked Sendable {
     }
 
     public func saveToken(_ token: String, serial: String) {
-        let url = tokenURL(serial)
-        try? Data(token.utf8).write(to: url, options: .atomic)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        Self.writePrivate(Data(token.utf8), to: tokenURL(serial))
     }
 
     public func loadToken(serial: String) -> String? {
@@ -143,8 +169,7 @@ public final class Store: @unchecked Sendable {
     public func saveSecret(_ value: String, name: String) {
         let url = tokenURL("secret-\(name)")
         if value.isEmpty { try? FileManager.default.removeItem(at: url); return }
-        try? Data(value.utf8).write(to: url, options: .atomic)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        Self.writePrivate(Data(value.utf8), to: url)
     }
 
     public func loadSecret(name: String) -> String? {

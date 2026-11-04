@@ -36,13 +36,18 @@ public enum LinearTasks {
         req.httpBody = try JSONSerialization.data(withJSONObject: ["query": query, "variables": variables])
         let (data, resp) = try await URLSession.shared.data(for: req)
         if let http = resp as? HTTPURLResponse, http.statusCode == 401 || http.statusCode == 400 {
-            throw NSError(domain: "Linear", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Linear rejected the API key (HTTP \(http.statusCode))."])
+            throw NSError(domain: "Linear", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: Self.httpErrorMessage(http.statusCode)])
         }
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw URLError(.cannotParseResponse) }
         if let errors = obj["errors"] as? [[String: Any]], let msg = errors.first?["message"] as? String {
             throw NSError(domain: "Linear", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
         }
         return (obj["data"] as? [String: Any]) ?? [:]
+    }
+
+    /// 401 is the key (wrong, revoked, or not a personal key); 400 is the request itself (a malformed query).
+    public static func httpErrorMessage(_ status: Int) -> String {
+        status == 401 ? "Linear rejected the API key (HTTP 401)." : "Linear rejected the request (HTTP \(status))."
     }
 
     /// Mark an issue done: move it to its team's first "completed" workflow state (Linear's own Done).

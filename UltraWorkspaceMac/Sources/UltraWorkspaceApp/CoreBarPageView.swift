@@ -32,14 +32,7 @@ struct CoreBarPageView: View {
             }
         }
         .onAppear { reloadCover(); if model.corebarPages.isEmpty { model.refreshPages() } }
-        .alert("Replace the bar's pages?", isPresented: $ui.confirm) {
-            Button("Replace pages", role: .destructive) { model.publishDeckhandPage(settings: settings) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(model.foreignPages.isEmpty
-                 ? "The bar will have two pages: its Standard page and the Deckhand page. The bar cannot send pages back, so pages made in the official app would be removed — none were found right now."
-                 : "These pages were made in the official app and will be removed: \(model.foreignPages.map(\.name).joined(separator: ", ")). Re-deploy them from that app if you still need them.")
-        }
+        .publishConfirmation(isPresented: $ui.confirm)
     }
 
     private func publish() {
@@ -125,10 +118,7 @@ struct CoreBarPageView: View {
                                     .disabled(!settings.deckhandPagePublished).help("Re-draws today's weather & date on the clock card")
                             }
                             Spacer()
-                            Button { settings.coreCards.removeAll { $0 == c.id } } label: {
-                                Image(systemName: "xmark.circle").frame(width: 32, height: 24).contentShape(Rectangle())
-                            }
-                            .buttonStyle(.borderless).help("Remove \(c.title)").accessibilityLabel("Remove \(c.title)")
+                            RemoveMark(title: c.title) { settings.coreCards.removeAll { $0 == c.id } }
                         }
                         if c.id == "WEATHER", ui.keyOpen {
                             VStack(alignment: .leading, spacing: 4) {

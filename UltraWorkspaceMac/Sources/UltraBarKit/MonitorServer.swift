@@ -33,6 +33,9 @@ public final class MonitorServer: @unchecked Sendable {
     private var actionRoute: ActionRoute = { _ in nil }
     /// Addresses that may trigger actions (the paired bar); nil = any peer. Loopback is always allowed.
     private var actionPeers: Set<String>?
+    /// When set, GET/HEAD too are answered only to `actionPeers` (plus loopback): the pages carry calendar
+    /// titles, Claude transcripts and the weather location, which not every LAN should be able to read.
+    private var pagesOnlyForPeers = false
     public private(set) var port: UInt16 = 0
     public var isRunning: Bool { lock.lock(); defer { lock.unlock() }; return listener?.state == .ready }
 
@@ -47,6 +50,10 @@ public final class MonitorServer: @unchecked Sendable {
     /// Only these peer addresses (plus loopback) may POST actions; nil (the default) lets any peer. The app
     /// sets it to the selected bar's address so another host on the LAN cannot drive Music or close issues.
     public func setActionPeers(_ peers: Set<String>?) { lock.lock(); actionPeers = peers; lock.unlock() }
+    /// `true`: pages and data (`GET`/`HEAD`) are served only to the action peers and loopback, everyone else gets
+    /// 403 ("pages only for the bar", off by default so a browser on the LAN can still preview the pages).
+    public func setPagesOnlyForPeers(_ on: Bool) { lock.lock(); pagesOnlyForPeers = on; lock.unlock() }
+    public var isPagesOnlyForPeers: Bool { lock.lock(); defer { lock.unlock() }; return pagesOnlyForPeers }
 
     /// Start on `port` (idempotent). Throws when the port is taken.
     public func start(port requested: UInt16 = MonitorServer.defaultPort) throws {
@@ -175,6 +182,11 @@ public final class MonitorServer: @unchecked Sendable {
         return peers.contains(address) || (address.hasPrefix("::ffff:") && peers.contains(String(address.dropFirst(7))))
     }
 
+    /// Whether a `GET`/`HEAD` from `address` is answered: anyone unless `pagesOnly`, then the same rule as for actions.
+    public static func peerMayRead(_ address: String?, peers: Set<String>?, pagesOnly: Bool) -> Bool {
+        pagesOnly ? peerMayAct(address, peers: peers) : true
+    }
+
     private func readRequest(_ conn: NWConnection, buffer: Data) {
         conn.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [weak self] data, _, complete, error in
             guard let self else { return }
@@ -220,8 +232,12 @@ public final class MonitorServer: @unchecked Sendable {
             }
         } else {
             guard method == "GET" || method == "HEAD" else { send(conn, header("405 Method Not Allowed", "text/plain", 0)); return }
-            lock.lock(); let r = route; lock.unlock()
-            resp = r(path) ?? Response("404 Not Found", type: "text/plain", body: Data("not found".utf8))
+            lock.lock(); let r = route, peers = actionPeers, pagesOnly = pagesOnlyForPeers; lock.unlock()
+            if !Self.peerMayRead(Self.peerAddress(conn), peers: peers, pagesOnly: pagesOnly) {
+                resp = Response("403 Forbidden", type: "text/plain", body: Data("pages are served to the paired bar only".utf8))
+            } else {
+                resp = r(path) ?? Response("404 Not Found", type: "text/plain", body: Data("not found".utf8))
+            }
         }
         if !target.hasSuffix(".json") { WireLog.shared.http("monitor ← \(method) \(target) \(resp.status)") }
         var out = header(resp.status, resp.type, resp.body.count)

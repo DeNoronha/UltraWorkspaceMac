@@ -30,7 +30,7 @@ struct CalEvent: Sendable {
 final class CalendarSource {
 
     /// Current EventKit authorization mapped to `CalAuth`.
-    static func authStatus() -> CalAuth {
+    nonisolated static func authStatus() -> CalAuth {
         let status = EKEventStore.authorizationStatus(for: .event)
         switch status {
         case .fullAccess:
@@ -82,7 +82,20 @@ final class CalendarSource {
 
     /// Events from now through the next 24 hours, sorted by start, mapped to
     /// `CalEvent`. `calendarIDs` empty = all calendars. Returns `[]` if not authorized.
+    ///
+    /// The EventKit query (`events(matching:)`) walks the calendar database synchronously and took
+    /// tens of milliseconds per call; the calendar feed asked every minute and the cube card on every
+    /// render, all on the main actor. It now runs in a detached task with its own `EKEventStore`
+    /// (EventKit objects are not thread-safe, so the store is created and dropped inside that task);
+    /// only the flattened `Sendable` `[CalEvent]` crosses back.
     static func upcoming(limit: Int = 3, calendarIDs: [String] = [], days: Int = 1) async -> [CalEvent] {
+        guard authStatus() == .authorized else { return [] }
+        return await Task.detached(priority: .utility) { query(limit: limit, calendarIDs: calendarIDs, days: days) }.value
+    }
+
+    /// The query itself, callable from any thread (synchronous wrapper for callers that are already
+    /// off the main actor). Checks authorization again so it degrades to `[]` on its own.
+    nonisolated static func query(limit: Int = 3, calendarIDs: [String] = [], days: Int = 1) -> [CalEvent] {
         guard authStatus() == .authorized else { return [] }
 
         let store = EKEventStore()
@@ -112,7 +125,7 @@ final class CalendarSource {
 
     /// Extracts a straight (r,g,b) tuple in 0...1 from a calendar's CGColor,
     /// converting through device RGB when needed. Falls back to a neutral blue.
-    private static func rgb(from cgColor: CGColor?) -> (Double, Double, Double) {
+    nonisolated private static func rgb(from cgColor: CGColor?) -> (Double, Double, Double) {
         guard let cgColor else { return (0.35, 0.60, 0.95) }
 
         if let comps = cgColor.components, cgColor.numberOfComponents >= 3 {

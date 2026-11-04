@@ -63,6 +63,7 @@ struct AppsView: View {
                     UpdateAllButton()
                 }
             }
+            LibraryErrorStrip()
             Divider()
             HSplitView {
                 List(selection: $ui.selected) {
@@ -97,8 +98,6 @@ struct AppsView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        if let e = model.appStoreError { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
-                        if let e = model.barAppError { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true).textSelection(.enabled) }
                         if let sel = ui.selected {
                             if let app = AppModel.barAppPages.first(where: { BarPages.package(for: $0.page) == sel }) { deckhandDetail(app) }
                             else if let e = entries.first(where: { $0.package == sel }) { entryDetail(e) }
@@ -218,7 +217,7 @@ struct AppsView: View {
                     .buttonStyle(.borderedProminent).disabled(model.appBusy != nil)
             }
             if let a = e.installed, let port = a.port, let tok = a.sessionToken, let bar = model.selectedCoreBar,
-               let url = URL(string: "http://\(model.discovered.first(where: { $0.serialNo == bar.serialNo })?.ip ?? bar.lastIp):\(port)/?sessionToken=\(tok)") {
+               let url = URL(string: "http://\(model.address(for: bar.serialNo) ?? bar.lastIp):\(port)/?sessionToken=\(tok)") {
                 Link(destination: url) { Label("Web UI", systemImage: "safari") }.buttonStyle(.bordered).help("Opens the app's own web page on the bar in your browser.")
             }
         }
