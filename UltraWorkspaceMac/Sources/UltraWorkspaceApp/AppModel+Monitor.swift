@@ -31,10 +31,10 @@ extension AppModel {
         monitorTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                let peer = self.ipForSelected() ?? "192.168.255.255"
-                let url = MonitorServer.shared.url(reachableFrom: peer)
+                let peer = self.ipForSelected()
+                let url = MonitorServer.shared.url(reachableFrom: peer ?? "192.168.255.255")
                 if url != self.monitorURL { self.monitorURL = url }
-                if let url { MonitorBeacon.send(url: url) }
+                if let url { MonitorBeacon.send(url: url, to: peer) }
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }

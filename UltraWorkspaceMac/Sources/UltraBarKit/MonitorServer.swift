@@ -131,26 +131,32 @@ public final class MonitorServer: @unchecked Sendable {
 public enum MonitorBeacon {
     public static let port: UInt16 = 5320
 
-    /// One broadcast; `url` is what the bar should open. Returns false when the socket failed.
+    /// One beacon: broadcast plus a unicast copy to `host` (the bar's IP) — the bar's Wi-Fi does not pass
+    /// 255.255.255.255 broadcasts to it (checked 2026-11-04), the unicast always arrives.
     @discardableResult
-    public static func send(url: String) -> Bool {
+    public static func send(url: String, to host: String? = nil) -> Bool {
         guard let payload = try? JSONSerialization.data(withJSONObject: ["deckhand": "monitor", "url": url, "v": 1]) else { return false }
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else { return false }
         defer { close(fd) }
         var yes: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &yes, socklen_t(MemoryLayout<Int32>.size))
-        var dst = sockaddr_in()
-        dst.sin_family = sa_family_t(AF_INET)
-        dst.sin_port = port.bigEndian
-        dst.sin_addr.s_addr = INADDR_BROADCAST
-        let sent = payload.withUnsafeBytes { buf in
-            withUnsafePointer(to: &dst) { p in
-                p.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                    sendto(fd, buf.baseAddress, buf.count, 0, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
+        func send(to addr: in_addr_t) -> Bool {
+            var dst = sockaddr_in()
+            dst.sin_family = sa_family_t(AF_INET)
+            dst.sin_port = port.bigEndian
+            dst.sin_addr.s_addr = addr
+            let sent = payload.withUnsafeBytes { buf in
+                withUnsafePointer(to: &dst) { p in
+                    p.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                        sendto(fd, buf.baseAddress, buf.count, 0, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
+                    }
                 }
             }
+            return sent == payload.count
         }
-        return sent == payload.count
+        var ok = send(to: INADDR_BROADCAST)
+        if let host { var a = in_addr(); if inet_pton(AF_INET, host, &a) == 1 { ok = send(to: a.s_addr) || ok } }
+        return ok
     }
 }
