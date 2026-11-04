@@ -33,15 +33,50 @@ private struct BindingsFooter: View {
     }
 }
 
+/// The bindings travel with the CoreBar page, so "publish bindings" is the page publish under its own name —
+/// added 2026-11-04 after a changed binding sat unpublished because nothing on this page said how to send it.
+private struct PublishBindings: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var settings: AppSettings
+    @StateObject private var ui = UI()
+    private final class UI: ObservableObject { @Published var confirm = false }
+    var body: some View {
+        Button {
+            if model.publishNeedsConfirmation(settings: settings) { ui.confirm = true } else { model.publishDeckhandPage(settings: settings) }
+        } label: { Label("Publish bindings", systemImage: "arrow.up.circle.fill").frame(minWidth: 120) }
+        .buttonStyle(.borderedProminent).controlSize(.large)
+        .disabled(model.isWorking || model.pageProgress.isRunning || settings.coreCards.isEmpty)
+        .help("Bindings are part of the CoreBar page — this publishes the page again with the bindings shown here")
+        .alert("Replace the bar's pages?", isPresented: $ui.confirm) {
+            Button("Replace pages", role: .destructive) { model.publishDeckhandPage(settings: settings) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(model.foreignPages.isEmpty
+                 ? "The bar will have two pages: its Standard page and the Deckhand page (with these bindings)."
+                 : "These pages were made in the official app and will be removed: \(model.foreignPages.map(\.name).joined(separator: ", ")).")
+        }
+    }
+}
+
+private struct BindingsProgress: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var settings: AppSettings
+    var body: some View {
+        ProgressRow(progress: model.pageProgress, lastAt: model.lastPagePublishedAt, idle: "Published", never: settings.deckhandPagePublished ? "Published before this session." : "Not sent yet.")
+    }
+}
+
 struct KnobKeyView: View {
+    @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var model: AppModel
     let module: AttachedModule
     var body: some View {
         VStack(spacing: 0) {
-            Header("KnobKey", "Turn and press.")
+            Header("KnobKey", "Turn and press.") { PublishBindings() }
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    BindingsProgress()
                     HStack(alignment: .top, spacing: 24) {
                         Image(systemName: "dial.medium").font(.system(size: 72)).foregroundStyle(.secondary).frame(width: 110)
                         Panel("What it does") {
@@ -51,7 +86,7 @@ struct KnobKeyView: View {
                             BindingsFooter(lastUsed: model.lastVolumePushAt)
                         }
                     }
-                    Text("Changing these bindings is planned; today they are fixed and shipped with every CoreBar page publish.").font(.caption).foregroundStyle(.tertiary)
+                    Text("Changing these bindings is planned; today they are fixed. They reach the bar with the CoreBar page — after an update of Deckhand, press Publish bindings once.").font(.caption).foregroundStyle(.tertiary)
                 }.padding(20)
             }
         }
@@ -64,10 +99,11 @@ struct DotKeyView: View {
     let module: AttachedModule
     var body: some View {
         VStack(spacing: 0) {
-            Header("DotKey", "Three keys: two round, one long.")
+            Header("DotKey", "Three keys: two round, one long.") { PublishBindings() }
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    BindingsProgress()
                     HStack(alignment: .top, spacing: 24) {
                         // As on the desk: two round keys stacked on the left, one tall key on the right.
                         HStack(spacing: 8) {
@@ -82,7 +118,7 @@ struct DotKeyView: View {
                             BindingsFooter(lastUsed: nil)
                         }
                     }
-                    Text("Changing these bindings is planned; today they are fixed and shipped with every CoreBar page publish.").font(.caption).foregroundStyle(.tertiary)
+                    Text("Changing these bindings is planned; today they are fixed. They reach the bar with the CoreBar page — after an update of Deckhand, press Publish bindings once.").font(.caption).foregroundStyle(.tertiary)
                 }.padding(20)
             }
         }

@@ -108,6 +108,15 @@ if let i = CommandLine.arguments.firstIndex(of: "upload1"), CommandLine.argument
     exit(r.accepted ? 0 : 1)
 }
 
+// `kitcheck page <ip> <serial> <page-id>` — select a page on the bar (TRIGGER_PROFILE_CHANGE 1103).
+if let i = CommandLine.arguments.firstIndex(of: "page"), CommandLine.arguments.count > i + 3 {
+    let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2], id = CommandLine.arguments[i + 3]
+    guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token"); exit(2) }
+    let s = CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
+    do { print(try await s.switchPage(id: id)) } catch { print("request failed: \(error)"); exit(1) }
+    exit(0)
+}
+
 // `kitcheck raw <ip> <serial> <act> <json-file>` — send one request with the file's JSON as `data`, print the reply.
 if let i = CommandLine.arguments.firstIndex(of: "raw"), CommandLine.arguments.count > i + 4 {
     let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2], act = Int(CommandLine.arguments[i + 3]) ?? 0
