@@ -184,7 +184,7 @@ final class BarPages {
                 try? await Task.sleep(nanoseconds: 3_600_000_000_000)
             }
         })
-        tasks.append(Task { [weak self] in   // Linear: every 2 min while a key is set
+        tasks.append(Task { [weak self] in   // Linear: every 20 s while the page is open, else every 2 min
             var lastKey = ""
             while !Task.isCancelled {
                 guard let self else { return }
@@ -203,8 +203,14 @@ final class BarPages {
                         self.linear = ["hasKey": true, "issues": self.linear["issues"] ?? [], "error": error.localizedDescription]
                     }
                 }
-                // A new key takes effect at once; otherwise wait two minutes.
-                for _ in 0..<24 { try? await Task.sleep(nanoseconds: 5_000_000_000); if Task.isCancelled || model.linearKey != key { break } }
+                // A new key takes effect at once. 20 s while the Tasks page is open on the bar (so an issue closed
+                // in Linear disappears quickly), two minutes otherwise, waking up as soon as the page is opened.
+                let open = self.lastHit["tasks"].map { Date().timeIntervalSince($0) < 60 } ?? false
+                for _ in 0..<(open ? 4 : 24) {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    if Task.isCancelled || model.linearKey != key { break }
+                    if !open, let t = self.lastHit["tasks"], Date().timeIntervalSince(t) < 10 { break }
+                }
                 lastKey = key
             }
             _ = lastKey
