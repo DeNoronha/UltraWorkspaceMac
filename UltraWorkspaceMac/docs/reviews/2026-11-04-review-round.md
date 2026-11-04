@@ -1,0 +1,51 @@
+# Review round of 4 November 2026
+
+Eight independent reviews ran on the evening of 4 November 2026, each by a separate agent with a narrow brief, after the Library redesign, the five new bar apps and the v0.2.0 release. This page collects their findings and what was done with them. Everything marked fixed is in commits `cfb3934` (first five reviews) and `b14ebc7` (security, architecture, documentation), shipped as v0.2.1. The two long-form outputs are separate documents: [SECURITY.md](../SECURITY.md) (rewritten by attack path) and [ARCHITECTURE-REVIEW.md](../ARCHITECTURE-REVIEW.md) (the refactor plan).
+
+## 1. Library target (UltraBarKit)
+
+Fixed: the cube's Wi‑Fi password was redacted from the wire log only when the bar's reply had the keys in one particular order, so a read reply could log it in clear; redaction is now order-independent and also covers session tokens and passwords. The wire log was created world-readable; now 0600. The LAN HTTP servers had no per-connection deadline (a client that never finished its request held a connection forever); now 15 s. The control channel spawned separate tasks for data and end-of-stream, so an EOF could overtake the last chunk and a complete reply be dropped as a timeout; the receive loop is ordered now, with a 4 MB line cap and timer tasks that are cancelled when a line arrives. A failed heartbeat was swallowed, so the link could show connected after a bar reboot; it now closes and reconnects. Sub-agent transcripts counted as "terminals waiting for you". A hand-rolled FD_SET could write past the struct for file descriptors above 1023. The compass function trapped on NaN and could index negatively; callsigns are now limited to 3–10 alphanumerics before being put in a URL. Bare-LF request lines and control characters in the request target were mishandled. Open-Meteo calls had no timeout. 36 checks added.
+
+Left as recommendations: a rejected pairing (act 101, code -1) waits the full 30 s; push handlers run serially in the read loop; discovery broadcasts only to 255.255.255.255 (one interface); 32-bit network counters wrap every 4 GB in the totals sent to the bar; the gzip helper can emit an empty body for incompressible input over about 13 MB; secrets are written with a sub-millisecond world-readable window before chmod; a few dead symbols.
+
+## 2. App target (UltraWorkspaceApp)
+
+Fixed: the Done button on the Tasks page could never be tapped (the row's hit area was tested before the button's). The Deckhand page had lost `showName` and `iconScale` through a comment that swallowed two dictionary keys. Location was resolved with a fresh CLLocationManager and reverse geocode every 10 s while the Flights page was open; one cached resolver now serves everything. The presence watcher never restarted a dead logcat tail. A screensaver catalogue error was wiped immediately. "No stored token" was shown when the app was merely busy. The music feed ran a second AppleScript on the main thread every 2 s. Timed cube switching stepped by the card list instead of the uploaded layers (black screen when a card had failed to render). A cancelled upload could overwrite state with the old package. Album art did not reload for the same track. Headlines opened on item five and repeated items. Tasks used the UTC date for "overdue". Music parsing broke on a pipe in a title. Settings load and save failures were silent. Stale map tiles were discarded when OpenStreetMap was unreachable. The Calendar page ignored the 24-hour setting.
+
+Left as recommendations: EventKit and AppleScript still run on the main actor; the page dictionaries are read with `DispatchQueue.main.sync` from the server thread (no deadlock found, but it blocks a thread while the main actor is busy); tile fetches block threads; the price gate has no in-flight de-duplication; the link switches the bar to the Deckhand page on every reconnect.
+
+## 3. Android bar apps and packaging
+
+Fixed: any LAN host could send a beacon pointing the kiosk at an arbitrary http(s) URL, which was remembered across restarts; now only private IPv4 http addresses, and since 1.7 the URL's host must equal the beacon's sender. Pages could navigate off the Mac with the JavaScript bridge attached; navigation is locked to the same host and port. One transient failure made the page reload every 5 s forever. `WebView.destroy()` was called while attached (the logcat warning). The beacon socket could be closed by a stale thread. Two unused permissions removed. The DMG README claimed notarization before it was known to have happened; a Gatekeeper rejection was silent; the site deploy died whenever the release DMG could not be fetched.
+
+Left as recommendations: the APKs are debug-signed with the machine's debug keystore (back it up; a release keystore outside the repo would be proper); handle HTTP errors on the main frame like transport errors; a beacon-loss timeout; universal (arm64 + x86_64) Mac build; pin GitHub Actions to SHAs.
+
+## 4. Mac app design
+
+Fixed: destructive actions on People and Logs had no confirmation; VivoCube Maintenance overflowed at the minimum window width; Screensavers lacked Update all; Refresh is now one shared button with ⌘R and a reason when disabled; terminology unified ("Open CoreBar page", "Connecting…", "Looking for modules…"); shared tags for "now" and "needs key"; one empty-state wording; a disabled state for the page already showing; orange warning banners everywhere instead of one red line; the two Controls pages share one closing note and the Publish bindings button has ⌘↩; the About page and the Settings "About" section rewritten; full sentences in the Installed page footers; accessibility labels on every unlabeled picker and decorative drawing.
+
+Left as recommendations: the first-run title still says "UltraBar" where everything else says CoreBar (the manual quotes it); error banners sit at the top of a long Installed page; two styles of Remove button; two slightly different publish confirmations; the older items from the UX review (editable bindings, a global Publish changes, a first-run wizard).
+
+## 5. Website design
+
+Fixed: stale versions and counts ("six apps", 0.1, 1.3); the requirements and security tables collapsed on phones; long code strings could force horizontal scroll; button meta text failed contrast; heading order jumped from h2 to h4; ARIA roles on the hero tabs; tap targets under 44 px in the navigation; the 404 page lacked the Support link; the two app screenshots were 1.8 MB and 0.6 MB for a 565 px slot, now 1600 px wide; Open Graph images were relative paths, so link previews had no image; the marketplace page used a different hero and footer; a wrong CoreBar screenshot (a desktop capture) replaced by the real page.
+
+Left as recommendations: the hero carousel has no visible pause control; two slightly different cube-card counts on the home and Deckhand pages; the bar-app icons on the bar-apps page could be served at 112 px.
+
+## 6. Security, by attack path
+
+Fixed: DNS rebinding against the page server and the preview server (any Host that is not an IP literal or localhost gets 421), which would have let a web page the user visits read every served page and fire actions; actions were open to any LAN host with the header, now only the paired bar's address and loopback, with a parsed header instead of a substring match; POST replies had a Content-Length but no body; security headers and a Content Security Policy on every response; discovery replies validated (IPv4 literal, port range, serial required and capped); the multipart filename and app icon URLs sanitised; flight look-ups send the location at 3 decimals; the tile proxy bounded to zoom 2–17 and four fetches; settings and contacts files 0600; a refused PC_CONTROL from the bar no longer logs its parameters.
+
+Left as recommendations: a discovery reply claiming the paired serial can still move the bar's address for uploads, ADB and the beacon (adopt a new address only after a pinned AUTH succeeds); `openBrowser` from the bar opens any URL without confirmation; the vendor's shared TLS key means first pairing is trust-on-first-use; page reads are open on the LAN while the switch is on (a "pages only for the bar" option would close that); Wi‑Fi ADB gives any LAN host a root shell on the bar while on; publish a SHA-256 for the DMG, pin Actions to SHAs, checksum the Gradle wrapper; marketplace entries must be treated as untrusted when installs land.
+
+## 7. Architecture
+
+Report only, in [ARCHITECTURE-REVIEW.md](../ARCHITECTURE-REVIEW.md). Top five: move the eleven page bodies out of Swift string literals into package resources; replace the ten feed loops with one feed abstraction and a lock-protected snapshot box so the server never calls into the main actor; cut the mutual dependency between AppModel and BarPages through a small host protocol, as the prerequisite for a SwiftUI-free core target with real tests; one bar-app catalogue instead of five lists and a hand-kept version string; ownership fixes (AppSettings lifetime, debounced saves, one device-polling owner, a per-bar link object before a second bar or the Teams OAuth app).
+
+## 8. Documentation
+
+Every document and site page was audited against the code: README (library pages, maintenance buttons, knob behaviour, network endpoints, project layout, roadmap mirror), MANUAL (toolbar, five cards per screenful, switching labels, Location panel, Update all on every library page, Logs, how the pages work, troubleshooting), PROTOCOL (ADB, app store acts, Mac-side services), ROADMAP, WIDGETS, RELEASING (0.2.1, the three places the bar-app version lives), COLLAB, UX-REVIEW, the Android README (Fluent icon pipeline, 1.6/1.7 rules), the site README and all site pages. The manual page was regenerated.
+
+## Also researched
+
+[TEAMS-APP-RESEARCH.md](../TEAMS-APP-RESEARCH.md): what the "Flow for Outlook & Teams" Stream Deck plugin does, and that a Deckhand Meetings app needs no sign-in for next meeting, countdown, Join and unread mail (Apple Calendar and Mail hold the Outlook data), while presence needs an Entra app registration; in-call controls are impossible since Microsoft retired the Teams client's local API in June 2026.
