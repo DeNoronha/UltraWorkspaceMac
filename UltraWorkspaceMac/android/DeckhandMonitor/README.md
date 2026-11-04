@@ -1,6 +1,6 @@
 # Deckhand bar apps (Android)
 
-A tiny full-screen kiosk app for the Sanytron UltraBar X CoreBar (Android 10, 1424×280 landscape). It is a single `WebView` that shows one of the live pages served by the Deckhand macOS app on the LAN. The CoreBar launcher shows one card per installed package, so the project is built as six product flavors, one per page, each with its own package, label and icon:
+A tiny full-screen kiosk app for the Sanytron UltraBar X CoreBar (Android 10, 1424×280 landscape). It is a single `WebView` that shows one of the live pages served by the Deckhand macOS app on the LAN. The CoreBar launcher shows one card per installed package, so the project is built as eleven product flavors, one per page, each with its own package, label and icon:
 
 | flavor | applicationId | label | page |
 |---|---|---|---|
@@ -10,6 +10,11 @@ A tiny full-screen kiosk app for the Sanytron UltraBar X CoreBar (Android 10, 14
 | weather | nl.denoronha.deckhand.weather | Weather | /weather |
 | music | nl.denoronha.deckhand.music | Music | /music |
 | calendar | nl.denoronha.deckhand.calendar | Calendar | /calendar |
+| flights | nl.denoronha.deckhand.flights | Flights | /flights |
+| sky | nl.denoronha.deckhand.sky | Sun & Moon | /sky |
+| news | nl.denoronha.deckhand.news | Headlines | /news |
+| verse | nl.denoronha.deckhand.verse | Verse | /verse |
+| tasks | nl.denoronha.deckhand.tasks | Tasks | /tasks |
 
 The flavors are declared in `app/build.gradle.kts` (one dimension, `page`); each sets `applicationId`, the `app_name` string and `BuildConfig.PAGE`. The shared code lives in `src/main`; everything icon-related per flavor lives in `src/<flavor>/res/` and is generated (see below).
 
@@ -32,11 +37,11 @@ Requires JDK 21, the Android command-line tools with `platforms;android-34`, and
 ```sh
 cd android/DeckhandMonitor
 JAVA_HOME=/opt/homebrew/opt/openjdk@21 ANDROID_HOME=/opt/homebrew/share/android-commandlinetools ./gradlew assembleDebug
-for f in monitor:Monitor claude:Claude crypto:Crypto weather:Weather music:Music calendar:Calendar; do cp app/build/outputs/apk/${f%%:*}/debug/app-${f%%:*}-debug.apk ../../dist/bar-apps/Deckhand${f##*:}.apk; done
+for f in monitor:Monitor claude:Claude crypto:Crypto weather:Weather music:Music calendar:Calendar flights:Flights sky:Sky news:News verse:Verse tasks:Tasks; do cp app/build/outputs/apk/${f%%:*}/debug/app-${f%%:*}-debug.apk ../../dist/bar-apps/Deckhand${f##*:}.apk; done
 cp ../../dist/bar-apps/DeckhandMonitor.apk ../../dist/DeckhandMonitor.apk
 ```
 
-`assembleDebug` builds all six flavors; `assembleClaudeDebug` etc. builds one.
+`assembleDebug` builds all eleven flavors; `assembleClaudeDebug` etc. builds one.
 
 The debug-signed APK is fine for the bar (it is an eng build). Kotlin, no Compose, no AndroidX.
 

@@ -9,8 +9,8 @@ android {
     defaultConfig {
         minSdk = 29
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
 
     buildFeatures {
@@ -28,6 +28,11 @@ android {
             Triple("weather", "nl.denoronha.deckhand.weather", "Weather"),
             Triple("music", "nl.denoronha.deckhand.music", "Music"),
             Triple("calendar", "nl.denoronha.deckhand.calendar", "Calendar"),
+            Triple("flights", "nl.denoronha.deckhand.flights", "Flights"),
+            Triple("sky", "nl.denoronha.deckhand.sky", "Sun & Moon"),
+            Triple("news", "nl.denoronha.deckhand.news", "Headlines"),
+            Triple("verse", "nl.denoronha.deckhand.verse", "Verse"),
+            Triple("tasks", "nl.denoronha.deckhand.tasks", "Tasks"),
         )
         for ((flavor, appId, label) in pages) {
             create(flavor) {

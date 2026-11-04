@@ -193,14 +193,56 @@ if CommandLine.arguments.contains("discover") {
 }
 
 var failures = 0
-@MainActor func check(_ cond: Bool, _ name: String) {
-    print("\(cond ? "ok  " : "FAIL") \(name)")
+@MainActor func check(_ cond: Bool, _ name: String, _ detail: String = "") {
+    print("\(cond ? "ok  " : "FAIL") \(name + (detail.isEmpty ? "" : "  — " + detail))")
     if !cond { failures += 1 }
 }
 
 // Cube Wi-Fi state mapping (vendor strings; hardware-confirmed 2026-11-03: packages apply only at 1)
 check(CoreBarSession.CubeWiFiState.isConnected(1) && !CoreBarSession.CubeWiFiState.isConnected(3), "cube wifi: 1 = connected, 3 = connecting")
 check(CoreBarSession.CubeWiFiState.label(3) == "still connecting" && CoreBarSession.CubeWiFiState.label(nil) == "not read yet", "cube wifi labels")
+
+// Sun & moon (SkyMath): Sassenheim, 2026-11-04. Reference: sunrise 07:41, sunset 17:07 CET (timeanddate),
+// new moon 2026-11-09, full moon 2026-11-24.
+do {
+    var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+    let noon = cal.date(from: DateComponents(year: 2026, month: 11, day: 4, hour: 12))!
+    let s = SkyMath.sunDay(at: noon, lat: 52.2258, lon: 4.5131, calendar: cal)
+    func hm(_ d: Date?) -> String { guard let d else { return "—" }; let f = DateFormatter(); f.timeZone = cal.timeZone; f.dateFormat = "HH:mm"; return f.string(from: d) }
+    func minutes(_ d: Date?) -> Int { guard let d else { return -9999 }; let c = cal.dateComponents([.hour, .minute], from: d); return c.hour! * 60 + c.minute! }
+    check(abs(minutes(s.sunrise) - (7 * 60 + 41)) <= 6, "sunrise Sassenheim 2026-11-04 ≈ 07:41", hm(s.sunrise))
+    check(abs(minutes(s.sunset) - (17 * 60 + 7)) <= 6, "sunset Sassenheim 2026-11-04 ≈ 17:07", hm(s.sunset))
+    check(s.now.elevation > 15 && s.now.elevation < 25, "sun elevation at noon in November ≈ 20°", "\(s.now.elevation)")
+    check(s.dayLength > 9 * 3600 && s.dayLength < 10 * 3600, "day length ≈ 9.4 h", "\(Int(s.dayLength / 60)) min")
+    let m = SkyMath.moonInfo(at: noon, lat: 52.2258, lon: 4.5131, calendar: cal)
+    let newMoon = cal.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 12))!, fullMoon = cal.date(from: DateComponents(year: 2026, month: 11, day: 24, hour: 12))!
+    check(abs(m.nextNew.timeIntervalSince(newMoon)) < 36 * 3600, "next new moon ≈ 2026-11-09", "\(m.nextNew)")
+    check(abs(m.nextFull.timeIntervalSince(fullMoon)) < 36 * 3600, "next full moon ≈ 2026-11-24", "\(m.nextFull)")
+    check(!m.waxing && m.illumination < 0.4, "2026-11-04: waning crescent", "\(m.name) \(m.illumination)")
+    check(m.rise != nil || m.set != nil, "moon rise/set found", "rise \(hm(m.rise)) set \(hm(m.set))")
+}
+
+// RSS parsing (CDATA titles, RFC 822 dates) and the verse of the day
+do {
+    let rss = """
+    <?xml version="1.0"?><rss version="2.0"><channel><title>Feed</title>
+    <item><title><![CDATA[First & foremost]]></title><link>https://x/1</link><pubDate>Wed, 04 Nov 2026 10:00:00 GMT</pubDate><description><![CDATA[<p>Body &amp; more</p>]]></description></item>
+    <item><title>Second</title><link>https://x/2</link><pubDate>Wed, 04 Nov 2026 09:00:00 +0100</pubDate></item>
+    </channel></rss>
+    """
+    let items = NewsFeed.parse(Data(rss.utf8))
+    check(items.count == 2 && items[0].title == "First & foremost" && items[0].summary == "Body & more", "rss: CDATA title and stripped description", items.map(\.title).joined(separator: "|"))
+    check(items[0].date != nil && items[1].date != nil && items[0].date! > items[1].date!, "rss: RFC 822 dates parsed", "\(String(describing: items[0].date))")
+    let lite = #"<ul><li class="card--lite"><a href="/2026/11/04/us/story-a">Story &amp; A</a></li><li class="card--lite"><a href="/2026/10/01/us/old">Old</a></li></ul>"#
+    var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC")!
+    let liteNow = utc.date(from: DateComponents(year: 2026, month: 11, day: 5, hour: 12))!
+    let cnn = NewsFeed.parseCNNLite(lite, now: liteNow)
+    check(cnn.count == 1 && cnn[0].title == "Story & A" && cnn[0].link == "https://lite.cnn.com/2026/11/04/us/story-a" && cnn[0].day != nil, "cnn lite: headline, link and day; stale items dropped", cnn.map(\.title).joined(separator: "|"))
+    let r1 = DailyVerse.reference(for: Date()), r2 = DailyVerse.reference(for: Date())
+    check(r1 == r2 && DailyVerse.references.contains(r1), "verse of the day is deterministic", r1)
+    check(Set(DailyVerse.references).count == DailyVerse.references.count, "verse list has no duplicates")
+    check(Flights.compass(0) == "N" && Flights.compass(44) == "NE" && Flights.compass(359) == "N" && Flights.compass(225) == "SW", "compass points")
+}
 
 // /upload reply classification: only hotspot-no-IP and module-not-found are retried by `upload`.
 do {

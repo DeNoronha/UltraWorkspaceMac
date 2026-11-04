@@ -56,6 +56,9 @@ final class AppSettings: ObservableObject {
     /// Presence-aware bar screen over ADB: on while the SenseCube sees someone, off after `presenceSleepMinutes`.
     @Published var presenceWake: Bool = false { didSet { save() } }
     @Published var presenceSleepMinutes: Int = 10 { didSet { save() } }
+    // Bar apps (2026-11-04): Flights radius, Headlines source. The Linear key lives in Store (user-only file).
+    @Published var flightsRadiusKm: Int = 3 { didSet { save() } }
+    @Published var newsSource: String = "cnn" { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows this many single cards without scrolling (the clock card takes two slots) — counted on the bar 2026-11-04.
     static let coreCardsThatFit = 5
@@ -122,6 +125,8 @@ final class AppSettings: ObservableObject {
         var monitorServe: Bool? = nil
         var presenceWake: Bool? = nil
         var presenceSleepMinutes: Int? = nil
+        var flightsRadiusKm: Int? = nil
+        var newsSource: String? = nil
     }
 
     // MARK: VivoCube cards (ordered, max 6)
@@ -197,6 +202,8 @@ final class AppSettings: ObservableObject {
             monitorServe = p.monitorServe ?? false
             presenceWake = p.presenceWake ?? false
             presenceSleepMinutes = p.presenceSleepMinutes ?? 10
+            flightsRadiusKm = p.flightsRadiusKm ?? 3
+            newsSource = p.newsSource ?? "cnn"
         }
     }
 
@@ -210,7 +217,8 @@ final class AppSettings: ObservableObject {
                           vivoSwitchMode: vivoSwitchMode, vivoPicturePath: vivoPicturePath,
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
-                          claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, monitorServe: monitorServe, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes)
+                          claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, monitorServe: monitorServe, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes,
+                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource)
         if let data = try? JSONEncoder().encode(p) { try? data.write(to: url, options: .atomic) }
     }
 

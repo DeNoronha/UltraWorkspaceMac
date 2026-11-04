@@ -28,6 +28,11 @@ let flavors: [Flavor] = [
     Flavor(name: "music",    background: "be123c", symbol: "music.note",              glyphColor: "ffffff"),
     Flavor(name: "calendar", background: "15803d", symbol: "calendar",                glyphColor: "ffffff"),
     Flavor(name: "claude",   background: "2b2522", symbol: nil,                       glyphColor: "d97757"),
+    Flavor(name: "flights",  background: "0f766e", symbol: "airplane",                glyphColor: "ffffff"),
+    Flavor(name: "sky",      background: "312e81", symbol: "moon.stars.fill",         glyphColor: "ffffff"),
+    Flavor(name: "news",     background: "7c2d12", symbol: "newspaper.fill",          glyphColor: "ffffff"),
+    Flavor(name: "verse",    background: "6b21a8", symbol: "book.closed.fill",        glyphColor: "ffffff"),
+    Flavor(name: "tasks",    background: "5e6ad2", symbol: "checklist",               glyphColor: "ffffff"),
 ]
 
 // density name -> scale factor (mdpi = 1 px per dp)

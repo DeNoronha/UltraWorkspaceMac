@@ -5,7 +5,10 @@ import UltraBarKit
 /// The bar does the downloading itself (APP_MANAGER 30600); Deckhand only asks and watches.
 struct AppsView: View {
     static func barAppIcon(_ page: String) -> String {
-        switch page { case "claude": return "sparkles"; case "crypto": return "bitcoinsign.circle"; case "weather": return "cloud.sun"; case "music": return "music.note"; case "calendar": return "calendar"; default: return "waveform.path.ecg" }
+        switch page {
+        case "claude": return "sparkles"; case "crypto": return "bitcoinsign.circle"; case "weather": return "cloud.sun"; case "music": return "music.note"; case "calendar": return "calendar"
+        case "flights": return "airplane"; case "sky": return "moon.stars"; case "news": return "newspaper"; case "verse": return "book.closed"; case "tasks": return "checklist"
+        default: return "waveform.path.ecg" }
     }
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
@@ -39,7 +42,7 @@ struct AppsView: View {
                         else if userApps.isEmpty { Text("Nothing installed beyond the firmware and Deckhand's own apps.").foregroundStyle(.secondary) }
                         ForEach(userApps, id: \.packageName) { a in installedRow(a); Divider() }
                     }
-                    Panel("Deckhand apps", footer: "Six small apps for the bar, one card each, showing full-width live pages served by this Mac. Installing and updating goes over ADB (Wi-Fi ADB on in the bar's Developer options). After installing: CoreBar page → Add a card → Publish page. ✕ or a long press on the bar returns to the cards. The pages are plain HTTP on this network and only exist while the switch is on.") {
+                    Panel("Deckhand apps", footer: "Small apps for the bar, one card each, showing full-width live pages served by this Mac. Installing and updating goes over ADB (Wi-Fi ADB on in the bar's Developer options). After installing: CoreBar page → Add a card → Publish page. ✕ or a long press on the bar returns to the cards. The pages are plain HTTP on this network and only exist while the switch is on.") {
                         HStack(spacing: 12) {
                             Toggle("Serve the pages from this Mac", isOn: $settings.monitorServe)
                                 .onChange(of: settings.monitorServe) { _ in model.startMonitor(settings: settings) }
@@ -50,6 +53,7 @@ struct AppsView: View {
                         }
                         Divider()
                         ForEach(AppModel.barAppPages, id: \.page) { app in deckhandRow(app); Divider() }
+                        appSettings
                     }
                     Panel("Marketplace", footer: "The vendor's catalogue. The bar downloads and installs the app itself (it needs internet), one at a time, in about ten seconds.") {
                         let available = model.storeApps.filter { s in !model.barApps.contains { $0.packageName == s.package } && !(model.appStatus[s.package]?.installed ?? false) }
@@ -100,6 +104,28 @@ struct AppsView: View {
                     .help(installed == nil ? "Install version \(AppModel.barAppsVersion) over ADB" : "Update to \(AppModel.barAppsVersion) over ADB")
             }
         }.padding(.vertical, 4)
+    }
+
+    /// Settings for the apps that have any: Flights radius, Headlines source, the Linear key for Tasks.
+    private var appSettings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("App settings").font(.headline).padding(.top, 4)
+            HStack {
+                Label("Flights", systemImage: "airplane").frame(width: 130, alignment: .leading)
+                Stepper("within \(settings.flightsRadiusKm) km", value: $settings.flightsRadiusKm, in: 1...25)
+                Text("of the weather location (Widgets → Weather).").font(.caption).foregroundStyle(.secondary)
+            }
+            HStack {
+                Label("Headlines", systemImage: "newspaper").frame(width: 130, alignment: .leading)
+                Picker("", selection: $settings.newsSource) { ForEach(NewsFeed.sources) { s in Text(s.name).tag(s.id) } }.labelsHidden().frame(width: 180)
+            }
+            HStack {
+                Label("Tasks", systemImage: "checklist").frame(width: 130, alignment: .leading)
+                SecureField("Linear personal API key (lin_api_…)", text: $model.linearKey).frame(width: 300)
+                if let e = model.linearError { Text(e).font(.caption).foregroundStyle(.orange) }
+                else { Text(model.linearKey.isEmpty ? "Linear → Settings → Security & access → Personal API keys. Stored in a user-only file." : "Saved.").font(.caption).foregroundStyle(.secondary) }
+            }
+        }
     }
 
     private func installedRow(_ a: CoreBarSession.AppInfo) -> some View {

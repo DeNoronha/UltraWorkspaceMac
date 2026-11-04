@@ -88,6 +88,9 @@ final class AppModel: ObservableObject {
     @Published var cubeProgress = StepProgress()
     @Published var pageProgress = StepProgress()
     @Published var lastCubeSentAt: Date?
+    /// Personal API key for the Tasks bar app (Linear). Stored as a user-only file, never in settings.json.
+    @Published var linearKey: String = Store.shared.loadSecret(name: "linear") ?? "" { didSet { Store.shared.saveSecret(linearKey, name: "linear") } }
+    @Published var linearError: String?
     /// SHA-256 over the layer images of the last accepted cube package — an unchanged package is not sent again.
     var lastCubeDigest: Data?
     var claudeWatchTask: Task<Void, Never>?

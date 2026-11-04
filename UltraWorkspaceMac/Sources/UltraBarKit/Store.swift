@@ -138,6 +138,20 @@ public final class Store: @unchecked Sendable {
         return String(data: data, encoding: .utf8)
     }
 
+    // MARK: Other secrets (API keys for the bar apps), same user-only files.
+
+    public func saveSecret(_ value: String, name: String) {
+        let url = tokenURL("secret-\(name)")
+        if value.isEmpty { try? FileManager.default.removeItem(at: url); return }
+        try? Data(value.utf8).write(to: url, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    }
+
+    public func loadSecret(name: String) -> String? {
+        guard let data = try? Data(contentsOf: tokenURL("secret-\(name)")) else { return nil }
+        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     public func deleteToken(serial: String) {
         try? FileManager.default.removeItem(at: tokenURL(serial))
     }

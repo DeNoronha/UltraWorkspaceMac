@@ -47,10 +47,12 @@ extension AppModel {
 
     var monitorInstalled: Bool { barApps.contains { $0.packageName == Self.monitorPackage } }
 
-    /// The six bar apps (android/DeckhandMonitor flavors): page id, label, bundled APK name.
+    /// The bar apps (android/DeckhandMonitor flavors): page id, label, bundled APK name. Order = order on the Apps page.
     static let barAppPages: [(page: String, label: String, apk: String)] = [
         ("monitor", "Monitor", "DeckhandMonitor"), ("claude", "Claude", "DeckhandClaude"), ("crypto", "Crypto", "DeckhandCrypto"),
-        ("weather", "Weather", "DeckhandWeather"), ("music", "Music", "DeckhandMusic"), ("calendar", "Calendar", "DeckhandCalendar")]
+        ("weather", "Weather", "DeckhandWeather"), ("music", "Music", "DeckhandMusic"), ("calendar", "Calendar", "DeckhandCalendar"),
+        ("flights", "Flights", "DeckhandFlights"), ("sky", "Sun & Moon", "DeckhandSky"), ("news", "Headlines", "DeckhandNews"),
+        ("verse", "Verse", "DeckhandVerse"), ("tasks", "Tasks", "DeckhandTasks")]
 
     /// APKs shipped inside Deckhand.app (packaging/make-app.sh copies dist/bar-apps) or next to the dev build.
     static func bundledAPK(_ name: String) -> URL? {
@@ -61,7 +63,7 @@ extension AppModel {
 
     func barAppVersion(_ page: String) -> String? { barApps.first { $0.packageName == BarPages.package(for: page) }?.versionName }
     /// Version of the APKs shipped with this build — keep in step with android/DeckhandMonitor/app/build.gradle.kts.
-    nonisolated static let barAppsVersion = "1.2"
+    nonisolated static let barAppsVersion = "1.3"
     /// The bar's copy is older than the one shipped with Deckhand.
     func barAppNeedsUpdate(_ page: String) -> Bool {
         guard let v = barAppVersion(page) else { return false }
