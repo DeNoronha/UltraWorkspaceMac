@@ -195,9 +195,7 @@ final class BarPages {
                     do {
                         let r = try await LinearTasks.fetch(apiKey: key)
                         model.linearError = nil
-                        self.linear = ["hasKey": true, "me": r.me, "at": Int(Date().timeIntervalSince1970), "issues": r.issues.map {
-                            i -> [String: Any] in ["id": i.identifier, "uid": i.id, "title": i.title, "priority": i.priority, "priorityLabel": i.priorityLabel, "due": i.dueDate.map { $0 as Any } ?? NSNull(),
-                             "state": i.state, "stateType": i.stateType, "color": i.stateColor, "project": i.project.map { $0 as Any } ?? NSNull(), "team": i.team] }]
+                        self.linear = Self.linearDict(r)
                     } catch {
                         model.linearError = error.localizedDescription
                         self.linear = ["hasKey": true, "issues": self.linear["issues"] ?? [], "error": error.localizedDescription]
@@ -215,6 +213,12 @@ final class BarPages {
             }
             _ = lastKey
         })
+    }
+
+    nonisolated static func linearDict(_ r: LinearTasks.Result) -> [String: Any] {
+        ["hasKey": true, "me": r.me, "at": Int(Date().timeIntervalSince1970), "issues": r.issues.map {
+            i -> [String: Any] in ["id": i.identifier, "uid": i.id, "title": i.title, "priority": i.priority, "priorityLabel": i.priorityLabel, "due": i.dueDate.map { $0 as Any } ?? NSNull(),
+             "state": i.state, "stateType": i.stateType, "color": i.stateColor, "project": i.project.map { $0 as Any } ?? NSNull(), "team": i.team] }]
     }
 
     /// Answer one request (called off the main actor by the server; reads a snapshot).
@@ -247,6 +251,8 @@ final class BarPages {
                         l["issues"] = issues.filter { ($0["uid"] as? String) != uid }
                         self.linear = l
                         model.say("Linear: \(done) marked done from the bar.")
+                        // Then the real list from Linear, so the page shows exactly what Linear has.
+                        if let r = try? await LinearTasks.fetch(apiKey: key) { self.linear = Self.linearDict(r) }
                     } catch { model.linearError = "Could not mark the issue done: \(error.localizedDescription)"; model.say(model.linearError!) }
                 }
             }
