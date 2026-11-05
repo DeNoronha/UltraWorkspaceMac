@@ -3,8 +3,6 @@ import UltraBarKit
 
 struct SidebarView: View {
     @EnvironmentObject var model: AppModel
-    @StateObject private var ui = UI()
-    private final class UI: ObservableObject { @Published var confirmForget = false }
 
     private func has(_ type: String) -> Bool { model.modules.contains { $0.type == type } }
 
@@ -50,10 +48,6 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 320)
         .safeAreaInset(edge: .top, spacing: 0) { deviceChooser }
-        .alert("Forget this CoreBar?", isPresented: $ui.confirmForget) {
-            Button("Forget", role: .destructive) { if let b = model.selectedCoreBar { model.unpair(b) } }
-            Button("Cancel", role: .cancel) {}
-        } message: { Text("Deckhand removes its pairing key for \(model.selectedCoreBar?.name ?? "this bar"). The bar itself is not changed.") }
     }
 
     private func row(_ title: String, _ icon: String, _ type: String) -> some View {
@@ -64,38 +58,42 @@ struct SidebarView: View {
         .help(model.modules.first { $0.type == type }.map { "Serial \($0.serial)" } ?? "")
     }
 
-    /// The paired CoreBar(s): one row with a menu, instead of a sidebar section.
-    private var deviceChooser: some View {
-        Menu {
-            ForEach(model.paired) { bar in
-                Button { select(bar) } label: {
-                    if bar.serialNo == model.selectedSerial { Label(bar.name, systemImage: "checkmark") } else { Text(bar.name) }
+    /// The paired CoreBar at the top of the sidebar. With more than one paired bar it is a menu to switch between
+    /// them; adding, forgetting and Find modules live in Settings → CoreBar.
+    @ViewBuilder private var deviceChooser: some View {
+        if model.paired.count > 1 {
+            Menu {
+                ForEach(model.paired) { bar in
+                    Button { select(bar) } label: {
+                        if bar.serialNo == model.selectedSerial { Label(bar.name, systemImage: "checkmark") } else { Text(bar.name) }
+                    }
                 }
-            }
-            Divider()
-            Button("Add another CoreBar…") { model.showingConnect = true }
-            if model.selectedCoreBar != nil {
-                Button { model.refreshModules() } label: { Label("Find modules", systemImage: "magnifyingglass") }.disabled(model.isWorking)
-                Button("Forget this CoreBar…", role: .destructive) { ui.confirmForget = true }
-            }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "rectangle.on.rectangle.angled").font(.title2).foregroundStyle(Color.accentColor).frame(width: 28)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(model.selectedCoreBar?.name ?? "No CoreBar").fontWeight(.semibold)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Spacer()
-                Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 10).padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.quaternary.opacity(0.5)))
-            .contentShape(Rectangle())
-            .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 6)
+            } label: { chooserLabel(switchable: true) }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+            .background(.bar)
+            .help(model.selectedCoreBar.map { "\($0.serialNo) · \(model.ipForSelected() ?? $0.lastIp)" } ?? "")
+        } else {
+            chooserLabel(switchable: false)
+                .background(.bar)
+                .help(model.selectedCoreBar.map { "\($0.serialNo) · \(model.ipForSelected() ?? $0.lastIp) — Settings → CoreBar to add or forget a bar" } ?? "")
+                .accessibilityElement(children: .combine)
         }
-        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
-        .background(.bar)
-        .help(model.selectedCoreBar.map { "\($0.serialNo) · \(model.ipForSelected() ?? $0.lastIp)" } ?? "")
+    }
+
+    private func chooserLabel(switchable: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "rectangle.on.rectangle.angled").font(.title2).foregroundStyle(Color.accentColor).frame(width: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(model.selectedCoreBar?.name ?? "No CoreBar").fontWeight(.semibold)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
+            if switchable { Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(.secondary) }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.quaternary.opacity(0.5)))
+        .contentShape(Rectangle())
+        .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 6)
     }
 
     /// Under the bar's name: its address and launcher version, or what to do when there is none.

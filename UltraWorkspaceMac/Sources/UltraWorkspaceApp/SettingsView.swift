@@ -3,6 +3,7 @@ import UltraBarKit
 
 struct SettingsView: View {
     @State private var confirmSoftwareUpdate = false
+    @State private var confirmForget = false
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
 
@@ -17,9 +18,27 @@ struct SettingsView: View {
                         LabeledContent("Name", value: bar.name)
                         LabeledContent("Serial") { Text(bar.serialNo).textSelection(.enabled) }
                         LabeledContent("Address", value: model.ipForSelected() ?? bar.lastIp)
+                        if model.paired.count > 1 {
+                            LabeledContent("Paired bars", value: model.paired.map(\.name).joined(separator: ", "))
+                        }
                     } else {
                         Text("No CoreBar selected.").foregroundStyle(.secondary)
                     }
+                    HStack {
+                        Button { model.refreshModules() } label: { Label(model.isWorking ? "Looking for modules…" : "Find modules", systemImage: "magnifyingglass") }
+                            .disabled(model.isWorking || model.selectedCoreBar == nil)
+                            .help("A live scan of the bar's magnetic bus, about 16 seconds. Tap the bar's screen first so sleeping modules answer.")
+                        Button { model.showingConnect = true } label: { Label("Add another CoreBar…", systemImage: "plus") }
+                            .help("Find and pair a second bar on this network; the sidebar then offers a switch between them.")
+                        if model.selectedCoreBar != nil {
+                            Button(role: .destructive) { confirmForget = true } label: { Label("Forget this CoreBar…", systemImage: "trash") }
+                                .help("Removes Deckhand's pairing key for this bar; the bar itself is not changed.")
+                        }
+                    }
+                    .alert("Forget this CoreBar?", isPresented: $confirmForget) {
+                        Button("Forget", role: .destructive) { if let b = model.selectedCoreBar { model.unpair(b) } }
+                        Button("Cancel", role: .cancel) {}
+                    } message: { Text("Deckhand removes its pairing key for \(model.selectedCoreBar?.name ?? "this bar"). The bar itself is not changed.") }
                 }
 
                 Section("Pages from this Mac") {

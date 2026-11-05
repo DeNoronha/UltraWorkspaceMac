@@ -57,7 +57,7 @@ The first time, Deckhand shows **Connect your CoreBar**:
 2. **Approve on the bar** — press **Pair**; the bar shows an Approve button for 30 seconds (Deckhand shows the countdown). Tap it.
 3. Deckhand then finds the modules on its own and opens the **CoreBar**.
 
-The pairing key is stored in a protected, user-only file in Application Support, and the bar's certificate is pinned, so an impostor on the network can't reuse your key. The paired bar is shown at the top of the sidebar; its menu has **Add another CoreBar…**, **Find modules** and **Forget this CoreBar…**.
+The pairing key is stored in a protected, user-only file in Application Support, and the bar's certificate is pinned, so an impostor on the network can't reuse your key. The paired bar is shown at the top of the sidebar (with more than one paired bar it is a menu to switch between them). **Add another CoreBar…**, **Find modules** and **Forget this CoreBar…** are under Settings → CoreBar.
 
 ---
 
@@ -65,7 +65,7 @@ The pairing key is stored in a protected, user-only file in Application Support,
 
 **Tap the bar's screen and press a DotKey key before you press Find modules.** Finding modules is a live scan of the magnetic bus, and a module that has gone to sleep — usually the **DotKey** — can be missed. Deckhand remembers every module it has ever seen on your bar and keeps it in the bar's configuration, so a one-time sleep won't drop a module; a scan with everything awake just gives the most reliable result.
 
-**Find modules** is in the bar's menu (top of the sidebar), under **Maintenance** on the CoreBar page, and in the sidebar when no modules are known yet. The scan takes about 16 seconds and also registers the modules on the bar so they can be controlled. A module that did not answer is marked *asleep* in the sidebar.
+**Find modules** is under Settings → CoreBar, under **Maintenance** on the CoreBar page, and in the sidebar when no modules are known yet. The scan takes about 16 seconds and also registers the modules on the bar so they can be controlled. A module that did not answer is marked *asleep* in the sidebar.
 
 ---
 

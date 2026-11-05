@@ -67,7 +67,7 @@ Pick any image (or let a widget render one); it is encoded as an LVGL v8 image �
 
 Deckhand is a single window with a sidebar:
 
-- **Your CoreBar** at the top (menu: switch bars, **Add another CoreBar…**, **Find modules**, **Forget**). First run shows a connect flow (find → pair with a countdown → modules found automatically).
+- **Your CoreBar** at the top (a menu to switch bars when more than one is paired; **Add another CoreBar…**, **Find modules** and **Forget** are in Settings → CoreBar). First run shows a connect flow (find → pair with a countdown → modules found automatically).
 - **Screens** — **CoreBar** (**Publish page** top-right; progress row first under the device strip; sections **Preview** — one screenful at a time with a pager; about 5 single cards fit, the clock card takes two slots —, **Cards on the bar** with **Add a card…**, **Pages on the bar**, **Maintenance**) and **VivoCube** (**Send to cube** top-right; sections **On the cube now**, **Cards on the cube** — up to 6 —, **Switching**, **Maintenance**).
 - **Controls** — **KnobKey**, **DotKey**: the bindings as they are written with every page publish, and **Publish bindings**.
 - **Sensors** — **SenseCube** live readings.
