@@ -49,11 +49,7 @@ struct AppsView: View {
         }
         return out.values.sorted { ($0.installed == nil ? 1 : 0, $0.name.lowercased()) < ($1.installed == nil ? 1 : 0, $1.name.lowercased()) }
     }
-    private func updateAvailable(_ e: Entry) -> Bool {
-        guard let s = e.store, e.installed != nil else { return false }
-        let code = model.appStatus[e.package]?.versionCode ?? 0
-        return code > 0 && s.versionCode > code
-    }
+    private func updateAvailable(_ e: Entry) -> Bool { e.installed != nil && model.marketUpdate(for: e.package) != nil }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -202,7 +198,7 @@ struct AppsView: View {
 
     @ViewBuilder private func entryDetail(_ e: Entry) -> some View {
         let busy = model.appBusy == e.package, update = updateAvailable(e)
-        let tag: (String, Color) = update ? ("update \(e.store?.versionName ?? "")", .orange) : (e.system ? ("built in", .secondary) : (e.installed != nil ? ("installed", .green) : ("not installed", .secondary)))
+        let tag: (String, Color) = update ? ("update \(e.store?.versionName ?? "")", .orange) : (model.staleCatalogueNote(e.package).map { ($0, .secondary) } ?? (e.system ? ("built in", .secondary) : (e.installed != nil ? ("installed", .green) : ("not installed", .secondary))))
         DetailTitle(title: e.name, version: e.installed == nil ? e.store?.versionName : e.version, tag: tag, subtitle: e.package + (e.store == nil ? " · not in the marketplace" : "")) {
             AppIcon(url: e.icon, fallback: e.system ? "app.badge" : "app", size: 48)
         }

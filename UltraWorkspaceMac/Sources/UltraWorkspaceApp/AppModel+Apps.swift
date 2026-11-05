@@ -41,15 +41,27 @@ extension AppModel {
 
     /// Installed marketplace apps and screensavers for which the catalogue has a higher versionCode.
     var marketUpdates: [(package: String, name: String)] {
-        barApps.compactMap { a in
-            guard let s = (storeApps + storeScreensavers).first(where: { $0.package == a.packageName }) else { return nil }
-            let code = appStatus[a.packageName]?.versionCode ?? 0
-            return (code > 0 && s.versionCode > code) ? (a.packageName, a.appName) : nil
-        }
+        barApps.compactMap { a in marketUpdate(for: a.packageName).map { _ in (a.packageName, a.appName) } }
+    }
+    /// The catalogue entry when the bar's copy is older than the marketplace lists — unless an earlier update
+    /// showed that the entry's file is the old version anyway (see `staleCatalogue`).
+    func marketUpdate(for package: String) -> BarAppStore.StoreApp? {
+        guard let s = (storeApps + storeScreensavers).first(where: { $0.package == package }) else { return nil }
+        let code = appStatus[package]?.versionCode ?? 0
+        guard code > 0, s.versionCode > code, staleCatalogue[package] != s.versionCode else { return nil }
+        return s
+    }
+    /// "marketplace lists 1.0.1, its file is 1.0.0" for an entry the vendor has not fixed yet.
+    func staleCatalogueNote(_ package: String) -> String? {
+        guard let s = (storeApps + storeScreensavers).first(where: { $0.package == package }), staleCatalogue[package] == s.versionCode,
+              let st = appStatus[package] else { return nil }
+        return "marketplace lists \(s.versionName), its file is \(st.versionName)"
     }
     /// Deckhand apps on the bar older than the APKs shipped with this build.
     var deckhandUpdates: [String] { Self.barAppPages.map(\.page).filter { barAppNeedsUpdate($0) } }
     var updatesAvailable: Int { marketUpdates.count + deckhandUpdates.count }
+    /// Names of everything Update all would touch, marketplace first.
+    var updateNames: [String] { marketUpdates.map(\.name) + deckhandUpdates.map { p in Self.barAppPages.first { $0.page == p }?.label ?? p } }
     var updateAllHelp: String {
         updatesAvailable == 0 ? "Everything is up to date." : "Updates one after another: " + (marketUpdates.map(\.name) + deckhandUpdates.map { p in Self.barAppPages.first { $0.page == p }?.label ?? p }).joined(separator: ", ")
     }
@@ -66,7 +78,8 @@ extension AppModel {
             let isScreensaver = storeScreensavers.contains { $0.package == package } && !storeApps.contains { $0.package == package }
             _ = try await session.installApp(package: package, appType: isScreensaver ? BarAppStore.screensaversType : BarAppStore.appsType)
             say("Bar: installing \(name)…")
-            let want = (storeApps + storeScreensavers).first { $0.package == package }?.versionCode ?? 0
+            let store = (storeApps + storeScreensavers).first { $0.package == package }
+            let want = store?.versionCode ?? 0, before = appStatus[package]?.versionCode ?? 0
             for _ in 0..<20 {
                 try await Task.sleep(nanoseconds: 3_000_000_000)
                 if let st = try? await session.appStatus(package: package) {
@@ -79,7 +92,14 @@ extension AppModel {
                 if let list = try? await session.listApps() { barApps = list }
                 return true
             }
-            appStoreError = "\(name) did not report as installed within a minute. The bar installs one app at a time and needs internet access for the download."
+            if let st = appStatus[package], let store, st.installed, st.versionCode == before, before > 0 {
+                // The bar downloaded and installed the file, and it is the version that was already there: the
+                // vendor's catalogue entry claims a newer version than the file it points to. Stop offering it.
+                staleCatalogue[package] = want
+                appStoreError = "\(name): the marketplace lists \(store.versionName), but the file it serves is still \(st.versionName), so the bar installed that again. There is nothing newer to get until the vendor fixes the entry."
+            } else {
+                appStoreError = "\(name) did not report as installed within a minute. The bar installs one app at a time and needs internet access for the download."
+            }
         } catch { appStoreError = "Install failed: \(FriendlyError.text(error))" }
         return false
     }

@@ -81,7 +81,7 @@ __BODY__
           <li><a href="../download/Deckhand.dmg">Download the DMG</a></li>
           <li><a href="../deckhand/">The Mac app</a></li>
           <li><a href="../deckhand/#security">Security and privacy</a></li>
-          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/docs/ROADMAP.md">Roadmap</a></li>
+          <li><a href="#8-whats-next-roadmap">What's next</a></li>
         </ul>
       </div>
       <div>

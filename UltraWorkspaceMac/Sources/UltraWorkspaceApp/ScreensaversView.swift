@@ -29,11 +29,7 @@ struct ScreensaversView: View {
         return out.values.sorted { ($0.installed == nil ? 1 : 0, $0.name) < ($1.installed == nil ? 1 : 0, $1.name) }
     }
     private func isActive(_ t: Tile) -> Bool { t.installed.map(model.isActiveScreensaver) ?? false }
-    private func updateAvailable(_ t: Tile) -> Bool {
-        guard let s = t.store, t.installed != nil else { return false }
-        let code = model.appStatus[t.package]?.versionCode ?? 0
-        return code > 0 && s.versionCode > code
-    }
+    private func updateAvailable(_ t: Tile) -> Bool { t.installed != nil && model.marketUpdate(for: t.package) != nil }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -77,7 +73,7 @@ struct ScreensaversView: View {
 
     @ViewBuilder private func detail(_ t: Tile) -> some View {
         let active = isActive(t), busy = model.appBusy == t.package, update = updateAvailable(t)
-        let tag: (String, Color) = active ? ("in use", .green) : (update ? ("update \(t.store?.versionName ?? "")", .orange) : (t.installed == nil ? ("not installed", .secondary) : ("installed", .green)))
+        let tag: (String, Color) = active ? ("in use", .green) : (update ? ("update \(t.store?.versionName ?? "")", .orange) : (model.staleCatalogueNote(t.package).map { ($0, .secondary) } ?? (t.installed == nil ? ("not installed", .secondary) : ("installed", .green))))
         HStack(alignment: .top, spacing: 20) {
             thumb(t.icon, width: 240, height: 135)
             VStack(alignment: .leading, spacing: 12) {

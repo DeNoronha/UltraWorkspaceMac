@@ -21,7 +21,7 @@ struct InstalledView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     let n = model.updatesAvailable
-                    if n > 0 { Label(n == 1 ? "1 update available" : "\(n) updates available", systemImage: "arrow.down.circle.fill").foregroundStyle(.orange).fontWeight(.medium) }
+                    if n > 0 { Label((n == 1 ? "1 update available: " : "\(n) updates available: ") + model.updateNames.joined(separator: ", "), systemImage: "arrow.down.circle.fill").foregroundStyle(.orange).fontWeight(.medium) }
 
                     let ours = AppModel.barAppPages.filter { model.barAppVersion($0.page) != nil }
                     let userApps = model.barApps.filter { !$0.isScreensaver && !$0.systemApp && !$0.packageName.hasPrefix(BarPages.packagePrefix) }
@@ -89,8 +89,7 @@ struct InstalledView: View {
 
     private func barRow(_ a: CoreBarSession.AppInfo) -> some View {
         let store = (model.storeApps + model.storeScreensavers).first { $0.package == a.packageName }
-        let code = model.appStatus[a.packageName]?.versionCode ?? 0
-        let update = store.map { $0.versionCode > code && code > 0 } ?? false
+        let update = model.marketUpdate(for: a.packageName) != nil
         let busy = model.appBusy == a.packageName, active = a.isScreensaver && model.isActiveScreensaver(a)
         let webUI: URL? = {
             guard let port = a.port, let tok = a.sessionToken, let bar = model.selectedCoreBar else { return nil }
@@ -103,7 +102,7 @@ struct InstalledView: View {
                 HStack(spacing: 6) {
                     Text(a.appName).fontWeight(.medium)
                     if !a.versionName.isEmpty { Text(a.versionName).font(.caption).foregroundStyle(.secondary) }
-                    if update, let store { Tag("update \(store.versionName)", .orange) } else if store != nil { Tag("up to date", .green) }
+                    if update, let store { Tag("update \(store.versionName)", .orange) } else if let note = model.staleCatalogueNote(a.packageName) { Tag(note, .secondary) } else if store != nil { Tag("up to date", .green) }
                     if active { Tag("in use", .green) }
                     if a.systemApp { Tag("built in", .secondary) }
                 }

@@ -47,6 +47,11 @@ final class AppModel: ObservableObject {
     @Published var appStatus: [String: CoreBarSession.AppStatus] = [:]
     @Published var appBusy: String?
     @Published var appStoreError: String?
+    /// Marketplace entries whose file turned out to be older than the entry says (package → the catalogue versionCode
+    /// that was tried): the bar installed it and stayed on the same version, so it is not offered again for that entry.
+    @Published var staleCatalogue: [String: Int] = (UserDefaults.standard.dictionary(forKey: "staleCatalogue") as? [String: Int]) ?? [:] {
+        didSet { UserDefaults.standard.set(staleCatalogue, forKey: "staleCatalogue") }
+    }
     /// Why the last bar-app install over ADB failed (shown on the Apps page until the next attempt succeeds).
     @Published var barAppError: String?
     /// Settings → Debug bridge: what Deckhand last saw of the bar's ADB.
