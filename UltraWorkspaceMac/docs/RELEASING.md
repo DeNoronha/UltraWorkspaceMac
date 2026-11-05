@@ -19,7 +19,7 @@ bash packaging/make-dmg.sh          # calls make-app.sh release, then -> dist/De
 
 ```sh
 git remote -v                        # upstream must show "DISABLED (push)"
-VER=0.2.2
+VER=0.2.3
 git tag -a "v$VER" -m "Deckhand v$VER"
 git push origin "v$VER"              # origin only
 gh release create "v$VER" dist/Deckhand.dmg \
