@@ -3,10 +3,12 @@
 <style>
   html,body{margin:0;background:#1c2029;color:#fff;font:18px -apple-system,Roboto,Helvetica,Arial,sans-serif;overflow:hidden;width:1424px;height:280px;-webkit-user-select:none}
   canvas{display:block}
-  #x{position:absolute;right:14px;top:10px;width:40px;height:40px;border-radius:20px;background:rgba(255,255,255,.16);color:#e5e9f0;font-size:22px;line-height:40px;text-align:center}
+  #x{position:absolute;right:0;top:0;width:96px;height:96px;display:flex;align-items:center;justify-content:center;color:#e5e9f0;font-size:28px}
+  #x span{width:56px;height:56px;border-radius:28px;background:rgba(255,255,255,.16);line-height:56px;text-align:center}
+  #x:active span{background:rgba(255,255,255,.34)}
   #wait{position:absolute;left:0;top:0;width:1424px;height:280px;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:20px;background:#1c2029}
 </style></head><body>
-<canvas id="c" width="1424" height="280"></canvas><div id="x">✕</div><div id="wait">Waiting for the Mac…</div>
+<canvas id="c" width="1424" height="280"></canvas><div id="x" role="button" aria-label="Close"><span>✕</span></div><div id="wait">Waiting for the Mac…</div>
 <script>
 const c=document.getElementById('c'),g=c.getContext('2d');
 const N=120, cpu=new Array(N).fill(0), down=new Array(N).fill(0), up=new Array(N).fill(0);
