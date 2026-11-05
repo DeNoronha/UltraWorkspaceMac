@@ -3,14 +3,15 @@ import CoreImage
 import AppKit
 
 /// Map tiles for the Flights radar. The Mac fetches OpenStreetMap's standard tiles (with a proper
-/// User-Agent, as OSM's tile policy asks), turns them into a dark style (invert + hue-rotate + dim, the
-/// usual "dark mode" filter) and caches them on disk, so the bar only ever talks to this Mac and a tile is
-/// fetched once. A radar needs about four to nine tiles; they are kept for 30 days.
+/// User-Agent, as OSM's tile policy asks), tones them down a little so they sit on the dark page without
+/// glaring, and caches them on disk, so the bar only ever talks to this Mac and a tile is fetched once.
+/// A radar needs about four to nine tiles; they are kept for 30 days. The inverted "dark mode" look of
+/// 1.8 was read as a satellite view and went on 2026-11-05: the plain road map is what people expect.
 /// CARTO's free dark tiles started answering "API KEY REQUIRED" on 2026-11-04, hence this route.
 enum MapTiles {
     static let cacheDir: URL = {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        let d = base.appendingPathComponent("Deckhand/tiles-v2", isDirectory: true)   // bump when the dark filter changes
+        let d = base.appendingPathComponent("Deckhand/tiles-v3", isDirectory: true)   // bump when the tile filter changes
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }()
@@ -47,14 +48,12 @@ enum MapTiles {
         return dark
     }
 
-    /// invert → hue-rotate 180° (so water stays blue-ish) → dim and desaturate a little.
+    /// The standard road map, slightly dimmed and desaturated so it does not glare on the dark page at night.
     nonisolated static func darken(_ png: Data) -> Data? {
         guard let img = CIImage(data: png) else { return nil }
         var out = img
-        if let f = CIFilter(name: "CIColorInvert") { f.setValue(out, forKey: kCIInputImageKey); out = f.outputImage ?? out }
-        if let f = CIFilter(name: "CIHueAdjust") { f.setValue(out, forKey: kCIInputImageKey); f.setValue(Float.pi, forKey: kCIInputAngleKey); out = f.outputImage ?? out }
         if let f = CIFilter(name: "CIColorControls") {
-            f.setValue(out, forKey: kCIInputImageKey); f.setValue(0.3, forKey: kCIInputSaturationKey); f.setValue(-0.12, forKey: kCIInputBrightnessKey); f.setValue(1.05, forKey: kCIInputContrastKey)
+            f.setValue(out, forKey: kCIInputImageKey); f.setValue(0.8, forKey: kCIInputSaturationKey); f.setValue(-0.08, forKey: kCIInputBrightnessKey); f.setValue(1.0, forKey: kCIInputContrastKey)
             out = f.outputImage ?? out
         }
         guard let cg = ciContext.createCGImage(out, from: out.extent) else { return nil }

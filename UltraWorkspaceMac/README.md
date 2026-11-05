@@ -124,7 +124,7 @@ Deckhand talks to the following hosts and nothing else (no telemetry, no account
 - `ipwho.is` — approximate location from your public IP, only when macOS Location is unavailable and no manual city is set.
 - `api.coingecko.com` — prices and today's chart for the coins you pick, up to five (Crypto widget and bar app).
 - `gatewayssl.dev.aiks360.com` — the vendor's app and screensaver catalogue, read when the Apps, Screensavers or Installed page refreshes (the bar downloads the packages itself).
-- Only while **Serve the pages from this Mac** is on (Apps page), for the bar apps: `api.adsb.lol` and `api.adsbdb.com` (Flights), `tile.openstreetmap.org` (the Flights map, darkened and cached on the Mac), `lite.cnn.com` or the RSS feed of the chosen source — BBC, New York Times, The Guardian, NOS, NU.nl — (Headlines), `bible-api.com` (Verse), `api.linear.app` (Tasks, with your personal API key).
+- Only while **Serve the pages from this Mac** is on (Apps page), for the bar apps: `api.adsb.lol` and `api.adsbdb.com` (Flights), `tile.openstreetmap.org` (the Flights road map, toned down and cached on the Mac), `lite.cnn.com` or the RSS feed of the chosen source — BBC, New York Times, The Guardian, NOS, NU.nl — (Headlines), `bible-api.com` (Verse), `api.linear.app` (Tasks, with your personal API key).
 - Inbound, only while that switch is on: the Mac serves the bar apps' pages on TCP 7432 (plain HTTP, LAN only; GET and HEAD, plus a few actions over POST that require the `X-Deckhand: action` header — Music transport, Tasks Done) and sends a UDP beacon on port 5320 every 5 s so the apps find it.
 - With Wi-Fi ADB on (optional): the local `adb` talks to the bar on TCP 5555 for app installs, the presence-aware screen and the launcher restart.
 

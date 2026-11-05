@@ -6,7 +6,7 @@ const tiles={};
 // A tile that failed (OSM unreachable, Mac busy) is dropped from the cache after 30 s so it is asked for again,
 // instead of staying a blank hole until the page is reopened.
 function tile(z,x,y){ const k=z+'/'+x+'/'+y; if(tiles[k]) return tiles[k]; const im=new Image(); im.onerror=()=>setTimeout(()=>{ if(tiles[k]===im) delete tiles[k]; },30000); im.src='/flights/tile/'+z+'/'+x+'/'+y+'.png'; tiles[k]=im; return im; }
-// OpenStreetMap tiles, darkened and cached by the Mac (see MapTiles.swift), scaled so the circle is exactly R km across.
+// OpenStreetMap road tiles, toned down and cached by the Mac (see MapTiles.swift), scaled so the circle is exactly R km across.
 function map(cx,cy,r,lat,lon,R){ if(lat==null||lon==null) return false;
   const mpp=R*1000/r, zf=Math.log2(156543.03*Math.cos(lat*Math.PI/180)/mpp), z=Math.max(2,Math.min(17,Math.floor(zf))), s=Math.pow(2,zf-z), n=Math.pow(2,z);
   const wx=(lon+180)/360*n*256, lr=lat*Math.PI/180, wy=(1-Math.log(Math.tan(lr)+1/Math.cos(lr))/Math.PI)/2*n*256;
@@ -15,21 +15,22 @@ function map(cx,cy,r,lat,lon,R){ if(lat==null||lon==null) return false;
   for(let tx=x0;tx<=x1;tx++) for(let ty=y0;ty<=y1;ty++){ const im=tile(z,tx,ty); if(im.complete&&im.naturalWidth){ g.drawImage(im,cx+(tx*256-wx)*s,cy+(ty*256-wy)*s,256*s+0.5,256*s+0.5); drew=true; } }
   g.restore(); return drew; }
 function plane(x,y,r,heading,col){ g.save(); g.translate(x,y); g.rotate((heading||0)*Math.PI/180); g.fillStyle=col; g.beginPath();
-  g.moveTo(0,-r); g.lineTo(r*.35,r*.25); g.lineTo(r*.12,r*.15); g.lineTo(r*.12,r*.6); g.lineTo(r*.3,r*.8); g.lineTo(0,r*.65); g.lineTo(-r*.3,r*.8); g.lineTo(-r*.12,r*.6); g.lineTo(-r*.12,r*.15); g.lineTo(-r*.35,r*.25); g.closePath(); g.fill(); g.restore(); }
+  g.moveTo(0,-r); g.lineTo(r*.35,r*.25); g.lineTo(r*.12,r*.15); g.lineTo(r*.12,r*.6); g.lineTo(r*.3,r*.8); g.lineTo(0,r*.65); g.lineTo(-r*.3,r*.8); g.lineTo(-r*.12,r*.6); g.lineTo(-r*.12,r*.15); g.lineTo(-r*.35,r*.25); g.closePath(); g.fill(); g.strokeStyle='rgba(0,0,0,.55)'; g.lineWidth=1.2; g.stroke(); g.restore(); }
 function render(d){
   const R=d.radius||3, ac=d.aircraft||[], inside=ac.filter(a=>a.inside), show=(inside.length?inside:ac.slice(0,1)).slice(0,4);
   // radar: 250 px circle, full height
   const cx=140,cy=140,rr0=122;
   g.fillStyle='#141821'; g.beginPath(); g.arc(cx,cy,rr0,0,7); g.fill();
   const hasMap=map(cx,cy,rr0,d.lat,d.lon,R);
-  g.strokeStyle='rgba(255,255,255,'+(hasMap?'.22':'.14')+')'; g.lineWidth=1.5;
+  g.strokeStyle=hasMap?'rgba(0,0,0,.28)':'rgba(255,255,255,.14)'; g.lineWidth=1.5;
   [1/3,2/3,1].forEach(f=>{ g.beginPath(); g.arc(cx,cy,rr0*f,0,7); g.stroke(); });
   g.beginPath(); g.moveTo(cx-rr0,cy); g.lineTo(cx+rr0,cy); g.moveTo(cx,cy-rr0); g.lineTo(cx,cy+rr0); g.stroke();
   const sweep=(Date.now()/4000*Math.PI*2)%(Math.PI*2);
   g.save(); g.beginPath(); g.moveTo(cx,cy); g.arc(cx,cy,rr0,sweep-0.9,sweep); g.closePath(); g.fillStyle='rgba(74,222,128,.12)'; g.fill(); g.restore();
-  g.fillStyle='#fff'; g.beginPath(); g.arc(cx,cy,4,0,7); g.fill();
-  txt('N',cx,cy-rr0+16,12,'#c7cdd8','center','600'); txt(R+' km',cx+rr0-6,cy-6,11,'#9aa3b2','right');
-  if(hasMap) txt('© OpenStreetMap',cx,cy+rr0-6,9,'rgba(255,255,255,.5)','center');
+  g.fillStyle=hasMap?'#1d4ed8':'#fff'; g.beginPath(); g.arc(cx,cy,4,0,7); g.fill();
+  const ink=hasMap?'#1f2937':'#c7cdd8', ink2=hasMap?'#374151':'#9aa3b2';
+  txt('N',cx,cy-rr0+16,12,ink,'center','600'); txt(R+' km',cx+rr0-6,cy-6,11,ink2,'right');
+  if(hasMap) txt('© OpenStreetMap',cx,cy+rr0-6,9,'rgba(0,0,0,.55)','center');
   if(d.at){ const age=Math.max(0,Math.round(Date.now()/1000-d.at)); txt(age<15?'live':ago(age)+' old',cx-rr0+8,cy-6,11,age<30?'#4ade80':'#fbbf24','left','600'); }
   // every aircraft in the circle: the shown ones in their colour with the flight number, the rest grey
   ac.forEach(a=>{ if(a.km>R) return; const i=show.indexOf(a), col=i>=0?COLS[i]:'#8b94a6';
