@@ -121,6 +121,8 @@ def main() -> int:
     toc.append("        </ol>")
     # Mark the warning blockquote so the stylesheet can colour it.
     body = body.replace("<blockquote>\n<p>⚠️", '<blockquote class="warn">\n<p>⚠️')
+    # Images are written for GitHub (relative to UltraWorkspaceMac/); the page lives in site/manual/.
+    body = body.replace('src="site/assets/', 'src="../assets/')
     html = HEAD.replace("__TOC__", "\n".join(toc)).replace("__BODY__", body.rstrip())
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(html, encoding="utf-8")

@@ -6,6 +6,8 @@ struct AdbStatus: Sendable {
     var adbPath: String?
     var wifi: Bool? = nil          // nil = not checked yet
     var persistent: Bool? = nil
+    /// The bar answers on 5555 but has not accepted this Mac yet (its screen shows "Allow debugging?").
+    var unauthorized = false
     var usbSerials: [String] = []
     var checkedAt: Date?
     var message: String?
@@ -24,7 +26,11 @@ extension AppModel {
             if let ip = ipForSelected() {
                 let b = AdbBridge(path: adb, ip: ip)
                 st.wifi = await b.connect()
-                if st.wifi == true { st.persistent = await b.isPersistent() }
+                if st.wifi == true {
+                    let state = await b.state()
+                    st.unauthorized = state.contains("unauthorized")
+                    if !st.unauthorized { st.persistent = await b.isPersistent() }
+                }
             } else {
                 st.message = "No CoreBar selected."
             }

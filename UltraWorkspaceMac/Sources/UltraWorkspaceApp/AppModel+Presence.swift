@@ -87,6 +87,11 @@ struct AdbBridge {
         return out.contains("connected to")
     }
 
+    /// `device` when the bar accepted this Mac, `unauthorized` while the bar still shows its "Allow debugging?" prompt, else an error text.
+    func state() async -> String {
+        await run(["-s", device, "get-state"], timeout: 8).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     func install(apkPath: String) async -> String {
         await run(["-s", device, "install", "-r", apkPath], timeout: 120)
     }

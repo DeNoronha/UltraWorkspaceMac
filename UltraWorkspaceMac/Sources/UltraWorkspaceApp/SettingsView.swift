@@ -48,29 +48,32 @@ struct SettingsView: View {
 
                 Section("Debug bridge (ADB)") {
                     let st = model.adbStatus
-                    LabeledContent("adb on this Mac", value: st.adbPath ?? "not found — brew install --cask android-platform-tools")
-                    LabeledContent("Wi-Fi ADB (port 5555)") {
-                        Text(st.wifi.map { $0 ? "reachable" : "off — the bar refuses the connection" } ?? "not checked")
-                            .foregroundStyle(st.wifi == false ? .orange : .primary)
-                    }
-                    LabeledContent("After a reboot") {
-                        Text(st.persistent.map { $0 ? "stays on" : "turns off again" } ?? "—")
-                            .foregroundStyle(st.persistent == false ? .orange : .primary)
-                    }
-                    LabeledContent("Over USB", value: st.usbSerials.isEmpty ? "no bar attached" : st.usbSerials.joined(separator: ", "))
+                    let adbOK = st.adbPath != nil, barOK = st.wifi == true && !st.unauthorized, stays = st.persistent == true
+                    Text("Deckhand installs its bar apps, restarts the bar's launcher and keeps the bar's screen on through Android's debug bridge. Three steps, once.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    AdbStep(number: 1, title: "adb on this Mac", done: adbOK,
+                            detail: adbOK ? st.adbPath! : "Install Android's platform tools: in Terminal, `brew install --cask android-platform-tools` (needs Homebrew), then press Check.")
+                    AdbStep(number: 2, title: "Wi‑Fi ADB on at the bar", done: barOK,
+                            detail: barOK ? "The bar answers on port 5555 and accepts this Mac."
+                                : st.unauthorized ? "The bar is asking whether to allow this Mac: on the bar, tick “Always allow from this computer” and tap Allow, then press Check."
+                                : "On the bar: long‑press the Settings button → About tablet → tap Build number seven times (“You are now a developer”) → back → System → Advanced → Developer options → switch on WiFi ADB. Then press Check and allow this Mac when the bar asks. Without a free hand: plug the bar's PC‑LINK port into this Mac over USB and press Turn on over USB.")
+                    AdbStep(number: 3, title: "Stays on after a reboot", done: stays,
+                            detail: stays ? "Wi‑Fi ADB comes back by itself after every reboot."
+                                : barOK ? "The bar switches Wi‑Fi ADB off at every reboot. Press Keep on after reboots once; Deckhand sets persist.adb.tcp.port=5555 on the bar."
+                                : "Needs step 2 first.")
                     if let m = st.message { Text(m).font(.callout).foregroundStyle(.orange) }
                     HStack {
                         Button { model.checkAdb() } label: { Label("Check", systemImage: "arrow.clockwise") }
                             .disabled(model.adbBusy).help("Look for adb on this Mac and ask the bar whether Wi-Fi ADB answers")
-                        Button { model.enableWifiAdbOverUSB() } label: { Label("Turn on over USB", systemImage: "cable.connector") }
-                            .disabled(st.usbSerials.isEmpty || st.adbPath == nil)
-                            .help("adb tcpip 5555 on the bar attached over USB: Wi-Fi ADB on until its next reboot")
                         Button { model.makeWifiAdbPersistent() } label: { Label("Keep on after reboots", systemImage: "pin") }
-                            .disabled(st.wifi != true || st.persistent == true)
+                            .disabled(!barOK || stays).buttonStyle(.borderedProminent)
                             .help("setprop persist.adb.tcp.port 5555 on the bar")
+                        Button { model.enableWifiAdbOverUSB() } label: { Label("Turn on over USB", systemImage: "cable.connector") }
+                            .disabled(st.usbSerials.isEmpty || !adbOK)
+                            .help(st.usbSerials.isEmpty ? "No bar attached over USB (its PC-LINK port, never the USB-OTG power port)" : "adb tcpip 5555 on the bar attached over USB: Wi-Fi ADB on until its next reboot")
                         if model.adbBusy { ProgressView().controlSize(.small) }
                     }
-                    Text("Installing the Deckhand apps, restarting the bar's launcher and keeping the screen on all go through Android's debug bridge. The bar's Developer options can turn Wi-Fi ADB on, but it turns off at every reboot. Two ways around that: plug the bar into this Mac over USB and press Turn on over USB (accept the prompt on the bar the first time), then Keep on after reboots so it sticks.")
+                    Text("While Wi‑Fi ADB is on, every device on your network can reach a shell on the bar, so keep the bar on a network you trust.")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -99,5 +102,21 @@ struct SettingsView: View {
             Text(title).fontWeight(.medium)
             Text(body).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+/// One row of the Debug bridge checklist: a tick or a numbered circle, the title, and what to do while it is not done.
+private struct AdbStep: View {
+    let number: Int, title: String, done: Bool, detail: String
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: done ? "checkmark.circle.fill" : "\(number).circle")
+                .font(.title3).foregroundStyle(done ? Color.green : Color.secondary).frame(width: 24)
+                .accessibilityLabel(done ? "Done" : "Step \(number)")
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).fontWeight(.medium)
+                Text(detail).font(.callout).foregroundStyle(done ? .secondary : .primary).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
+        }.padding(.vertical, 2)
     }
 }

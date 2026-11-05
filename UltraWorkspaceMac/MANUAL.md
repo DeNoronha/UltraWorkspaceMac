@@ -18,7 +18,7 @@ Deckhand runs on macOS 13 or later. On macOS 26 and later it uses the system's L
 **What you need**
 
 - A Mac on macOS 13 or later.
-- An UltraBar X with launcher **1.0.9** or later (the `ver` shown in the sidebar after a scan), on the **same network** as the Mac. Wi‑Fi or wired, it does not matter; the Mac and the bar only need to reach each other.
+- An UltraBar X with launcher **1.0.9** or later, on the **same network** as the Mac. Wi‑Fi or wired, it does not matter; the Mac and the bar only need to reach each other. The launcher version is the `ver` Deckhand shows in the sidebar after a scan (for example `1.0.9(9)`); on the bar it is under Settings → About tablet. Bars shipped in 2026 came with **1.0.3**, and the bar's own Settings → About may not offer the update: Sanytron publishes the launcher (`LineOS.V1.0.9.9.apk`) and the bridge (`bridge.1.0.4.4.apk`) on its [GitHub releases page](https://github.com/Qinkunex/UltraWorkspace/releases); once the debug bridge below is on, install them from the Mac with `adb install -r <file>.apk` (the bar restarts its launcher; your pages and pairing survive). On 1.0.3 the SenseCube cards and the Deckhand apps' cards do not exist.
 - Only for the **Deckhand apps** on the bar (Monitor, Crypto, Flights and the other eight), for **Restart bar launcher** and for the *Keep the screen on* option: Android's debug bridge, `adb`, on the Mac, and the bridge switched on at the bar. Install it with `brew install --cask android-platform-tools` (needs [Homebrew](https://brew.sh)); switching it on at the bar is described under [Turn on the debug bridge (ADB) on the bar](#turn-on-the-debug-bridge-adb-on-the-bar). Everything else (cube cards, CoreBar pages, KnobKey, DotKey, SenseCube, marketplace apps and screensavers) works without it.
 
 ---
@@ -125,14 +125,31 @@ A list on the left, the chosen app on the right. Three sections in the list: **D
 
 ### Turn on the debug bridge (ADB) on the bar
 
-The Deckhand apps are installed over Android's debug bridge, so the bar has to accept ADB from the Mac. The bar switches Wi‑Fi ADB off at every reboot; Deckhand can make it stick. Once:
+The Deckhand apps are installed over Android's debug bridge, so the bar has to accept ADB from the Mac. You do this once; Settings → **Debug bridge (ADB)** in Deckhand shows the same three steps with a tick next to each one that is done.
 
-1. On the Mac: `brew install --cask android-platform-tools` (Terminal; needs Homebrew). Deckhand's Settings → **Debug bridge (ADB)** then shows "adb found".
-2. On the bar: open its **Settings** app, go to **About**, tap **Build number** seven times until it says you are a developer, go back, open **Developer options** and turn on **USB debugging** (and **Wireless debugging** or **ADB over network**, if your launcher shows it).
-3. Attach the bar to the Mac with a USB cable on the bar's **PC‑LINK** port (never the USB‑OTG power port). In Deckhand's Settings → Debug bridge press **Turn on over USB**; the bar shows an "Allow USB debugging?" prompt the first time, tick *Always allow from this computer* and accept.
-4. Press **Keep on after reboots**. The status line reads "Wi‑Fi ADB on, stays on after a reboot". You can unplug the cable; from now on the Apps page installs and updates the Deckhand apps over Wi‑Fi.
+1. **On the Mac**: install Android's platform tools, in Terminal: `brew install --cask android-platform-tools` (needs [Homebrew](https://brew.sh)). Deckhand's first step ticks.
+2. **On the bar, open its Settings**: long‑press the Settings button on the bar's home screen. Scroll to the bottom of the list.
 
-If the status says the bar does not answer on port 5555 after a reboot, do steps 3 and 4 again. Wi‑Fi ADB gives every device on your network a shell on the bar while it is on, so keep the bar on a network you trust (see the Security section on the site).
+   ![The bar's Settings, scrolled to the bottom: System, About tablet](site/assets/img/screens/bar-settings-home.png)
+
+3. **Become a developer**: tap **About tablet**, scroll to the bottom and tap **Build number** seven times, until the bar says you are now a developer. Go back one screen.
+
+   ![About tablet, with Build number at the bottom](site/assets/img/screens/bar-settings-build.png)
+
+4. **Find Developer options**: tap **System**, then **Advanced** (it lists Developer options), then **Developer options**.
+
+   ![System, with Advanced at the bottom](site/assets/img/screens/bar-settings-system.png)
+
+5. **Switch on WiFi ADB**: scroll down to *Debugging* and switch **WiFi ADB** on ("Allow ADB connections over WiFi on port 5555"). Leave the Settings with the bar's Home button.
+
+   ![Developer options, Debugging: the WiFi ADB switch](site/assets/img/screens/bar-settings-wifi-adb.png)
+
+6. **Back in Deckhand**, Settings → Debug bridge: press **Check**. The bar may now show *Allow debugging?*: tick *Always allow from this computer* and tap **Allow**, then press Check again. The second step ticks.
+7. Press **Keep on after reboots**. The bar switches WiFi ADB off at every reboot; this makes it come back by itself (Deckhand sets `persist.adb.tcp.port=5555` on the bar). The third step ticks, and from now on the Apps page installs and updates the Deckhand apps over Wi‑Fi.
+
+No cable is needed. If you prefer one, or the bar stops answering after a reboot before step 7 was done: attach the bar's **PC‑LINK** port (never the USB‑OTG power port) to the Mac and press **Turn on over USB** instead of steps 2 to 6.
+
+While WiFi ADB is on, every device on your network can open a shell on the bar, so keep the bar on a network you trust (see the Security section on the site).
 
 ### Screensavers
 
