@@ -25,6 +25,18 @@ struct SettingsView: View {
                 Section("Pages from this Mac") {
                     Toggle("Serve the pages only to the bar", isOn: $settings.pagesOnlyForBar)
                         .onChange(of: settings.pagesOnlyForBar) { on in MonitorServer.shared.setPagesOnlyForPeers(on) }
+                    if let base = model.monitorURL.map({ String($0.dropLast("/monitor".count)) }) {
+                        LabeledContent("Open in a browser") {
+                            // What the bar gets, at the bar's size (1424 × 280): handy to preview a page on this Mac.
+                            VStack(alignment: .trailing, spacing: 4) {
+                                ForEach(AppModel.barAppPages, id: \.page) { p in
+                                    if let u = URL(string: base + "/" + p.page) {
+                                        Link(u.absoluteString, destination: u).font(.callout.monospaced())
+                                    }
+                                }
+                            }.textSelection(.enabled)
+                        }
+                    }
                     Text(settings.monitorServe
                          ? "The bar apps' pages (Monitor, Claude, Calendar, Tasks, …) are served on port 7432 while \"Serve the pages from this Mac\" is on (Apps page). Off: anyone on the network can read them in a browser, handy to preview a page. On: only the paired bar's address and this Mac get them; any other host gets 403. The bar's address is taken from a pinned, authenticated connection, not from discovery alone."
                          : "\"Serve the pages from this Mac\" is off (Apps page), so nothing is served. This switch decides who may read the pages once it is on: everyone on the network (off, lets you preview in a browser) or only the paired bar and this Mac (on).")
@@ -34,7 +46,11 @@ struct SettingsView: View {
                 Section("Bar screen") {
                     Toggle("Keep the screen on while someone is at the desk (via ADB)", isOn: $settings.presenceWake)
                         .onChange(of: settings.presenceWake) { on in on ? model.startPresence(settings: settings) : model.stopPresence(settings: settings) }
-                    Stepper("Switch off after \(settings.presenceSleepMinutes) min without anyone", value: $settings.presenceSleepMinutes, in: 1...120)
+                    LabeledContent("Switch off after … without anyone") {
+                        Stepper(value: $settings.presenceSleepMinutes, in: 1...120) {
+                            Text("\(settings.presenceSleepMinutes) min").monospacedDigit().frame(minWidth: 52, alignment: .trailing)
+                        }
+                    }
                         .disabled(!settings.presenceWake)
                     LabeledContent("Status") {
                         VStack(alignment: .trailing, spacing: 2) {
