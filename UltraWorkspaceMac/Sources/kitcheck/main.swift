@@ -2,10 +2,24 @@ import Foundation
 import Compression
 import UltraBarKit
 
+/// Same comparison as the app's BarSoftwareStatus: newer when the release's versionCode is above the bar's.
+struct BarSoftwareProbe {
+    var launcher: (String, Int)?
+    var bridge: (String, Int)?
+    var release: VendorRelease.Release
+    init(launcher: (String, Int)?, bridge: (String, Int)?, release: VendorRelease.Release) { self.launcher = launcher; self.bridge = bridge; self.release = release }
+    var launcherNewer: Bool { (release.launcher?.versionCode ?? 0) > (launcher?.1 ?? 0) && launcher != nil }
+    var bridgeNewer: Bool { (release.bridge?.versionCode ?? 0) > (bridge?.1 ?? 0) && bridge != nil }
+}
+
 setvbuf(stdout, nil, _IONBF, 0) // line-by-line output even when piped/killed
 
 // `kitcheck discover` — run the app's real Discovery from the terminal (which
 // already has Local Network permission) to prove the code works against hardware.
+if let i = CommandLine.arguments.firstIndex(of: "apk"), CommandLine.arguments.count > i + 1 {
+    let info = try ApkInfo.read(apk: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+    print("\(info.package) \(info.versionName) (\(info.versionCode))"); exit(0)
+}
 if CommandLine.arguments.contains("weather") {
     let city = CommandLine.arguments.last ?? "Amsterdam"
     do {
@@ -444,6 +458,8 @@ do {
         check(hit.0 == 200 && hit.1 == "hit", "monitor server: route gets the percent-decoded path without the query", "\(hit)")
         let miss = await get("/nope")
         check(miss.0 == 404, "monitor server: unknown path → 404", "\(miss.0)")
+        let ico = await get("/favicon.ico")
+        check(ico.0 == 204 && ico.1.isEmpty, "monitor server: /favicon.ico → 204 without a body (browsers on the Mac ask for it)", "\(ico.0)")
         let post = await get("/a%20b", method: "POST")
         check(post.0 == 403, "monitor server: POST without the X-Deckhand header → 403", "\(post.0)")
         let put = await get("/a%20b", method: "PUT")
@@ -619,6 +635,38 @@ do {
     check(a.received > 0 || a.sent > 0, "network: counters are non-zero on a machine with traffic", "\(a)")
     check(NetworkStats.isCounted("en0") && !NetworkStats.isCounted("lo0") && !NetworkStats.isCounted("utun3") && !NetworkStats.isCounted("awdl0"), "network: interface filter")
 }
+
+// Vendor releases on GitHub: the launcher and bridge APKs are picked by file name, the version split into name + code.
+do {
+    let sample = """
+    {"tag_name":"v1.0.1.0","published_at":"2026-10-21T02:44:03Z","assets":[
+      {"name":"bridge.1.0.4.4.apk","size":22006908,"browser_download_url":"https://github.com/Qinkunex/UltraWorkspace/releases/download/v1.0.1.0/bridge.1.0.4.4.apk"},
+      {"name":"LineOS.V1.0.9.9.apk","size":72371659,"browser_download_url":"https://github.com/Qinkunex/UltraWorkspace/releases/download/v1.0.1.0/LineOS.V1.0.9.9.apk"},
+      {"name":"Sence.Cube_V2_ota.bin","size":38884,"browser_download_url":"https://github.com/Qinkunex/UltraWorkspace/releases/download/v1.0.1.0/Sence.Cube_V2_ota.bin"},
+      {"name":"evil.apk","size":1,"browser_download_url":"http://example.com/LineOS.V9.9.9.9.apk"},
+      {"name":"UltraWorkSpace-V1.0.1.0-MacOS-Installer.dmg","size":1,"browser_download_url":"https://github.com/x/y.dmg"}]}
+    """
+    let r = try VendorRelease.parse(Data(sample.utf8))
+    check(r.tag == "v1.0.1.0" && r.published != nil, "vendor release: tag and date", r.tag)
+    check(r.launcher?.name == "LineOS.V1.0.9.9.apk" && r.launcher?.versionName == "1.0.9" && r.launcher?.versionCode == 9, "vendor release: launcher asset 1.0.9 (9)", "\(String(describing: r.launcher))")
+    check(r.bridge?.name == "bridge.1.0.4.4.apk" && r.bridge?.versionName == "1.0.4" && r.bridge?.versionCode == 4 && r.bridge?.size == 22006908, "vendor release: bridge asset 1.0.4 (4)", "\(String(describing: r.bridge))")
+    check(r.senseCubeFirmware?.name == "Sence.Cube_V2_ota.bin", "vendor release: SenseCube firmware noticed", "")
+    check(r.launcher?.url.host == "github.com", "vendor release: a non-https / non-GitHub asset never wins the launcher slot", "\(r.launcher?.url.absoluteString ?? "")")
+    check(VendorRelease.split("1.0.9").code == 0 && VendorRelease.split("1.0.9").name == "1.0.9", "vendor release: three-part version has no code", "")
+    let st = BarSoftwareProbe(launcher: ("1.0.3", 3), bridge: ("1.0.4", 4), release: r)
+    check(st.launcherNewer && !st.bridgeNewer, "vendor release: 1.0.3(3) → launcher update, bridge 1.0.4(4) → none", "")
+} catch { check(false, "vendor release: parse", "\(error)") }
+
+// APK manifests: package and version read from the binary XML of a Deckhand bar app when a build is present.
+do {
+    let apk = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("dist/bar-apps/DeckhandMonitor.apk")
+    if FileManager.default.fileExists(atPath: apk.path) {
+        let info = try ApkInfo.read(apk: apk)
+        check(info.package == "nl.denoronha.deckhand.monitor" && info.versionCode == 9 && info.versionName == "1.8", "apk: DeckhandMonitor.apk manifest = nl.denoronha.deckhand.monitor 1.8 (9)", "\(info)")
+    } else { print("skip  apk: no dist/bar-apps/DeckhandMonitor.apk here") }
+    do { _ = try ApkInfo.parseManifest(Data("<xml/>".utf8)); check(false, "apk: text XML rejected", "") }
+    catch { check(true, "apk: text XML rejected", "") }
+} catch { check(false, "apk: read", "\(error)") }
 
 print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
 exit(failures == 0 ? 0 : 1)

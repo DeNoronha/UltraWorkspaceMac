@@ -92,8 +92,17 @@ struct AdbBridge {
         await run(["-s", device, "get-state"], timeout: 8).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func install(apkPath: String) async -> String {
-        await run(["-s", device, "install", "-r", apkPath], timeout: 120)
+    func install(apkPath: String, timeout: TimeInterval = 120) async -> String {
+        await run(["-s", device, "install", "-r", apkPath], timeout: timeout)
+    }
+
+    /// `versionName` and `versionCode` of a package on the bar, or nil when it is not installed.
+    func packageVersion(_ package: String) async -> (name: String, code: Int)? {
+        let out = await shell("dumpsys package \(package) | grep -E 'versionCode=|versionName='")
+        guard let c = out.range(of: #"versionCode=(\d+)"#, options: .regularExpression),
+              let n = out.range(of: #"versionName=(\S+)"#, options: .regularExpression) else { return nil }
+        let code = Int(out[c].dropFirst("versionCode=".count)) ?? 0
+        return (String(out[n].dropFirst("versionName=".count)), code)
     }
 
     func uninstall(package: String) async -> String {

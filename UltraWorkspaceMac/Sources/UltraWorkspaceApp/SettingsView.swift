@@ -2,6 +2,7 @@ import SwiftUI
 import UltraBarKit
 
 struct SettingsView: View {
+    @State private var confirmSoftwareUpdate = false
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
 
@@ -77,6 +78,39 @@ struct SettingsView: View {
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
 
+                Section("Bar software") {
+                    let sw = model.barSoftware, adbOK = model.adbStatus.wifi == true && !model.adbStatus.unauthorized
+                    Text("The bar's launcher and bridge service, as installed on the bar and as published by Sanytron on GitHub. Deckhand downloads the newer file, checks that it is the right package, and installs it over the debug bridge; the vendor's desktop app is not needed.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    SoftwareRow(title: "Launcher", package: VendorRelease.launcherPackage, installed: sw.launcher, latest: sw.release?.launcher, update: sw.launcherUpdate != nil)
+                    SoftwareRow(title: "Bridge", package: VendorRelease.bridgePackage, installed: sw.bridge, latest: sw.release?.bridge, update: sw.bridgeUpdate != nil)
+                    if let r = sw.release {
+                        LabeledContent("Latest release") {
+                            HStack(spacing: 6) {
+                                Text(r.tag + (r.published.map { " · " + $0.formatted(date: .abbreviated, time: .omitted) } ?? ""))
+                                Link("on GitHub", destination: VendorRelease.pageURL).font(.callout)
+                            }
+                        }
+                    }
+                    if let m = sw.message { Text(m).font(.callout).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
+                    HStack {
+                        Button { model.checkBarSoftware() } label: { Label("Check", systemImage: "arrow.clockwise") }
+                            .disabled(model.barSoftwareBusy != nil)
+                            .help(adbOK ? "Read the versions off the bar and the latest release from GitHub" : "Reads GitHub now; the bar's own versions need the debug bridge (above)")
+                        Button { confirmSoftwareUpdate = true } label: { Label(sw.updates.isEmpty ? "Update bar software" : "Update bar software (\(sw.updates.count))", systemImage: "arrow.down.circle") }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(sw.updates.isEmpty || !adbOK || model.barSoftwareBusy != nil)
+                            .help(sw.updates.isEmpty ? "Nothing newer than what the bar has" : "Install " + sw.updates.map(\.name).joined(separator: " and ") + " on the bar")
+                        if let b = model.barSoftwareBusy { ProgressView().controlSize(.small); Text(b).font(.callout).foregroundStyle(.secondary) }
+                    }
+                    .confirmationDialog("Update the bar's software?", isPresented: $confirmSoftwareUpdate, titleVisibility: .visible) {
+                        Button("Install " + sw.updates.map(\.name).joined(separator: " and ")) { model.updateBarSoftware() }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("Deckhand downloads \(sw.updates.map { "\($0.name) (\($0.size / 1_000_000) MB)" }.joined(separator: " and ")) from Sanytron's GitHub release, checks the package inside, and installs it over Wi‑Fi ADB. A new launcher restarts the bar's screen for a few seconds; keep the bar powered. Your pages and pairing stay.")
+                    }
+                }
+
                 Section("Connecting") {
                     ConnectionHelp()
                 }
@@ -118,5 +152,22 @@ private struct AdbStep: View {
                 Text(detail).font(.callout).foregroundStyle(done ? .secondary : .primary).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             }
         }.padding(.vertical, 2)
+    }
+}
+
+/// One row of the Bar software section: what is on the bar, what the vendor published, and whether that is newer.
+private struct SoftwareRow: View {
+    let title: String, package: String, installed: (name: String, code: Int)?, latest: VendorRelease.Asset?, update: Bool
+    var body: some View {
+        LabeledContent(title) {
+            HStack(spacing: 8) {
+                Text(installed.map { "\($0.name) (\($0.code)) on the bar" } ?? "not read from the bar yet")
+                if let latest {
+                    if update { Tag("update \(latest.versionName)", .orange) }
+                    else if installed != nil { Tag("up to date", .green) }
+                    else { Text("· latest \(latest.versionName)").foregroundStyle(.secondary) }
+                }
+            }
+        }.help(package)
     }
 }

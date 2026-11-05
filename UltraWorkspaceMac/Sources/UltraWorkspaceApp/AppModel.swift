@@ -57,6 +57,10 @@ final class AppModel: ObservableObject {
     /// Settings → Debug bridge: what Deckhand last saw of the bar's ADB.
     @Published var adbStatus = AdbStatus()
     @Published var adbBusy = false
+    /// Settings → Bar software: the launcher and bridge on the bar against the vendor's latest GitHub release.
+    @Published var barSoftware = BarSoftwareStatus()
+    /// What the update is doing right now ("Downloading LineOS.V1.0.9.9.apk…"), nil when idle.
+    @Published var barSoftwareBusy: String?
     @Published var screensaver: CoreBarSession.ScreensaverConfig?
     // Persistent link ("Mac agent") that answers the CoreBar's push queries. Wording lives in `LinkBadge`.
     @Published var link: CoreBarLink.State = .stopped

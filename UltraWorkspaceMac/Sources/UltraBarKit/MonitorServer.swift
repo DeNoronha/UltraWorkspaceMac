@@ -236,7 +236,9 @@ public final class MonitorServer: @unchecked Sendable {
             if !Self.peerMayRead(Self.peerAddress(conn), peers: peers, pagesOnly: pagesOnly) {
                 resp = Response("403 Forbidden", type: "text/plain", body: Data("pages are served to the paired bar only".utf8))
             } else {
-                resp = r(path) ?? Response("404 Not Found", type: "text/plain", body: Data("not found".utf8))
+                resp = r(path) ?? (path == "/favicon.ico"
+                    ? Response("204 No Content", type: "text/plain", body: Data())   // browsers on the Mac ask; the pages carry no icon
+                    : Response("404 Not Found", type: "text/plain", body: Data("not found".utf8)))
             }
         }
         if !target.hasSuffix(".json") { WireLog.shared.http("monitor ← \(method) \(target) \(resp.status)") }
