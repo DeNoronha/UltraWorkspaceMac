@@ -41,27 +41,27 @@ struct AboutView: View {
             Text("A native macOS app for the UltraBar X — find and pair your CoreBar, put cards on the bar and on the VivoCube, install apps and screensavers, and see what the hardware is doing.")
                 .font(.callout).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 360)
+                .frame(maxWidth: 480)
 
-            Divider().frame(width: 320)
+            Divider().frame(width: 480)
 
             VStack(alignment: .leading, spacing: 8) {
                 row("Author", value: "Ramon de Noronha")
                 HStack(spacing: 6) {
                     Text("Repository").frame(width: 92, alignment: .leading).foregroundStyle(.secondary)
-                    Link("github.com/DeNoronha/UltraWorkspaceMac", destination: Self.repoURL)
+                    Link(Self.repoURL.absoluteString, destination: Self.repoURL).lineLimit(1).fixedSize()
                 }
                 HStack(spacing: 6) {
                     Text("Contact").frame(width: 92, alignment: .leading).foregroundStyle(.secondary)
-                    Link(Self.contactEmail, destination: URL(string: "mailto:\(Self.contactEmail)")!)
+                    Link(Self.contactEmail, destination: URL(string: "mailto:\(Self.contactEmail)")!).lineLimit(1).fixedSize()
                 }
                 row("License", value: "MIT")
                 row("Built with", value: "Swift 6 · SwiftUI")
             }
             .font(.callout)
-            .frame(width: 340, alignment: .leading)
+            .frame(width: 480, alignment: .leading)
 
-            Divider().frame(width: 320)
+            Divider().frame(width: 480)
 
             Text("© 2026 Ramon de Noronha. Released under the MIT License.")
                 .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
