@@ -143,19 +143,36 @@ public enum ClaudeUsage {
     public struct Session: Sendable, Identifiable {
         public enum State: String, Sendable { case working, waiting, question }
         public var id: String          // session file name
-        public var project: String     // last path component of the session's cwd
-        public var title: String       // first user prompt, trimmed
+        public var project: String     // the session's own name (`/rename`, as in cmux) if it has one, else the cwd's last path component
+        public var title: String       // Claude's title for the session, else the first user prompt, trimmed
         public var state: State
         public var lastAt: Date
         public var lastText: String    // last assistant text, trimmed
     }
 
-    /// Sessions touched within `window`, newest first. Reads the first 8 KB (cwd + first prompt) and the
-    /// last 64 KB (state + last text) of each transcript; sub-agent transcripts (in `subagents/`) are skipped.
+    /// Session names per transcript: the newest `custom-title` (the name given with `/rename`, which cmux shows too)
+    /// and `ai-title`. Found once by scanning the whole file, then kept up to date from each tail read.
+    private static let titleLock = NSLock()
+    nonisolated(unsafe) private static var titles: [String: (custom: String, ai: String)] = [:]
+
+    private static func titleLines(_ text: Substring, into t: inout (custom: String, ai: String)) {
+        for line in text.split(separator: "\n") where line.contains("-title\"") {
+            guard let obj = parse(line) else { continue }
+            if (obj["type"] as? String) == "custom-title", let v = obj["customTitle"] as? String, !v.isEmpty { t.custom = v }
+            if (obj["type"] as? String) == "ai-title", let v = obj["aiTitle"] as? String, !v.isEmpty { t.ai = v }
+        }
+    }
+
+    /// Sessions with a real message (yours or Claude's) within `window`, newest first. Reads the first 8 KB (cwd +
+    /// first prompt) and the last 64 KB (state, last text, time of the last real message) of each transcript; the
+    /// file's modification time alone is not enough, because idle sessions keep getting `system` entries.
+    /// Sub-agent transcripts (in `subagents/`) are skipped.
     public static func sessions(window: TimeInterval = 3600) -> [Session] {
         let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/projects", isDirectory: true)
         guard let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.contentModificationDateKey]) else { return [] }
         let now = Date()
+        let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoPlain = ISO8601DateFormatter(); isoPlain.formatOptions = [.withInternetDateTime]
         var out: [Session] = []
         for case let url as URL in en {
             guard url.pathExtension == "jsonl", !url.path.contains("/subagents/"),
@@ -174,10 +191,20 @@ public enum ClaudeUsage {
                 if title.isEmpty, (obj["type"] as? String) == "user", (obj["isMeta"] as? Bool) != true, let t = text(of: obj), !t.hasPrefix("<") { title = t }
                 if !cwd.isEmpty, !title.isEmpty { break }
             }
-            var state = Session.State.working, last = ""
-            for line in String(decoding: tailData, as: UTF8.self).split(separator: "\n").reversed() {
+            let id = url.deletingPathExtension().lastPathComponent
+            let tailText = String(decoding: tailData, as: UTF8.self)
+            titleLock.lock(); var names = titles[id]; titleLock.unlock()
+            if names == nil, let whole = try? String(contentsOf: url, encoding: .utf8) {
+                var t = (custom: "", ai: ""); titleLines(Substring(whole), into: &t); names = t
+            } else if var t = names { titleLines(Substring(tailText), into: &t); names = t }
+            titleLock.lock(); titles[id] = names; titleLock.unlock()
+            var state = Session.State.working, last = "", lastAt: Date?
+            for line in tailText.split(separator: "\n").reversed() {
                 guard let obj = parse(line), let type = obj["type"] as? String else { continue }
                 if cwd.isEmpty, let c = obj["cwd"] as? String { cwd = c }
+                if lastAt == nil, type == "user" || type == "assistant", let ts = obj["timestamp"] as? String {
+                    lastAt = iso.date(from: ts) ?? isoPlain.date(from: ts)
+                }
                 if type == "user" { state = .working; break }
                 if type == "assistant" {
                     let content = (obj["message"] as? [String: Any])?["content"] as? [[String: Any]] ?? []
@@ -189,9 +216,12 @@ public enum ClaudeUsage {
                     break
                 }
             }
-            let project = cwd.isEmpty ? url.deletingLastPathComponent().lastPathComponent.split(separator: "-").last.map(String.init) ?? "?" : (cwd as NSString).lastPathComponent
-            out.append(Session(id: url.deletingPathExtension().lastPathComponent, project: project, title: trim(title, 70),
-                               state: state, lastAt: mod, lastText: trim(last, 140)))
+            let at = lastAt ?? mod
+            guard now.timeIntervalSince(at) <= window else { continue }
+            let folder = cwd.isEmpty ? url.deletingLastPathComponent().lastPathComponent.split(separator: "-").last.map(String.init) ?? "?" : (cwd as NSString).lastPathComponent
+            let name = names?.custom ?? "", ai = names?.ai ?? ""
+            out.append(Session(id: id, project: name.isEmpty ? folder : name, title: trim(ai.isEmpty ? title : ai, 70),
+                               state: state, lastAt: at, lastText: trim(last, 140)))
         }
         return out.sorted { $0.lastAt > $1.lastAt }
     }
