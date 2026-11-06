@@ -33,7 +33,16 @@ extension AppModel {
         themeTask = Task {
             defer { if timed { self.themeRunning = false } }
             self.cubeProgress.run("render")
-            guard await self.uploadPackage(cards, settings: settings, session: session, serial: serial, force: true) else { return }
+            guard await self.uploadPackage(cards, settings: settings, session: session, serial: serial, force: true) else {
+                // Timed switching stays wanted (vivoRotationOn): try the whole Send again in a minute instead of
+                // leaving the cube on one card until someone presses Send (seen after a restart, "reply error:238").
+                if timed, !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 60_000_000_000)
+                    // A new task, so this one's defer (themeRunning = false) runs before the new Send sets it again.
+                    if !Task.isCancelled, settings.vivoRotationOn { Task { @MainActor in self.sendToCube(settings: settings) } }
+                }
+                return
+            }
             if Task.isCancelled { return }
             self.cubeProgress.run("apply", note: "about \(Self.vivoSettleSeconds) s")
             try? await Task.sleep(nanoseconds: Self.vivoSettleSeconds * 1_000_000_000)

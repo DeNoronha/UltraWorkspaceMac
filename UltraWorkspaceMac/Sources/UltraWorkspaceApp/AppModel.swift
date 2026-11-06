@@ -67,6 +67,12 @@ final class AppModel: ObservableObject {
     @Published var screensaver: CoreBarSession.ScreensaverConfig?
     // Persistent link ("Mac agent") that answers the CoreBar's push queries. Wording lives in `LinkBadge`.
     @Published var link: CoreBarLink.State = .stopped
+    /// Bar hardening (AppModel+Hardening): the firewall as last seen, whether the user wants it, and the bar's boot id
+    /// (a new one means the bar restarted).
+    @Published var barFirewall: BarFirewallState = .unknown
+    var barFirewallWanted = false
+    var barFirewallTask: Task<Void, Never>?
+    var lastBarBootID: String?
     @Published var pushCount = 0
     @Published var lastKnobVolume: Int?
     var activeLink: CoreBarLink?

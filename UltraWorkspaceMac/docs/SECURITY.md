@@ -100,7 +100,11 @@ Files are written atomically and then `chmod`ed; between the two there is a wind
 
 ### 8. ADB (the Android debug bridge)
 
-The bar apps' installs, *Restart bar launcher* and *Keep the screen on while someone is at the desk* use the local `adb` binary (found at fixed paths, never `PATH`) against `<bar-ip>:5555`. Wi-Fi ADB is off by default on the bar and is off again after every reboot unless *Keep on after reboots* was used (it sets `persist.adb.tcp.port=5555` and switches USB debugging on); while it is on, **anyone on the LAN has a root shell on the bar**. Deckhand runs a fixed set of commands with literal arguments (`logcat -s <tag>`, `dumpsys power`, `input keyevent KEYCODE_WAKEUP`, `settings put system screen_off_timeout <int>`, `am force-stop`/`am start` of the launcher, `install -r <bundled apk>`, `uninstall <own package>`, `getprop`/`setprop persist.adb.tcp.port`), each with a timeout. Turn Wi-Fi ADB off when you do not use it.
+The bar apps' installs, *Restart bar launcher* and *Keep the screen on while someone is at the desk* use the local `adb` binary (found at fixed paths, never `PATH`) against `<bar-ip>:5555`. Wi-Fi ADB is off by default on the bar and is off again after every reboot unless *Keep on after reboots* was used (it sets `persist.adb.tcp.port=5555` and switches USB debugging on); while it is on, **anyone on the LAN has a root shell on the bar**. Deckhand runs a fixed set of commands with literal arguments (`logcat -s <tag>`, `dumpsys power`, `input keyevent KEYCODE_WAKEUP`, `settings put system screen_off_timeout <int>`, `am force-stop`/`am start` of the launcher, `install -r <bundled apk>`, `uninstall <own package>`, `getprop`/`setprop persist.adb.tcp.port`, `settings put global adb_enabled 1`, the firewall rules below, `cat /proc/sys/kernel/random/boot_id`), each with a timeout. Turn Wi-Fi ADB off when you do not use it, or turn on *Bar hardening*.
+
+**The bar's listening services** (read on the bar, 2026-11-06): `adbd` on `:5555` as root with no key check (`ro.adb.secure` is empty on this eng build, and it is a read-only property), the vendor launcher's upload server on `:8080` (no authentication), the hub's control channel on `:7431` (TLS + token), an audio HAL service on `:14035` and the UltraRadio app on two high ports, all on every interface.
+
+**Bar hardening** (Settings → Bar hardening, off by default) puts a firewall in front of all of them. Deckhand adds an iptables chain `deckhand_in` at the top of `INPUT`: on the bar's home-network interface (`wlan0`) new TCP connections are dropped unless they come from this Mac's address (the one the bar reaches it on); loopback, the bar's own hotspot for the VivoCube (`wlan1`), replies to connections the bar opened itself and all UDP (the beacon) pass. Over IPv6 no new TCP connection is accepted on `wlan0`. Limits: Android does not keep iptables rules across a reboot and `netd` rebuilds the tables while the bar starts, so Deckhand sets the rules again when the link comes back (after `sys.boot_completed`) and checks them every two minutes; between a bar restart and that moment the services are open as before. Anything else on the LAN (the vendor's own PC or phone app, another Mac) can no longer reach the bar while the firewall is on. If this Mac changes address it is locked out too: restart the bar, the rules are gone, and Deckhand sets them again with the new address. A key check on adb itself (`ro.adb.secure=1` with this Mac's key in `adb_keys`) would need a change to the bar's boot image and is not done.
 
 ### 9. What leaves the Mac, and to whom
 
@@ -122,7 +126,8 @@ Nothing identifies the Mac or the user to these services beyond the request itse
 
 ## Mitigations you control (no device changes)
 
-- Put the CoreBar on an **IoT VLAN / guest SSID** with no route to your PCs/NAS, and put the Mac that runs Deckhand on it only while you use the bar — or firewall `:7431`, `:8080` and `:5555` on the bar so only the Mac reaches them. Never port-forward these.
+- Turn on **Settings → Bar hardening** so only this Mac can open connections to the bar (section 8).
+- Put the CoreBar on an **IoT VLAN / guest SSID** with no route to your PCs/NAS, and put the Mac that runs Deckhand on it only while you use the bar. Never port-forward the bar's ports.
 - On a shared network, do not install the Claude, Calendar and Tasks bar apps.
 - Turn Wi-Fi ADB off after installs.
 - Optionally block the bar's outbound to `*.aiks360.com` (its cleartext backup, finding 5) and the telemetry hosts.

@@ -22,7 +22,7 @@ extension AppModel {
                 Task { @MainActor in
                     guard let self else { return }
                     self.link = st
-                    if st == .connected { self.showDeckhandPageIfPublished() }
+                    if st == .connected { self.showDeckhandPageIfPublished(); self.afterBarConnected() }
                 }
             }, handler: { [weak self] type, payloadJSON in
                 guard let self else { return nil }

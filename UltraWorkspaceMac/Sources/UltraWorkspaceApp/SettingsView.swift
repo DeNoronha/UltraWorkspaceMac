@@ -88,7 +88,21 @@ struct SettingsView: View {
                             .help(st.usbSerials.isEmpty ? "No bar attached over USB (its PC-LINK port, never the USB-OTG power port)" : "adb tcpip 5555 on the bar attached over USB: Wi-Fi ADB on until its next reboot")
                         if model.adbBusy { ProgressView().controlSize(.small) }
                     }
-                    Text("While Wi‑Fi ADB is on, every device on your network can reach a shell on the bar, so keep the bar on a network you trust.")
+                    Text("While Wi‑Fi ADB is on, every device on your network can reach a root shell on the bar. Bar hardening below closes that.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                Section("Bar hardening") {
+                    Toggle("Only this Mac may connect to the bar", isOn: Binding(get: { settings.barFirewall }, set: { on in
+                        settings.barFirewall = on; model.setBarFirewall(on)
+                    }))
+                    .toggleStyle(.switch).disabled(model.adbStatus.wifi != true)
+                    switch model.barFirewall {
+                    case .on(let mac): Label("On: the bar accepts connections only from \(mac).", systemImage: "lock.shield").foregroundStyle(.green)
+                    case .off: Label("Off: every device on your network can reach the bar's debug bridge (a root shell), its upload server and its other services.", systemImage: "lock.open").foregroundStyle(.orange)
+                    case .failed(let why): Label(why, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                    case .unknown: Text(model.adbStatus.wifi == true ? "Checking…" : "Needs the debug bridge (above).").foregroundStyle(.secondary)
+                    }
+                    Text("A firewall on the bar: on your home network only this Mac may open connections to it (debug bridge, the bar's upload server and services). The VivoCube's own Wi‑Fi link, the bar apps' internet access and Deckhand's beacon are not affected. The bar forgets the rules when it restarts; Deckhand sets them again as soon as it reconnects. If this Mac gets a different address and can no longer reach the bar, restart the bar: the rules are gone until Deckhand sets them with the new address.")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
 

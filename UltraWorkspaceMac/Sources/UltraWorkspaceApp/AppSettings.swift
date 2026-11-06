@@ -54,6 +54,8 @@ final class AppSettings: ObservableObject {
     /// Presence-aware bar screen over ADB: on while the SenseCube sees someone, off after `presenceSleepMinutes`.
     @Published var presenceWake: Bool = false { didSet { save() } }
     @Published var presenceSleepMinutes: Int = 10 { didSet { save() } }
+    /// Bar hardening: only this Mac may open TCP connections to the bar (AppModel+Hardening).
+    @Published var barFirewall: Bool = false { didSet { save() } }
     // Bar apps (2026-11-04): Flights radius, Headlines source. The Linear key lives in Store (user-only file).
     @Published var flightsRadiusKm: Int = 3 { didSet { save() } }
     @Published var newsSource: String = "cnn" { didSet { save() } }
@@ -122,6 +124,7 @@ final class AppSettings: ObservableObject {
         var claudeNotifyWaiting: Bool? = nil
         var presenceWake: Bool? = nil
         var presenceSleepMinutes: Int? = nil
+        var barFirewall: Bool? = nil
         var flightsRadiusKm: Int? = nil
         var newsSource: String? = nil
     }
@@ -204,6 +207,7 @@ final class AppSettings: ObservableObject {
             claudeNotifyWaiting = p.claudeNotifyWaiting ?? true
             presenceWake = p.presenceWake ?? false
             presenceSleepMinutes = p.presenceSleepMinutes ?? 10
+            barFirewall = p.barFirewall ?? false
             flightsRadiusKm = p.flightsRadiusKm ?? 3
             newsSource = p.newsSource ?? "cnn"
         }
@@ -219,7 +223,7 @@ final class AppSettings: ObservableObject {
                           vivoSwitchMode: vivoSwitchMode, vivoPicturePath: vivoPicturePath,
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
-                          claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes,
+                          claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes, barFirewall: barFirewall,
                           flightsRadiusKm: flightsRadiusKm, newsSource: newsSource)
         do {
             try JSONEncoder().encode(p).write(to: url, options: .atomic)

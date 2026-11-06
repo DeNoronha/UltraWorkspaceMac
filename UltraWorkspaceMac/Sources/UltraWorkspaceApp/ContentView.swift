@@ -31,6 +31,7 @@ struct ContentView: View {
             model.lastPublishedVivoLayers = max(model.lastPublishedVivoLayers, settings.vivoLayerCount)
             model.startMusicPolling(settings: settings); model.startDailyCoverRefresh(settings: settings); model.startClaudeWatch(settings: settings); model.startBarDataServer(settings: settings); model.startPresence(settings: settings)
             resumeCubeRotation()
+            model.setBarFirewall(settings.barFirewall)
         }
         // The cube's serial is only known once the link has listed the bar's modules, which is after onAppear on
         // a fresh launch: resume then (and again if the cube reappears after the bar restarted).
