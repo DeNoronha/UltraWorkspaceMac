@@ -128,13 +128,22 @@ struct AdbBridge {
         await AdbBridge(path: path, ip: "").run(["-s", usbSerial, "tcpip", "5555"], timeout: 15)
     }
 
-    /// Whether the bar keeps Wi-Fi ADB on across reboots (`persist.adb.tcp.port`).
+    /// Whether the bar keeps Wi-Fi ADB on across reboots. Two settings, both needed (verified 2026-11-06):
+    /// `persist.adb.tcp.port=5555` makes adbd listen on Wi-Fi, and USB debugging (`adb_enabled=1`) makes Android
+    /// start adbd at boot at all. With USB debugging off, the bar's Developer-options "WiFi ADB" switch only starts
+    /// adbd until the next reboot, even with the port property set.
     func isPersistent() async -> Bool {
-        (await shell("getprop persist.adb.tcp.port")).trimmingCharacters(in: .whitespacesAndNewlines) == "5555"
+        let out = await shell("getprop persist.adb.tcp.port; settings get global adb_enabled")
+        let lines = out.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+        return lines.count >= 2 && lines[0] == "5555" && lines[1] == "1"
     }
 
     func makePersistent() async -> Bool {
         _ = await shell("setprop persist.adb.tcp.port 5555")
+        // Switching USB debugging on restarts adbd, which drops this connection: reconnect before checking.
+        _ = await shell("settings put global adb_enabled 1")
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        _ = await connect()
         return await isPersistent()
     }
 

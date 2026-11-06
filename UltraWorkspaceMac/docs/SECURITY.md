@@ -103,7 +103,7 @@ Files are written atomically and then `chmod`ed; between the two there is a wind
 
 ### 8. ADB (the Android debug bridge)
 
-The bar apps' installs, *Restart bar launcher* and *Keep the screen on while someone is at the desk* use the local `adb` binary (found at fixed paths, never `PATH`) against `<bar-ip>:5555`. Wi-Fi ADB is off by default on the bar and is off again after every reboot unless *Keep on after reboots* was used; while it is on, **anyone on the LAN has a root shell on the bar**. Deckhand runs a fixed set of commands with literal arguments (`logcat -s <tag>`, `dumpsys power`, `input keyevent KEYCODE_WAKEUP`, `settings put system screen_off_timeout <int>`, `am force-stop`/`am start` of the launcher, `install -r <bundled apk>`, `uninstall <own package>`, `getprop`/`setprop persist.adb.tcp.port`), each with a timeout. Turn Wi-Fi ADB off when you do not use it.
+The bar apps' installs, *Restart bar launcher* and *Keep the screen on while someone is at the desk* use the local `adb` binary (found at fixed paths, never `PATH`) against `<bar-ip>:5555`. Wi-Fi ADB is off by default on the bar and is off again after every reboot unless *Keep on after reboots* was used (it sets `persist.adb.tcp.port=5555` and switches USB debugging on); while it is on, **anyone on the LAN has a root shell on the bar**. Deckhand runs a fixed set of commands with literal arguments (`logcat -s <tag>`, `dumpsys power`, `input keyevent KEYCODE_WAKEUP`, `settings put system screen_off_timeout <int>`, `am force-stop`/`am start` of the launcher, `install -r <bundled apk>`, `uninstall <own package>`, `getprop`/`setprop persist.adb.tcp.port`), each with a timeout. Turn Wi-Fi ADB off when you do not use it.
 
 ### 9. What leaves the Mac, and to whom
 

@@ -92,10 +92,10 @@ struct SettingsView: View {
                     AdbStep(number: 2, title: "Wi‑Fi ADB on at the bar", done: barOK,
                             detail: barOK ? "The bar answers on port 5555 and accepts this Mac."
                                 : st.unauthorized ? "The bar is asking whether to allow this Mac: on the bar, tick “Always allow from this computer” and tap Allow, then press Check."
-                                : "On the bar: long‑press the Settings button → About tablet → tap Build number seven times (“You are now a developer”) → back → System → Advanced → Developer options → switch on WiFi ADB. Then press Check and allow this Mac when the bar asks. Without a free hand: plug the bar's PC‑LINK port into this Mac over USB and press Turn on over USB.")
+                                : "On the bar: long‑press the Settings button → About tablet → tap Build number seven times (“You are now a developer”) → back → System → Advanced → Developer options → switch on WiFi ADB. Then press Check and allow this Mac when the bar asks. No USB cable: plugging the bar's PC‑LINK port into a computer turns Wi‑Fi ADB off.")
                     AdbStep(number: 3, title: "Stays on after a reboot", done: stays,
                             detail: stays ? "Wi‑Fi ADB comes back by itself after every reboot."
-                                : barOK ? "The bar switches Wi‑Fi ADB off at every reboot. Press Keep on after reboots once; Deckhand sets persist.adb.tcp.port=5555 on the bar."
+                                : barOK ? "The bar switches Wi‑Fi ADB off at every reboot. Press Keep on after reboots once; Deckhand sets persist.adb.tcp.port=5555 and switches USB debugging on, which Wi‑Fi ADB needs to start at boot."
                                 : "Needs step 2 first.")
                     if let m = st.message { Text(m).font(.callout).foregroundStyle(.orange) }
                     HStack {
@@ -103,7 +103,7 @@ struct SettingsView: View {
                             .disabled(model.adbBusy).help("Look for adb on this Mac and ask the bar whether Wi-Fi ADB answers")
                         Button { model.makeWifiAdbPersistent() } label: { Label("Keep on after reboots", systemImage: "pin") }
                             .disabled(!barOK || stays).buttonStyle(.borderedProminent)
-                            .help("setprop persist.adb.tcp.port 5555 on the bar")
+                            .help("setprop persist.adb.tcp.port 5555 and USB debugging on (adb_enabled=1) on the bar")
                         Button { model.enableWifiAdbOverUSB() } label: { Label("Turn on over USB", systemImage: "cable.connector") }
                             .disabled(st.usbSerials.isEmpty || !adbOK)
                             .help(st.usbSerials.isEmpty ? "No bar attached over USB (its PC-LINK port, never the USB-OTG power port)" : "adb tcpip 5555 on the bar attached over USB: Wi-Fi ADB on until its next reboot")

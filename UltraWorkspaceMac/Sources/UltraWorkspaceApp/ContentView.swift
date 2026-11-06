@@ -152,7 +152,7 @@ struct ConnectView: View {
                 }
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                    Text("Power the bar from its PC-LINK port via your Mac — never a fast charger.").font(.callout)
+                    Text("Deckhand needs no USB cable. Power the bar from USB-OTG; leave PC-LINK unplugged.").font(.callout)
                     Button("Why?") { ui.showWhy.toggle() }.buttonStyle(.link).font(.callout)
                         .popover(isPresented: $ui.showWhy) { ConnectionHelp().padding().frame(width: 420) }
                 }
@@ -169,14 +169,14 @@ struct ConnectionHelp: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Connecting your CoreBar", systemImage: "cable.connector").font(.headline)
-            Text("Deckhand controls the CoreBar over your **Wi-Fi / local network** — the Mac and the CoreBar must be on the same network. The USB cable is only for power; there is no USB data link.")
+            Text("Deckhand controls the CoreBar over your **Wi-Fi / local network** — the Mac and the CoreBar must be on the same network. Deckhand needs no USB cable.")
                 .font(.callout).fixedSize(horizontal: false, vertical: true)
             GroupBox {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Use the correct USB port", systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange).font(.subheadline.bold())
-                    Text("• **PC-LINK** (5 V only) → connect to your Mac / computer USB. Safe and correct.")
-                    Text("• **USB-OTG** → charging only (a PD/QC or 12 V adapter).")
+                    Text("• **USB-OTG** → power (a PD/QC charger or the 12 V adapter).")
+                    Text("• **PC-LINK** (5 V only) → leave it unplugged. On a computer the bar becomes a USB keyboard and its Wi‑Fi ADB turns off, which Deckhand needs for the bar apps.")
                     Text("• Never plug a laptop/PD fast-charger into PC-LINK — it can permanently damage the mainboard.")
                         .foregroundStyle(.orange)
                 }.font(.caption).frame(maxWidth: .infinity, alignment: .leading)

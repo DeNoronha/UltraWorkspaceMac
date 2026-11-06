@@ -13,11 +13,11 @@ The CoreBar has **two** USB ports and they are not interchangeable. Getting this
 | Port | Use it for | Rule |
 |------|------------|------|
 | **USB-OTG** | **Power / charging** — a fast charger (PD / QC, 9–20 V) or the 12 V adapter. | Fast charging is OK here. |
-| **PC-LINK** | **Connecting to your computer** (and 5 V power from the computer). | **5 V only.** A computer's USB port or a plain 5 V adapter. |
+| **PC-LINK** | The vendor's link to a computer (the bar becomes a USB keyboard). Deckhand does not use it. | **5 V only.** A computer's USB port or a plain 5 V adapter. |
 
-> ⚠️ **Never plug a phone/MacBook/laptop PD fast-charger into PC-LINK.** PC-LINK is 5 V-only; a 9–20 V charger will permanently damage the mainboard and can overheat. Connecting PC-LINK to a **computer USB port is safe and correct** — that's what it's for.
+> ⚠️ **Never plug a phone/MacBook/laptop PD fast-charger into PC-LINK.** PC-LINK is 5 V-only; a 9–20 V charger will permanently damage the mainboard and can overheat. A computer's USB port is electrically safe on PC-LINK.
 
-Deckhand talks to the CoreBar over **Wi-Fi / your LAN**, not over USB; the cable only provides power. The same guidance is shown in-app (Settings → Connecting) and in `MANUAL.md`.
+Deckhand talks to the CoreBar over **Wi-Fi / your LAN**, not over USB, and needs no USB cable. Leave PC-LINK unplugged: plugging it into a computer turns the bar's Wi-Fi ADB off. The same guidance is shown in-app (Settings → Connecting) and in `MANUAL.md`.
 
 ## Hardware it talks to
 

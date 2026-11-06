@@ -56,7 +56,7 @@ extension AppModel {
         }
     }
 
-    /// Make the bar keep Wi-Fi ADB on across reboots (`persist.adb.tcp.port=5555`, verified 2026-11-04 on launcher 1.0.9).
+    /// Make the bar keep Wi-Fi ADB on across reboots: `persist.adb.tcp.port=5555` plus USB debugging on (verified 2026-11-06).
     func makeWifiAdbPersistent() {
         guard !adbBusy, let adb = AdbBridge.find(), let ip = ipForSelected() else { return }
         adbBusy = true
@@ -68,7 +68,7 @@ extension AppModel {
                 say("Wi-Fi ADB now stays on after a reboot.")
                 adbStatus.persistent = true; adbStatus.wifi = true
             } else {
-                say("The bar did not accept the setting (setprop persist.adb.tcp.port).")
+                say("The bar did not accept the settings (persist.adb.tcp.port 5555 and USB debugging on).")
             }
         }
     }

@@ -98,7 +98,7 @@ extension AppModel {
         barAppBusy = page; defer { barAppBusy = nil }
         let bridge = AdbBridge(path: adb, ip: ip)
         guard await bridge.connect() else {
-            return fail("The bar refuses ADB on \(ip):5555 — Wi-Fi ADB is off (it turns off at every reboot unless made persistent). Settings → Debug bridge: Turn on over USB, then Keep on after reboots.")
+            return fail("The bar refuses ADB on \(ip):5555 — Wi-Fi ADB is off (after a reboot unless made persistent, or after PC-LINK was plugged into a computer). Switch WiFi ADB on in the bar's Developer options, then Settings → Debug bridge: Keep on after reboots.")
         }
         let out = await bridge.install(apkPath: apk.path)
         let ok = out.contains("Success")
