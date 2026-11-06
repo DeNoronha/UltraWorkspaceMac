@@ -28,7 +28,7 @@ gh release create "v$VER" dist/Deckhand.dmg \
   --notes "Signed with a Developer ID and notarized — opens without a Gatekeeper warning."
 ```
 
-Publishing the release runs `.github/workflows/pages.yml`, which redeploys the site with the new `Deckhand.dmg` behind its download buttons. The repository's `github-pages` environment allows deployments from `main` and from tags `v*` (the tag rule was added 2026-11-06; without it the release-triggered deploy is rejected). To redeploy by hand: `gh workflow run pages.yml --repo DeNoronha/UltraWorkspaceMac --ref main`.
+Publishing the release runs `.github/workflows/pages.yml`, which redeploys the site with the new `Deckhand.dmg` behind its download buttons. The repository's `github-pages` environment allows deployments from `main` and from tags `v*` (the tag rule was added 2026-11-06; without it the release-triggered deploy is rejected). Check afterwards that `https://denoronha.github.io/UltraWorkspaceMac/download/latest.json` names the new tag: for v0.3.2 the release-triggered deployment reported success but the site kept serving the previous build, and a redeploy from `main` fixed it. To redeploy by hand: `gh workflow run pages.yml --repo DeNoronha/UltraWorkspaceMac --ref main`.
 
 ## Signing & notarization (set up 2026-11-01, automatic in the scripts)
 
