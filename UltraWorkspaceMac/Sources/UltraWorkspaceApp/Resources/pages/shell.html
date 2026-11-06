@@ -9,7 +9,7 @@
   #wait{position:absolute;left:0;top:0;width:1424px;height:280px;display:flex;align-items:center;justify-content:center;color:#8b94a6;font-size:20px;background:#1c2029}
   .btn{position:absolute;top:200px;width:64px;height:64px;border-radius:32px;background:rgba(255,255,255,.14);color:#fff;font-size:28px;line-height:64px;text-align:center}
 </style></head><body>
-<canvas id="c" width="1424" height="280"></canvas><div id="x" role="button" aria-label="Close"><span>✕</span></div><div id="wait">Waiting for the Mac…</div>
+<canvas id="c" width="1424" height="280"></canvas><div id="x" role="button" aria-label="Close"><span>✕</span></div><div id="wait">{{WAIT}}</div>
 <script>
 const c=document.getElementById('c'),g=c.getContext('2d'); let D=null, okAt=0;
 document.getElementById('x').onclick=()=>{ if(window.Deckhand) Deckhand.close(); };

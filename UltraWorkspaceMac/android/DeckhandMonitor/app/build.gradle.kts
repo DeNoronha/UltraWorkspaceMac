@@ -9,13 +9,21 @@ android {
     defaultConfig {
         minSdk = 29
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.8"
+        versionCode = 10
+        versionName = "1.9"
     }
 
     buildFeatures {
         buildConfig = true
         resValues = true
+    }
+
+    // The page scripts are the Mac app's own (Sources/UltraWorkspaceApp/Resources/pages): one source for the pages
+    // Deckhand serves and the pages the on-bar apps carry. Packaged as assets: shell.html, <page>.js.
+    sourceSets {
+        getByName("main") {
+            assets.srcDir("../../../Sources/UltraWorkspaceApp/Resources/pages")
+        }
     }
 
     // One card per page on the CoreBar launcher: each flavor is its own package.
@@ -34,12 +42,16 @@ android {
             Triple("verse", "nl.denoronha.deckhand.verse", "Verse"),
             Triple("tasks", "nl.denoronha.deckhand.tasks", "Tasks"),
         )
+        // These fetch their own data on the bar (1.9): page and feeds in the APK, only config.json from the Mac.
+        val onBar = setOf("flights", "crypto", "weather", "sky", "news", "verse")
         for ((flavor, appId, label) in pages) {
             create(flavor) {
                 dimension = "page"
                 applicationId = appId
                 resValue("string", "app_name", label)
                 buildConfigField("String", "PAGE", "\"$flavor\"")
+                buildConfigField("String", "TITLE", "\"$label\"")
+                buildConfigField("boolean", "ON_BAR", if (flavor in onBar) "true" else "false")
             }
         }
     }

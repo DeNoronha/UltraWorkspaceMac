@@ -22,6 +22,10 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import nl.denoronha.deckhand.monitor.onbar.BarConfig
+import nl.denoronha.deckhand.monitor.onbar.LocalSite
+import nl.denoronha.deckhand.monitor.onbar.httpJson
+import nl.denoronha.deckhand.monitor.onbar.pool
 import org.json.JSONObject
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -38,6 +42,10 @@ import kotlin.math.abs
  * Whatever the source, only http(s) URLs whose host is a private (LAN) IPv4 address are
  * loaded, and the WebView never navigates away from that host.
  *
+ * On-bar flavors (1.9: flights, crypto, weather, sky, news, verse; `BuildConfig.ON_BAR`) carry their page and
+ * fetch their own data ([LocalSite]); for them the beacon only says where Deckhand is, so its `/config.json`
+ * (place, units, coins, news source) can be picked up and kept. They work with the Mac off.
+ *
  * A page that cannot be loaded (transport error or an HTTP error status on the main frame)
  * gives way to the "Looking for Deckhand…" page and is retried; a page whose beacons stop
  * for [BEACON_LOST_MS] gives way to it too, and the next beacon loads the page again.
@@ -53,6 +61,7 @@ class MainActivity : Activity() {
         private const val RETRY_DELAY_MS = 5_000L
         private const val BEACON_LOST_MS = 60_000L   // Deckhand beacons every 5 s
         private const val LONG_PRESS_MS = 700L
+        private const val CONFIG_EVERY_MS = 300_000L    // on-bar flavors: config.json from the Mac at most every 5 min
         private const val LOOKING_HTML = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>html,body{margin:0;height:100%;background:#000;color:#888;font:16px -apple-system,Roboto,sans-serif;
@@ -69,6 +78,8 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
     private var errorInThisLoad = false       // main-frame error seen since the last onPageStarted of currentUrl
 
     private var beacon: BeaconListener? = null
+    private val local: LocalSite? by lazy { if (BuildConfig.ON_BAR) LocalSite(applicationContext, BuildConfig.PAGE, BuildConfig.TITLE) else null }
+    private var configAt = 0L
     private var multicastLock: WifiManager.MulticastLock? = null
 
     private val fallbackToRemembered = Runnable {
@@ -137,7 +148,7 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
         setContentView(web)
         showLookingPage()
 
-        loadFromIntent(intent)
+        if (local != null) load(LocalSite.ORIGIN + "/" + BuildConfig.PAGE) else loadFromIntent(intent)
     }
 
     override fun onNewIntent(intent: android.content.Intent?) {
@@ -147,6 +158,7 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
 
     /** The `url` extra (adb / another app): same rules as a beacon, anything else is ignored. */
     private fun loadFromIntent(intent: android.content.Intent?) {
+        if (local != null) return   // an on-bar page never loads anything else
         val url = intent?.getStringExtra("url")?.trim()?.takeIf { it.isNotEmpty() } ?: return
         if (isLocalHttpUrl(url)) {
             Log.i(TAG, "Loading url from intent extra: $url")
@@ -227,6 +239,7 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
     /** (Re)start the beacon-loss clock while a page is shown; a no-op on the looking page. */
     private fun armBeaconLost() {
         main.removeCallbacks(beaconLost)
+        if (local != null) return   // the page does not depend on the Mac
         if (currentUrl != null && !showingLookingPage) main.postDelayed(beaconLost, BEACON_LOST_MS)
     }
 
@@ -247,12 +260,38 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
 
     private fun onBeacon(url: String) {
         if (isFinishing || isDestroyed) return
+        if (local != null) { fetchConfig(url); return }
         if (url != currentUrl) Log.i(TAG, "Beacon url $url")
         load(url)          // no-op while that page is already up; otherwise (re)load it now
         armBeaconLost()
     }
 
+    /**
+     * On-bar flavors: Deckhand is at the beacon's address, so ask it for `/config.json` (at most every 5 min) and
+     * keep it. The beacon was already checked to name its own sender on the LAN (see [parseBeacon]).
+     */
+    private fun fetchConfig(beaconUrl: String) {
+        val now = System.currentTimeMillis()
+        if (now - configAt < CONFIG_EVERY_MS) return
+        configAt = now
+        val u = Uri.parse(beaconUrl)
+        val base = "${u.scheme}://${u.host}${if (u.port > 0) ":" + u.port else ""}"
+        pool.execute {
+            val cfg = httpJson("$base/config.json", 5_000) ?: return@execute
+            if (BarConfig.save(applicationContext, cfg)) {
+                Log.i(TAG, "New settings from Deckhand at ${u.host}")
+                local?.reloadConfig()
+            }
+        }
+    }
+
     private inner class Client : WebViewClient() {
+        /** On-bar flavors: every request to the private origin is answered by [LocalSite], never the network. */
+        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+            val site = local ?: return null
+            return if (request.url.host == LocalSite.HOST) site.handle(request.url) else null
+        }
+
         /** Kiosk: the page may only navigate within the host it was loaded from. */
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val target = request.url
@@ -439,6 +478,7 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
      */
     private fun isLocalHttpUrl(url: String): Boolean {
         val uri = try { Uri.parse(url) } catch (_: Exception) { return false }
+        if (local != null && uri.scheme == "https" && uri.host == LocalSite.HOST) return true
         if (!uri.scheme.isHttpScheme()) return false
         val host = uri.host ?: return false
         val parts = host.split('.')

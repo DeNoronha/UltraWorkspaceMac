@@ -71,7 +71,7 @@ extension AppModel {
 
     func barAppVersion(_ page: String) -> String? { barApps.first { $0.packageName == BarPages.package(for: page) }?.versionName }
     /// Version of the APKs shipped with this build — keep in step with android/DeckhandMonitor/app/build.gradle.kts.
-    nonisolated static let barAppsVersion = "1.8"
+    nonisolated static let barAppsVersion = "1.9"
     /// The bar's copy is older than the one shipped with Deckhand.
     func barAppNeedsUpdate(_ page: String) -> Bool {
         guard let v = barAppVersion(page) else { return false }
@@ -104,6 +104,7 @@ extension AppModel {
         let ok = out.contains("Success")
         if ok {
             barAppError = nil
+            barPages.repushConfig()   // a freshly installed on-bar app gets its settings within 10 s
             say("\(entry.label) \(Self.barAppsVersion) is on the bar — add its card on the CoreBar page if it is not there yet.")
         } else {
             _ = fail("Install of \(entry.label) failed: \(out.trimmingCharacters(in: .whitespacesAndNewlines))")

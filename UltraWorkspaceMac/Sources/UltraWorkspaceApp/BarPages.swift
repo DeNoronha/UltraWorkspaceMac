@@ -7,12 +7,16 @@ import UltraBarKit
 /// need fresh on its own cadence (crypto and weather every few minutes, calendar every minute, Claude
 /// sessions and Music every 2 s) so a request never waits on the network.
 ///
-/// Routes: `/<page>` (html), `/<page>/data.json`, `/music/art.jpg`, `/music/cmd/<play|next|previous>`, `/flights/tile/z/x/y.png`, `/tasks/done/<id>`.
+/// Routes: `/config.json` (settings for the on-bar apps), `/<page>` (html), `/<page>/data.json`, `/music/art.jpg`, `/music/cmd/<play|next|previous>`, `/flights/tile/z/x/y.png`, `/tasks/done/<id>`.
 @MainActor
 final class BarPages {
     nonisolated static let pages = ["monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
+    /// Pages whose bar app (1.9 and later) fetches its own data on the bar: the APK carries the page and the feeds,
+    /// and reads only `/config.json` from this Mac. Their feeds here run only while a browser on the LAN has the
+    /// page open (see `wanted`), so they cost this Mac nothing in normal use.
+    nonisolated static let onBar: Set<String> = ["flights", "crypto", "weather", "sky", "news", "verse"]
 
     private var claude: [String: Any] = ["sessions": [], "tokens": "", "active": 0, "waiting": 0]
     private var crypto: [String: Any] = ["coins": []]
@@ -30,6 +34,13 @@ final class BarPages {
     /// Seconds since a page last asked for its data (nil: never) — `AppModel.musicWanted` slows the Music poll on it.
     func secondsSinceHit(_ page: String) -> TimeInterval? { lastHit[page].map { Date().timeIntervalSince($0) } }
     private var tasks: [Task<Void, Never>] = []
+    /// False for an on-bar page nobody has asked for in ten minutes: its feed then idles.
+    private func wanted(_ page: String) -> Bool {
+        guard Self.onBar.contains(page) else { return true }
+        return lastHit[page].map { Date().timeIntervalSince($0) < 600 } ?? false
+    }
+    /// What the on-bar apps need from this Mac, at most every few minutes: where, which units, which coins.
+    private var barConfig: [String: Any] = [:]
 
     /// The resource self-check reports once per launch, not on every settings change that restarts the feeds.
     private static var reportedMissing = false
@@ -41,6 +52,7 @@ final class BarPages {
             model.say("Bar pages missing from the app's resource bundle: \(Self.missingResources.joined(separator: ", ")). Those pages show 'Page missing' on the bar; rebuild with packaging/make-app.sh.")
         }
         startFeeds(model: model, settings: settings)
+        startConfigFeed(model: model, settings: settings)
         tasks.append(Task { [weak self] in   // Claude sessions + Music: 2 s
             while !Task.isCancelled {
                 // Low priority and incremental (ClaudeUsage.snapshot): this must never crowd out the link.
@@ -64,6 +76,7 @@ final class BarPages {
         })
         tasks.append(Task { [weak self] in   // crypto: 2 min
             while !Task.isCancelled {
+                if let s = self, !s.wanted("crypto") { try? await Task.sleep(nanoseconds: 5_000_000_000); continue }
                 let ids = settings.cryptoCoinsConfigured, cur = settings.cryptoCurrency
                 let coins = await CryptoStats.fetch(ids: ids, currency: cur)
                 var out: [[String: Any]] = []
@@ -80,6 +93,7 @@ final class BarPages {
         })
         tasks.append(Task { [weak self] in   // weather: 15 min
             while !Task.isCancelled {
+                if let s = self, !s.wanted("weather") { try? await Task.sleep(nanoseconds: 5_000_000_000); continue }
                 let metric = settings.units == .metric
                 if let loc = try? await model.resolveLocation(settings: settings),
                    let now = try? await OpenMeteo.current(latitude: loc.lat, longitude: loc.lon, metric: metric, placeName: loc.name),
@@ -124,6 +138,7 @@ final class BarPages {
             var routes: [String: Flights.Route?] = [:]
             while !Task.isCancelled {
                 guard let self else { return }
+                if !self.wanted("flights") { try? await Task.sleep(nanoseconds: 5_000_000_000); continue }
                 let open = self.lastHit["flights"].map { Date().timeIntervalSince($0) < 60 } ?? false
                 let radius = Double(max(1, settings.flightsRadiusKm))
                 if let loc = try? await model.resolveLocation(settings: settings) {
@@ -153,6 +168,7 @@ final class BarPages {
         tasks.append(Task { [weak self] in   // sun & moon: every minute, computed locally
             while !Task.isCancelled {
                 guard let self else { return }
+                if !self.wanted("sky") { try? await Task.sleep(nanoseconds: 5_000_000_000); continue }
                 if let loc = try? await model.resolveLocation(settings: settings) {
                     let now = Date()
                     let s = SkyMath.sunDay(at: now, lat: loc.lat, lon: loc.lon), m = SkyMath.moonInfo(at: now, lat: loc.lat, lon: loc.lon)
@@ -171,6 +187,7 @@ final class BarPages {
         tasks.append(Task { [weak self] in   // headlines: every 10 min
             while !Task.isCancelled {
                 guard let self else { return }
+                if !self.wanted("news") { try? await Task.sleep(nanoseconds: 5_000_000_000); continue }
                 let src = NewsFeed.source(settings.newsSource)
                 if let items = try? await NewsFeed.fetch(src, limit: 14) {
                     self.news = ["source": src.name, "at": Int(Date().timeIntervalSince1970),
@@ -187,6 +204,7 @@ final class BarPages {
             var have = ""
             while !Task.isCancelled {
                 guard let self else { return }
+                if !self.wanted("verse") { try? await Task.sleep(nanoseconds: 5_000_000_000); continue }
                 let ref = DailyVerse.reference(for: Date())
                 if ref != have, let v = try? await DailyVerse.fetch(reference: ref) {
                     have = ref
@@ -221,6 +239,67 @@ final class BarPages {
                 }
             }
         })
+    }
+
+    /// The bar apps' configuration (v2), owned by Deckhand: one document per bar, a section per app.
+    ///
+    ///     {"v":2, "location":{"lat","lon","place"}, "units":{"metric","clock24h"},
+    ///      "apps":{"flights":{"radiusKm"}, "crypto":{"coins":[…],"currency"}, "news":{"source"}, "weather":{}, "sky":{}, "verse":{}}}
+    ///
+    /// An app section may carry its own `location` to override the shared one. Deckhand pushes the document to the
+    /// on-bar apps over the debug bridge whenever it changes (`am broadcast … --es config64`, accepted only from the
+    /// shell user), and serves it as `/config.json` so an app also picks it up from the beacon when ADB is off.
+    /// The apps keep their copy and run without the Mac. Position rounded to three decimals (about 100 m).
+    static func configDocument(settings: AppSettings, location: (lat: Double, lon: Double, name: String)?) -> [String: Any] {
+        var doc: [String: Any] = [
+            "v": 2,
+            "units": ["metric": settings.units == .metric, "clock24h": settings.clock24h],
+            "apps": [
+                "flights": ["radiusKm": max(1, settings.flightsRadiusKm)],
+                "crypto": ["coins": settings.cryptoCoinsConfigured, "currency": settings.cryptoCurrency.lowercased()],
+                "news": ["source": settings.newsSource],
+                "weather": [String: Any](), "sky": [String: Any](), "verse": [String: Any](),
+            ] as [String: Any],
+        ]
+        if let l = location { doc["location"] = ["lat": (l.lat * 1000).rounded() / 1000, "lon": (l.lon * 1000).rounded() / 1000, "place": l.name] }
+        return doc
+    }
+
+    /// Keeps `/config.json` current (every 10 s; the location is cached by the model) and pushes a changed
+    /// document to the bar. A push that fails (ADB off) is retried on the next change or after 30 minutes.
+    private var pushedConfig: Data?
+    private var pushedAt = Date.distantPast
+    /// Forget what was pushed, so the next round pushes again (after a bar app was installed).
+    func repushConfig() { pushedConfig = nil }
+
+    private func startConfigFeed(model: AppModel, settings: AppSettings) {
+        tasks.append(Task { [weak self] in
+            while !Task.isCancelled {
+                let loc = try? await model.resolveLocation(settings: settings)
+                let doc = Self.configDocument(settings: settings, location: loc)
+                let data = (try? JSONSerialization.data(withJSONObject: doc, options: [.sortedKeys])) ?? Data()
+                guard let self else { return }
+                self.barConfig = doc
+                if data != self.pushedConfig || Date().timeIntervalSince(self.pushedAt) > 1800 {
+                    if await Self.pushConfig(data, model: model) { self.pushedConfig = data; self.pushedAt = Date() }
+                    else { self.pushedAt = Date() }   // ADB off: try again on the next change or in 30 min
+                }
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+            }
+        })
+    }
+
+    /// `am broadcast` of the document to each on-bar app (base64, so no shell quoting). `-f 32` is
+    /// FLAG_INCLUDE_STOPPED_PACKAGES: an app that was installed but never opened is "stopped" and would not get it
+    /// (seen on the bar 2026-11-06). True when the bar took it.
+    private static func pushConfig(_ data: Data, model: AppModel) async -> Bool {
+        guard let adb = AdbBridge.find(), let ip = model.ipForSelected() else { return false }
+        let b = AdbBridge(path: adb, ip: ip)
+        guard await b.connect() else { return false }
+        let b64 = data.base64EncodedString()
+        let cmd = onBar.sorted().map { "am broadcast -f 32 -a nl.denoronha.deckhand.CONFIG -p \(package(for: $0)) --es config64 \(b64)" }.joined(separator: "; ")
+        let out = await b.shell(cmd)
+        return out.contains("Broadcast completed")
     }
 
     nonisolated static func linearDict(_ r: LinearTasks.Result) -> [String: Any] {
@@ -268,6 +347,7 @@ final class BarPages {
     nonisolated func route(_ path: String, model: AppModel) -> MonitorServer.Response? {
         let parts = path.split(separator: "/").map(String.init)
         guard let page = parts.first else { return .html(Self.html("monitor")) }
+        if parts == ["config.json"] { return .json(DispatchQueue.main.sync { self.barConfig }) }
         guard Self.pages.contains(page) else { return nil }
         if parts.count == 1 { return .html(Self.html(page)) }
         if parts[1] == "data.json" { return .json(DispatchQueue.main.sync { self.lastHit[page] = Date(); return self.data(page) }) }
@@ -370,7 +450,8 @@ final class BarPages {
         guard let shell = resources["shell.html"] else { return missing("shell.html") }
         let js: String
         if script.isEmpty { js = "" } else if let s = resources[script] { js = s } else { return missing(script) }
-        return shell.replacingOccurrences(of: "{{TITLE}}", with: title).replacingOccurrences(of: "\n{{JS}}\n", with: "\n" + js + "\n")
+        return shell.replacingOccurrences(of: "{{TITLE}}", with: title).replacingOccurrences(of: "{{WAIT}}", with: "Waiting for the Mac…")
+            .replacingOccurrences(of: "\n{{JS}}\n", with: "\n" + js + "\n")
     }
 
     nonisolated static func missing(_ name: String) -> String {
