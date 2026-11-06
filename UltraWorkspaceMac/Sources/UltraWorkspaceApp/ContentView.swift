@@ -6,6 +6,12 @@ struct ContentView: View {
     @StateObject private var contacts = ContactStore()
     @StateObject private var settings = AppSettings()
 
+    /// Resume timed switching if it was on when the app last quit, as soon as the bar's VivoCube is known.
+    private func resumeCubeRotation() {
+        guard model.vivoCubeSerial != nil, settings.vivoRotationOn, settings.vivoSwitchMode == .timed, !model.themeRunning else { return }
+        model.sendToCube(settings: settings)
+    }
+
     var body: some View {
         NavigationSplitView {
             SidebarView()
@@ -24,9 +30,11 @@ struct ContentView: View {
             // The cube keeps its last package across restarts: let DotKey "next" wrap at that count.
             model.lastPublishedVivoLayers = max(model.lastPublishedVivoLayers, settings.vivoLayerCount)
             model.startMusicPolling(settings: settings); model.startDailyCoverRefresh(settings: settings); model.startClaudeWatch(settings: settings); model.startBarDataServer(settings: settings); model.startPresence(settings: settings)
-            // Resume timed switching if it was on when the app last quit.
-            if settings.vivoRotationOn, settings.vivoSwitchMode == .timed, !model.themeRunning { model.sendToCube(settings: settings) }
+            resumeCubeRotation()
         }
+        // The cube's serial is only known once the link has listed the bar's modules, which is after onAppear on
+        // a fresh launch: resume then (and again if the cube reappears after the bar restarted).
+        .onChange(of: model.vivoCubeSerial) { _ in resumeCubeRotation() }
         .toolbar {
             // The link to the bar, right of the window title: the same badge on every page.
             ToolbarItem(placement: .status) {
