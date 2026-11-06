@@ -95,7 +95,7 @@ extension AppModel {
         if ok {
             barAppError = nil
             barPages.repushConfig()   // a freshly installed on-bar app gets its settings within 10 s
-            say("\(entry.label) \(Self.barAppsVersion) is on the bar — add its card on the CoreBar page if it is not there yet.")
+            say("\(entry.label) \(Self.barAppsVersion) is on the bar — publish the CoreBar page to show its icon there.")
         } else {
             _ = fail("Install of \(entry.label) failed: \(out.trimmingCharacters(in: .whitespacesAndNewlines))")
         }

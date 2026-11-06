@@ -2,7 +2,7 @@ import SwiftUI
 import UltraBarKit
 
 /// Apps on the bar, laid out like Widgets: the list on the left (Deckhand's own apps, the vendor's
-/// marketplace, the firmware's), the chosen app on the right with an "Installed on the bar" switch and its
+/// marketplace, the firmware's), the chosen app on the right with an "On the bar" switch and its
 /// settings. Deckhand's apps install over ADB; marketplace apps are fetched by the bar itself (APP_MANAGER).
 struct AppsView: View {
     static func barAppIcon(_ page: String) -> String {
@@ -110,6 +110,32 @@ struct AppsView: View {
         }
     }
 
+    /// Put an app's icon on the Deckhand page, or take it off. Installing a Deckhand app puts it on, removing an app
+    /// takes it off, so the page never shows an icon for an app that is not on the bar.
+    private func setIcon(_ cardID: String, _ on: Bool) {
+        if on { if !settings.coreCards.contains(cardID) { settings.coreCards.append(cardID) } }
+        else { settings.coreCards.removeAll { $0 == cardID } }
+    }
+
+    /// The second line under "On the bar": whether the app's icon is on Deckhand's page in the bar's launcher.
+    @ViewBuilder private func iconRow(_ cardID: String, known: Bool) -> some View {
+        let onPage = settings.coreCards.contains(cardID)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                if known {
+                    InstalledToggle(title: "Icon on the Deckhand page", isOn: onPage) { setIcon(cardID, $0) }
+                    if onPage, !settings.deckhandPagePublished { Text("not published yet").font(.caption).foregroundStyle(.orange) }
+                } else {
+                    Text("Press Refresh to see its icon.").font(.caption).foregroundStyle(.secondary)
+                }
+                Button("Open CoreBar page") { model.nav = .coreBarPage }.buttonStyle(.borderless).font(.callout)
+            }
+            Text("The page of cards you swipe through on the bar; tap the icon there to open the app. Without it, the app is still in the bar's app list.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.leading, 20)
+    }
+
     // MARK: Deckhand app
 
     @ViewBuilder private func deckhandDetail(_ app: (page: String, label: String, apk: String)) -> some View {
@@ -119,9 +145,11 @@ struct AppsView: View {
             AppIcon(url: model.barAppIconURL(app.page), fallback: Self.barAppIcon(app.page), size: 48)
         }
         Text(Self.blurb(app.page)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        let cardID = AppModel.appCardPrefix + pkg
         HStack(spacing: 14) {
-            InstalledToggle(title: "Installed on the bar", isOn: installed != nil, busy: busy, disabled: !hasAPK || model.barAppBusy != nil,
+            InstalledToggle(title: "On the bar", isOn: installed != nil, busy: busy, disabled: !hasAPK || model.barAppBusy != nil,
                             note: hasAPK ? nil : "No APK in this build.", confirmOff: "Remove \(app.label) from the bar?") { on in
+                setIcon(cardID, on)
                 if on { model.installBarApp(app.page) } else { model.uninstallBarApp(app.page) }
             }
             if stale, !busy {
@@ -130,20 +158,9 @@ struct AppsView: View {
             }
         }
         if installed != nil {
-            let cardID = AppModel.appCardPrefix + pkg, onPage = settings.coreCards.contains(cardID)
-            HStack(spacing: 10) {
-                if model.coreCard(cardID) != nil {
-                    InstalledToggle(title: "Card on the CoreBar page", isOn: onPage) { on in
-                        if on { settings.coreCards.append(cardID) } else { settings.coreCards.removeAll { $0 == cardID } }
-                    }
-                    if onPage, !settings.deckhandPagePublished { Text("not published yet").font(.caption).foregroundStyle(.orange) }
-                } else {
-                    Text("Press Refresh to see its card.").font(.caption).foregroundStyle(.secondary)
-                }
-                Button("Open CoreBar page") { model.nav = .coreBarPage }.buttonStyle(.borderless).font(.callout)
-            }
+            iconRow(cardID, known: model.coreCard(cardID) != nil)
         } else {
-            Text("Installing goes over the bar's debug bridge (Settings → Debug bridge). Afterwards, put its card on the CoreBar page and publish.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("Installs over the bar's debug bridge (Settings → Debug bridge), with its icon on the Deckhand page.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         Divider()
         appSettings(app.page)
@@ -196,8 +213,9 @@ struct AppsView: View {
         }
         if let s = e.store, !s.summary.isEmpty { Text(s.summary).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
         HStack(spacing: 14) {
-            InstalledToggle(title: "Installed on the bar", isOn: e.installed != nil, busy: busy, disabled: model.appBusy != nil || !model.link.isConnected || e.system || (e.installed == nil && e.store == nil),
+            InstalledToggle(title: "On the bar", isOn: e.installed != nil, busy: busy, disabled: model.appBusy != nil || !model.link.isConnected || e.system || (e.installed == nil && e.store == nil),
                             note: e.system ? "Part of the firmware; it cannot be removed." : nil, confirmOff: "Remove \(e.name) from the bar?") { on in
+                if !on { setIcon(AppModel.appCardPrefix + e.package, false) }
                 if on { model.installApp(e.package, name: e.name) } else { model.uninstallApp(e.package, name: e.name) }
             }
             if update, let s = e.store, !busy {
@@ -210,14 +228,7 @@ struct AppsView: View {
             }
         }
         if let a = e.installed, a.allowProfile {
-            let cardID = AppModel.appCardPrefix + a.packageName, onPage = settings.coreCards.contains(cardID)
-            HStack(spacing: 10) {
-                InstalledToggle(title: "Card on the CoreBar page", isOn: onPage) { on in
-                    if on { settings.coreCards.append(cardID) } else { settings.coreCards.removeAll { $0 == cardID } }
-                }
-                if onPage, !settings.deckhandPagePublished { Text("not published yet").font(.caption).foregroundStyle(.orange) }
-                Button("Open CoreBar page") { model.nav = .coreBarPage }.buttonStyle(.borderless).font(.callout)
-            }
+            iconRow(AppModel.appCardPrefix + a.packageName, known: true)
         }
         if let s = e.store, !s.changeLog.isEmpty {
             Panel("What's new in \(s.versionName)") { Text(s.changeLog).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
