@@ -1,33 +1,42 @@
 import Foundation
 
-/// The names you gave your cmux workspaces, by working directory, so the Claude bar app can show a session under
-/// the name you see in cmux ("Deckhand for UltrabarX") instead of its folder ("UltraWorkspace"). Read with cmux's
-/// own CLI at its fixed path inside the app bundle (never `PATH`), at most every 30 s; empty when cmux is not
-/// installed or not running. Only workspaces with a custom title count.
+/// The cmux workspaces that are open, with the names you gave them, so the Claude bar app can show every open
+/// session under the name you see in cmux ("Deckhand for UltrabarX") instead of its folder ("UltraWorkspace").
+/// Read with cmux's own CLI at its fixed path inside the app bundle (never `PATH`), at most every 30 s; empty when
+/// cmux is not installed or not running, and the Claude app then falls back to the sessions of the last hour.
 enum CmuxNames {
+    struct Workspace: Sendable { let directory: String; let title: String? }
     static let cli = "/Applications/cmux.app/Contents/Resources/bin/cmux"
-    nonisolated(unsafe) private static var cache: (at: Date, names: [String: String]) = (.distantPast, [:])
+    nonisolated(unsafe) private static var cache: (at: Date, list: [Workspace]) = (.distantPast, [])
     private static let lock = NSLock()
 
-    static func byDirectory() -> [String: String] {
+    /// The open workspaces in cmux's order (every window), each directory once.
+    static func workspaces() -> [Workspace] {
         lock.lock(); let c = cache; lock.unlock()
-        if Date().timeIntervalSince(c.at) < 30 { return c.names }
-        let names = read()
-        lock.lock(); cache = (Date(), names); lock.unlock()
-        return names
+        if Date().timeIntervalSince(c.at) < 30 { return c.list }
+        let list = read()
+        lock.lock(); cache = (Date(), list); lock.unlock()
+        return list
     }
 
-    private static func read() -> [String: String] {
-        guard FileManager.default.isExecutableFile(atPath: cli) else { return [:] }
+    /// Custom workspace titles by directory.
+    static func byDirectory() -> [String: String] {
         var out: [String: String] = [:]
+        for w in workspaces() { if let t = w.title, out[w.directory] == nil { out[w.directory] = t } }
+        return out
+    }
+
+    private static func read() -> [Workspace] {
+        guard FileManager.default.isExecutableFile(atPath: cli) else { return [] }
+        var out: [Workspace] = [], seen = Set<String>()
         for window in windows() {
             guard let data = run(["workspace", "list", "--window", window, "--json"]),
                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let list = obj["workspaces"] as? [[String: Any]] else { continue }
-            for w in list where (w["has_custom_title"] as? Bool) == true {
-                if let dir = w["current_directory"] as? String, let title = w["custom_title"] as? String, !title.isEmpty, out[dir] == nil {
-                    out[dir] = title
-                }
+            for w in list {
+                guard let dir = w["current_directory"] as? String, !dir.isEmpty, seen.insert(dir).inserted else { continue }
+                let title = (w["has_custom_title"] as? Bool) == true ? (w["custom_title"] as? String).flatMap { $0.isEmpty ? nil : $0 } : nil
+                out.append(Workspace(directory: dir, title: title))
             }
         }
         return out

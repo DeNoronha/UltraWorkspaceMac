@@ -49,7 +49,17 @@ final class BarPages {
             while !Task.isCancelled {
                 if let s = self, !s.wanted("claude"), !s.wanted("music") { try? await Task.sleep(nanoseconds: 2_000_000_000); continue }
                 // Low priority and incremental (ClaudeUsage.snapshot): this must never crowd out the link.
-                let s = await Task.detached(priority: .utility) { ClaudeUsage.sessions() }.value
+                // Every Claude session open in cmux (its newest transcript per workspace), else the last hour's.
+                let s = await Task.detached(priority: .utility) { () -> [ClaudeUsage.Session] in
+                    let open = CmuxNames.workspaces()
+                    guard !open.isEmpty else { return ClaudeUsage.sessions() }
+                    var seen = Set<String>()
+                    return open.compactMap { w in
+                        guard var s = ClaudeUsage.latestSession(cwd: w.directory), seen.insert(s.id).inserted else { return nil }
+                        if let t = w.title { s.project = t }
+                        return s
+                    }
+                }.value
                 let cmux = await Task.detached(priority: .utility) { CmuxNames.byDirectory() }.value
                 let snap = await Task.detached(priority: .utility) { ClaudeUsage.snapshot() }.value
                 // Music's state comes from the model's own 3 s poll (and is refreshed at once by the page's
@@ -57,8 +67,15 @@ final class BarPages {
                 let np = model.nowPlaying
                 guard let self else { return }
                 let now = Date()
-                self.claude = ["sessions": s.prefix(6).map { ["project": cmux[$0.cwd] ?? $0.project, "title": $0.title, "state": $0.state.rawValue, "ago": Int(now.timeIntervalSince($0.lastAt)), "last": $0.lastText] },
-                               "tokens": ClaudeUsage.shortTokens(snap.todayTokens), "active": snap.activeSessions, "waiting": s.filter { $0.state != .working }.count]
+                // Waiting ones first, the most recent first; then the working ones, most recent first.
+                let ordered = s.sorted { a, b in
+                    let wa = a.state != .working, wb = b.state != .working
+                    return wa != wb ? wa : a.lastAt > b.lastAt
+                }
+                let budget = settings.claudeDailyBudget
+                self.claude = ["sessions": ordered.prefix(12).map { ["project": cmux[$0.cwd] ?? $0.project, "title": $0.title, "state": $0.state.rawValue, "ago": Int(now.timeIntervalSince($0.lastAt)), "last": $0.lastText] },
+                               "tokens": ClaudeUsage.shortTokens(snap.todayTokens), "tokensRaw": snap.todayTokens, "budget": budget,
+                               "plan": settings.claudePlan.title, "active": snap.activeSessions, "waiting": s.filter { $0.state != .working }.count]
                 let key = np.title + "|" + np.artist + "|" + np.album
                 if np.hasTrack, self.art?.key != key {
                     let jpeg = AppleMusic.currentArtwork().flatMap { Self.jpeg($0, side: 240) }

@@ -87,6 +87,17 @@ if let i = CommandLine.arguments.firstIndex(of: "cubewifi"), CommandLine.argumen
 }
 
 // `kitcheck readprop <ip> <serial> <deviceId> <propertyId>` — raw MODULE_PROPERTY_READ reply.
+if let i = CommandLine.arguments.firstIndex(of: "claude-session"), CommandLine.arguments.count > i + 1 {
+    // kitcheck claude-session <cwd>…: the newest Claude Code session per directory, as the Claude bar app sees it.
+    for cwd in CommandLine.arguments[(i + 1)...] {
+        let t0 = Date()
+        if let s = ClaudeUsage.latestSession(cwd: cwd) {
+            print("\(cwd): \(s.state.rawValue) \(s.project) | \(s.title) | \(Int(Date().timeIntervalSince(s.lastAt))) s ago (\(String(format: "%.2f", Date().timeIntervalSince(t0))) s)")
+        } else { print("\(cwd): none") }
+    }
+    exit(0)
+}
+
 if let i = CommandLine.arguments.firstIndex(of: "readprop"), CommandLine.arguments.count > i + 4 {
     let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2]
     let dev = Int(CommandLine.arguments[i + 3]) ?? 256, prop = Int(CommandLine.arguments[i + 4]) ?? 7

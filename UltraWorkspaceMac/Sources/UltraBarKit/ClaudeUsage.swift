@@ -178,8 +178,34 @@ public enum ClaudeUsage {
         for case let url as URL in en {
             guard url.pathExtension == "jsonl", !url.path.contains("/subagents/"),
                   let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
-                  now.timeIntervalSince(mod) <= window else { continue }
-            guard let h = try? FileHandle(forReadingFrom: url) else { continue }
+                  now.timeIntervalSince(mod) <= window,
+                  let session = readSession(url, modified: mod, iso: iso, isoPlain: isoPlain),
+                  now.timeIntervalSince(session.lastAt) <= window else { continue }
+            out.append(session)
+        }
+        return out.sorted { $0.lastAt > $1.lastAt }
+    }
+
+
+    /// The newest Claude Code session started in `cwd` (any age), or nil when there is none. Claude keeps each
+    /// project's transcripts in `~/.claude/projects/<cwd with every non-alphanumeric character as "-">/`.
+    public static func latestSession(cwd: String) -> Session? {
+        let folder = String(cwd.map { $0.isLetter || $0.isNumber ? $0 : "-" })
+        let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/projects/\(folder)", isDirectory: true)
+        guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return nil }
+        let newest = files.filter { $0.pathExtension == "jsonl" }
+            .compactMap { u in (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate.map { (u, $0) } }
+            .max { $0.1 < $1.1 }
+        guard let (url, mod) = newest else { return nil }
+        let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoPlain = ISO8601DateFormatter(); isoPlain.formatOptions = [.withInternetDateTime]
+        return readSession(url, modified: mod, iso: iso, isoPlain: isoPlain)
+    }
+
+    /// One transcript: name, title, state and the time of its last real message. Reads the first 8 KB and the last 64 KB.
+    private static func readSession(_ url: URL, modified: Date, iso: ISO8601DateFormatter, isoPlain: ISO8601DateFormatter) -> Session? {
+            let mod = modified
+            guard let h = try? FileHandle(forReadingFrom: url) else { return nil }
             let headData = (try? h.read(upToCount: 8_000)) ?? Data()
             let size = (try? h.seekToEnd()) ?? 0
             try? h.seek(toOffset: size > 64_000 ? size - 64_000 : 0)
@@ -218,13 +244,10 @@ public enum ClaudeUsage {
                 }
             }
             let at = lastAt ?? mod
-            guard now.timeIntervalSince(at) <= window else { continue }
             let folder = cwd.isEmpty ? url.deletingLastPathComponent().lastPathComponent.split(separator: "-").last.map(String.init) ?? "?" : (cwd as NSString).lastPathComponent
             let name = names?.custom ?? "", ai = names?.ai ?? ""
-            out.append(Session(id: id, cwd: cwd, project: name.isEmpty ? folder : name, title: trim(ai.isEmpty ? title : ai, 70),
-                               state: state, lastAt: at, lastText: trim(last, 140)))
-        }
-        return out.sorted { $0.lastAt > $1.lastAt }
+            return Session(id: id, cwd: cwd, project: name.isEmpty ? folder : name, title: trim(ai.isEmpty ? title : ai, 70),
+                           state: state, lastAt: at, lastText: trim(last, 140))
     }
 
     private static func parse(_ line: Substring) -> [String: Any]? {
