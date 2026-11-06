@@ -3,7 +3,7 @@
 //
 //   swift tools/make-icons.swift            (run from android/DeckhandMonitor)
 //
-// Per flavor it writes, under app/src/<flavor>/res/:
+// Per flavor it writes, under app/src/<flavor>/res/ (or the flavor's own resDir, e.g. home/src/main/res for Deckhand Home):
 //   mipmap-<density>/ic_launcher_background.png   adaptive-icon background, 108 dp canvas: vertical two-tone
 //                                                 gradient with a soft radial highlight top-left
 //   mipmap-<density>/ic_launcher_foreground.png   adaptive-icon foreground, 108 dp canvas: the glyph with a soft
@@ -21,6 +21,8 @@ import Foundation
 
 struct Flavor {
     let name: String
+    /// Where the icons go; nil = app/src/<name>/res (a product flavor of the kiosk app).
+    var resDir: String? = nil
     let top: String             // gradient top colour, hex rrggbb (lighter)
     let bottom: String          // gradient bottom colour, hex rrggbb (darker)
     let glyphColor: String      // hex rrggbb (only the hand-drawn claude glyph uses it)
@@ -29,6 +31,7 @@ struct Flavor {
 
 enum Glyph {
     case claude                 // hand-drawn starburst
+    case house                  // hand-drawn house (Deckhand Home)
     case fluent(String)         // file name in tools/fluent/
 }
 
@@ -44,6 +47,8 @@ let flavors: [Flavor] = [
     Flavor(name: "news",     top: "b8552f", bottom: "6e2710", glyphColor: "ffffff", glyph: .fluent("rolled-up_newspaper_3d.png")),
     Flavor(name: "verse",    top: "9b4fd6", bottom: "5b1a92", glyphColor: "ffffff", glyph: .fluent("open_book_3d.png")),
     Flavor(name: "tasks",    top: "7d87ea", bottom: "4a52b8", glyphColor: "ffffff", glyph: .fluent("check_mark_button_3d.png")),
+    // Deckhand Home is its own Gradle module (home/), not a flavor of the kiosk app.
+    Flavor(name: "home", resDir: "home/src/main/res", top: "4b5a78", bottom: "1c2436", glyphColor: "ffffff", glyph: .house),
 ]
 
 // density name -> scale factor (mdpi = 1 px per dp)
@@ -183,6 +188,23 @@ func drawClaude(_ cg: CGContext, color tint: CGColor) {
     cg.restoreGState()
 }
 
+/// A house: pitched roof with a chimney, body with a door. Unit space 0...1, (0,0) top-left.
+func drawHouse(_ cg: CGContext, color tint: CGColor) {
+    cg.saveGState()
+    cg.setFillColor(tint); cg.setStrokeColor(tint)
+    cg.setLineWidth(0.11); cg.setLineJoin(.round); cg.setLineCap(.round)
+    // roof: stroked chevron
+    cg.move(to: P(0.08, 0.50)); cg.addLine(to: P(0.50, 0.12)); cg.addLine(to: P(0.92, 0.50)); cg.strokePath()
+    // chimney
+    cg.fill(CGRect(x: 0.66, y: 0.14, width: 0.12, height: 0.22))
+    // body
+    cg.addPath(rounded(CGRect(x: 0.20, y: 0.46, width: 0.60, height: 0.44), 0.04)); cg.fillPath()
+    // door, cut out of the body
+    cg.setBlendMode(.clear)
+    cg.addPath(rounded(CGRect(x: 0.42, y: 0.62, width: 0.16, height: 0.28), 0.03)); cg.fillPath()
+    cg.restoreGState()
+}
+
 /// Draws the Fluent artwork centred in `box` with high-quality scaling. It is sized by area (a square emoji fills the
 /// box; a wide one such as the airplane grows a little so it carries the same visual weight), with its long side
 /// capped at 112 % of the box so nothing leaves the adaptive-icon safe zone.
@@ -208,6 +230,10 @@ func drawGlyph(_ flavor: Flavor, in box: CGRect, _ cg: CGContext) {
         cg.translateBy(x: box.minX, y: box.maxY)
         cg.scaleBy(x: box.width, y: -box.height)
         drawClaude(cg, color: color(flavor.glyphColor))
+    case .house:
+        cg.translateBy(x: box.minX, y: box.maxY)
+        cg.scaleBy(x: box.width, y: -box.height)
+        drawHouse(cg, color: color(flavor.glyphColor))
     }
     cg.endTransparencyLayer()
     cg.restoreGState()
@@ -234,7 +260,7 @@ func composed(_ flavor: Flavor, px: Int) -> NSBitmapImageRep {
 }
 
 for flavor in flavors {
-    let flavorRes = "\(resRoot)/\(flavor.name)/res"
+    let flavorRes = flavor.resDir.map { "\(projectDir)/\($0)" } ?? "\(resRoot)/\(flavor.name)/res"
     for (density, scale) in densities {
         let px = Int(adaptiveDp * scale)
         let canvas = CGRect(x: 0, y: 0, width: CGFloat(px), height: CGFloat(px))

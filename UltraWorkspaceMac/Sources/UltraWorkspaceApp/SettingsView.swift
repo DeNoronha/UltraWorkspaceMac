@@ -146,6 +146,42 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Bar home screen") {
+                    let h = model.barHome, adbOK = model.adbStatus.wifi == true && !model.adbStatus.unauthorized
+                    Text("What the bar shows when no app is open. Out of the box that is the bar's own launcher with its card pages. Deckhand Home is a plain home screen for the strip: the clock, whether Deckhand is reachable, one tile per installed app, and Settings and the bar's own launcher always within reach. Both keep running; switching is one press either way.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    LabeledContent("Deckhand Home on the bar") {
+                        if let i = h.installed { Text("\(i.name) (\(i.code))" + (h.updateAvailable ? " · \(AppModel.homeVersion) available" : "")) }
+                        else if h.checkedAt != nil { Text("Not installed").foregroundStyle(.secondary) }
+                        else { Text("Not checked yet").foregroundStyle(.secondary) }
+                    }
+                    LabeledContent("Current home screen") {
+                        if h.deckhandIsHome { Text("Deckhand Home") }
+                        else if h.vendorIsHome { Text("The bar's own launcher") }
+                        else if let c = h.current { Text(c).font(.callout) }
+                        else { Text("—").foregroundStyle(.secondary) }
+                    }
+                    if let m = h.message { Text(m).font(.callout).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
+                    HStack {
+                        Button { model.checkBarHome() } label: { Label("Check", systemImage: "arrow.clockwise") }
+                            .disabled(model.barHomeBusy != nil || !adbOK)
+                            .help(adbOK ? "Ask the bar what it has and which home screen it uses" : "Needs the debug bridge (above)")
+                        Button { model.installBarHome() } label: { Label(h.installed == nil ? "Install Deckhand Home" : h.updateAvailable ? "Update to \(AppModel.homeVersion)" : "Reinstall", systemImage: "arrow.down.circle") }
+                            .disabled(model.barHomeBusy != nil || !adbOK)
+                            .help("adb install of the DeckhandHome.apk shipped with this build")
+                        Button { model.setBarHome(deckhand: true) } label: { Label("Use Deckhand Home", systemImage: "house") }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.barHomeBusy != nil || !adbOK || h.installed == nil || h.deckhandIsHome)
+                            .help("cmd package set-home-activity on the bar; the bar's own launcher keeps running")
+                        Button { model.setBarHome(deckhand: false) } label: { Label("Use the bar's own home", systemImage: "arrow.uturn.backward") }
+                            .disabled(model.barHomeBusy != nil || !adbOK || h.vendorIsHome)
+                            .help("Back to the launcher that came with the bar")
+                        if let b = model.barHomeBusy { ProgressView().controlSize(.small); Text(b).font(.callout).foregroundStyle(.secondary) }
+                    }
+                    Text("With Deckhand Home in front, the bar's card pages are one tap away on its UltraBar tile, and the bar's Back key returns to Deckhand Home from any app. The screen timeout above still applies.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+
                 Section("Connecting") {
                     ConnectionHelp()
                 }

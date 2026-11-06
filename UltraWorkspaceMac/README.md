@@ -73,7 +73,7 @@ Deckhand is a single window with a sidebar:
 - **Sensors** — **SenseCube** live readings.
 - **Library** — four pages laid out alike (a list on the left, the chosen item with a switch and its settings on the right): **Installed** (everything in use on the bar and the screens, **Update** / **Remove**, **Update all**), **Widgets** (**For the VivoCube** and **For the CoreBar**; preview + settings; switches **On the cube** / **On the CoreBar page**), **Apps** (**Deckhand apps**, **Marketplace**, **Built into the firmware**; switch **Installed on the bar**, **Card on the CoreBar page**, the app's settings), **Screensavers** (switch **Installed on the bar**, **Use this screensaver**, the bar's screensaver timing) — plus **People**.
 - **Health** — **Status** (device truth, worst first, one button per problem, **Copy report**) and **Logs**.
-- **Deckhand** — **Settings** (the bar, **Bar screen**, **Debug bridge (ADB)** as a three-step checklist, **Bar software**: the launcher and bridge updated from Sanytron's GitHub release over ADB, connection help, what is set on the bar itself) and **About Deckhand**.
+- **Deckhand** — **Settings** (the bar, **Bar screen**, **Debug bridge (ADB)** as a three-step checklist, **Bar software**: the launcher and bridge updated from Sanytron's GitHub release over ADB, **Bar home screen**: Deckhand Home installed and made the bar's home screen, or the bar's own launcher restored, connection help, what is set on the bar itself) and **About Deckhand**.
 - Every device page carries a status strip (what is the device showing? last sent? one fault + one fix). The toolbar shows Deckhand's last action, the link badge ("Connected · n requests answered") and the age of the bar's last request; **Activity** (toolbar) opens Deckhand's own log.
 
 ## Build & run
@@ -91,7 +91,7 @@ open dist/Deckhand.app
 bash packaging/make-dmg.sh                # produces dist/Deckhand.dmg (app + Applications shortcut + manual); signs and notarizes when the identity and credentials exist
 ```
 
-The bar apps' APKs come from the Android project (`android/DeckhandMonitor/README.md`); `make-app.sh` copies whatever is in `dist/bar-apps/` into the app bundle, and the Apps page installs them from there.
+The bar apps' APKs come from the Android project (`android/DeckhandMonitor/README.md`; the `home/` module there is Deckhand Home, a HOME-category launcher with one tile per installed app, installed and chosen from Settings → Bar home screen); `make-app.sh` copies whatever is in `dist/bar-apps/` into the app bundle, and the Apps page installs them from there.
 
 First launch: press **Look for CoreBars**, then **Pair** next to your CoreBar and tap *Approve* on the CoreBar within 30 seconds. macOS may ask once for **Local Network** permission — allow it.
 
@@ -185,7 +185,7 @@ Mirrors [`docs/ROADMAP.md`](docs/ROADMAP.md); that file is authoritative.
 - **CoreBar pages** via `BATCH_SAVE_PROFILE` (1108): list / switch / publish a Deckhand page made of the bar's own cards (SenseCube, Mac stats, buttons, Open \<app\>) with our image as the clock-card cover; the Deckhand page is the bar's start page — confirmed on hardware.
 - The persistent **`PUSH_MESSAGE` (1000000)** link: Mac stats for the bar's cards, **KnobKey → Mac volume (turn) and play/pause (press)**, **DotKey → cube cards and pages** (fixed bindings, written with every publish).
 - **Full-width pages on the bar** (`android/DeckhandMonitor`, eleven flavors, bar apps 1.8, 2026-11-04) — Monitor, Claude, Crypto, Weather, Music, Calendar, Flights, Sun & Moon, Headlines, Verse and Tasks: tiny Android kiosk apps (one card each) that show full-width live pages served by Deckhand (`BarPages`, `MonitorServer` :7432). They find Deckhand through a UDP beacon on port 5320 (broadcast + unicast) and only load pages on a private LAN address; the Apps page installs them over Wi-Fi ADB.
-- **Library pages** (Installed / Widgets / Apps / Screensavers), marketplace apps and screensavers installed, updated and removed from Deckhand, **Settings → Debug bridge** (three-step checklist: adb on the Mac, WiFi ADB on at the bar, keep on after reboots), **Settings → Bar software** (launcher and bridge from the vendor's GitHub release, package and version checked in the APK before `adb install`), the **presence-aware bar screen** (Settings → Bar screen, over ADB: on while the SenseCube sees someone, off after N minutes without anyone).
+- **Library pages** (Installed / Widgets / Apps / Screensavers), marketplace apps and screensavers installed, updated and removed from Deckhand, **Settings → Debug bridge** (three-step checklist: adb on the Mac, WiFi ADB on at the bar, keep on after reboots), **Settings → Bar home screen** (Deckhand Home 1.0, 2026-11-06: a tile-per-app home screen for the strip, chosen with `cmd package set-home-activity`, reversible), **Settings → Bar software** (launcher and bridge from the vendor's GitHub release, package and version checked in the APK before `adb install`), the **presence-aware bar screen** (Settings → Bar screen, over ADB: on while the SenseCube sees someone, off after N minutes without anyone).
 - A Developer-ID signed and notarized release (v0.2.0).
 
 **Pending**

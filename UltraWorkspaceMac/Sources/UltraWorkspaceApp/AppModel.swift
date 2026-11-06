@@ -61,6 +61,9 @@ final class AppModel: ObservableObject {
     @Published var barSoftware = BarSoftwareStatus()
     /// What the update is doing right now ("Downloading LineOS.V1.0.9.9.apk…"), nil when idle.
     @Published var barSoftwareBusy: String?
+    /// Settings → Bar home screen (AppModel+Home).
+    @Published var barHome = BarHomeStatus()
+    @Published var barHomeBusy: String?
     @Published var screensaver: CoreBarSession.ScreensaverConfig?
     // Persistent link ("Mac agent") that answers the CoreBar's push queries. Wording lives in `LinkBadge`.
     @Published var link: CoreBarLink.State = .stopped

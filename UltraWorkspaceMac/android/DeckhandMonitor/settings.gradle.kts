@@ -13,3 +13,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "DeckhandMonitor"
 include(":app")
+include(":home")
