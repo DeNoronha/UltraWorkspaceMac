@@ -61,21 +61,29 @@ final class BarPages {
                     }
                 }.value
                 let cmux = await Task.detached(priority: .utility) { CmuxNames.byDirectory() }.value
+                let cmuxStatus = await Task.detached(priority: .utility) { CmuxNames.claudeStatus() }.value
                 let snap = await Task.detached(priority: .utility) { ClaudeUsage.snapshot() }.value
                 // Music's state comes from the model's own 3 s poll (and is refreshed at once by the page's
                 // play/next/previous): asking Music again here ran a second AppleScript on the main thread every 2 s.
                 let np = model.nowPlaying
                 guard let self else { return }
                 let now = Date()
-                // Waiting ones first, the most recent first; then the working ones, most recent first.
+                // Status as cmux's sidebar shows it (running / waiting / idle) when cmux knows the workspace, else from
+                // the transcript: Claude busy = running, Claude done or asking = waiting.
+                func status(_ x: ClaudeUsage.Session) -> String {
+                    if let c = cmuxStatus[x.cwd] { return c == "waiting" && x.state == .question ? "question" : c }
+                    return x.state == .working ? "running" : x.state == .question ? "question" : "waiting"
+                }
+                // Waiting ones first, then running, then idle; within each, the most recent first.
+                func rank(_ st: String) -> Int { st == "waiting" || st == "question" ? 0 : st == "running" ? 1 : 2 }
                 let ordered = s.sorted { a, b in
-                    let wa = a.state != .working, wb = b.state != .working
-                    return wa != wb ? wa : a.lastAt > b.lastAt
+                    let ra = rank(status(a)), rb = rank(status(b))
+                    return ra != rb ? ra < rb : a.lastAt > b.lastAt
                 }
                 let budget = settings.claudeDailyBudget
-                self.claude = ["sessions": ordered.prefix(12).map { ["project": cmux[$0.cwd] ?? $0.project, "title": $0.title, "state": $0.state.rawValue, "ago": Int(now.timeIntervalSince($0.lastAt)), "last": $0.lastText] },
+                self.claude = ["sessions": ordered.prefix(12).map { ["project": cmux[$0.cwd] ?? $0.project, "title": $0.title, "state": status($0), "ago": Int(now.timeIntervalSince($0.lastAt)), "last": $0.lastText] },
                                "tokens": ClaudeUsage.shortTokens(snap.todayTokens), "tokensRaw": snap.todayTokens, "budget": budget,
-                               "plan": settings.claudePlan.title, "active": snap.activeSessions, "waiting": s.filter { $0.state != .working }.count]
+                               "plan": settings.claudePlan.title, "active": snap.activeSessions, "waiting": s.filter { ["waiting", "question"].contains(status($0)) }.count]
                 let key = np.title + "|" + np.artist + "|" + np.album
                 if np.hasTrack, self.art?.key != key {
                     let jpeg = AppleMusic.currentArtwork().flatMap { Self.jpeg($0, side: 240) }

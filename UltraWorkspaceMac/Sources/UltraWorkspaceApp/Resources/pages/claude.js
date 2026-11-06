@@ -29,11 +29,14 @@ function render(d){
   if(!shown.length){ txt('No Claude Code session open.',M+W+GAP+P,Y+H/2,20,'#6b7280'); return; }
   const nameSize=Math.min(24,Math.round(W/8.5)), small=Math.min(15,Math.round(W/13));
   shown.forEach((s,i)=>{ x=M+(i+1)*(W+GAP);
-    const wait=s.state!=='working';
+    // state: running (blue), waiting / question (yellow, first), idle (grey), as cmux's sidebar shows them.
+    const wait=s.state==='waiting'||s.state==='question', run=s.state==='running';
     rr(x,Y,W,H,14, wait? 'rgba(250,204,21,'+(0.16+0.12*pulse)+')' : 'rgba(255,255,255,.07)');
     if(wait){ g.strokeStyle='rgba(250,204,21,'+(0.55+0.45*pulse)+')'; g.lineWidth=3; g.strokeRect(x+1.5,Y+1.5,W-3,H-3); }
     txt(fit(s.project,IW,nameSize,'700'),x+P,Y+38,nameSize,'#fff','left','700');
-    txt(fit(s.state==='question'?'asks a question': wait?'waiting for you':'working…',IW,small,'600'),x+P,Y+64,small, wait?'#fde047':'#8b94a6','left','600');
+    const label=s.state==='question'?'asks a question': wait?'waiting for you': run?'running':'idle';
+    if(run){ g.fillStyle='#4C8DFF'; g.beginPath(); g.arc(x+P+5,Y+59,5,0,7); g.fill(); }
+    txt(fit(label,IW-(run?16:0),small,'600'),x+P+(run?16:0),Y+64,small, wait?'#fde047': run?'#7aa7ff':'#8b94a6','left','600');
     const [t1,t2]=two(s.title,IW,small); txt(t1,x+P,Y+98,small,'#c7cdd8'); if(t2) txt(t2,x+P,Y+98+small+6,small,'#c7cdd8');
     const ls=small-1, [l1,l2]=two(s.last,IW,ls); txt(l1,x+P,Y+160,ls,'#8b94a6'); if(l2) txt(l2,x+P,Y+160+ls+6,ls,'#8b94a6');
     txt(ago(s.ago)+' ago',x+P,Y+H-16,13,'#6b7280');

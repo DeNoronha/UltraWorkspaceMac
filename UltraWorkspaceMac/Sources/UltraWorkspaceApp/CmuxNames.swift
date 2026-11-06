@@ -5,7 +5,7 @@ import Foundation
 /// Read with cmux's own CLI at its fixed path inside the app bundle (never `PATH`), at most every 30 s; empty when
 /// cmux is not installed or not running, and the Claude app then falls back to the sessions of the last hour.
 enum CmuxNames {
-    struct Workspace: Sendable { let directory: String; let title: String? }
+    struct Workspace: Sendable { let directory: String; let title: String?; let ref: String }
     static let cli = "/Applications/cmux.app/Contents/Resources/bin/cmux"
     nonisolated(unsafe) private static var cache: (at: Date, list: [Workspace]) = (.distantPast, [])
     private static let lock = NSLock()
@@ -17,6 +17,27 @@ enum CmuxNames {
         let list = read()
         lock.lock(); cache = (Date(), list); lock.unlock()
         return list
+    }
+
+    nonisolated(unsafe) private static var statusCache: (at: Date, byDir: [String: String]) = (.distantPast, [:])
+
+    /// What cmux's sidebar says about Claude Code in each workspace, by directory: "running", "waiting" or "idle"
+    /// (`cmux sidebar-state`, the `claude_code=` line). Read at most every 5 s, about 150 ms per workspace.
+    static func claudeStatus() -> [String: String] {
+        lock.lock(); let c = statusCache; lock.unlock()
+        if Date().timeIntervalSince(c.at) < 5 { return c.byDir }
+        var out: [String: String] = [:]
+        for w in workspaces() where !w.ref.isEmpty {
+            guard let data = run(["sidebar-state", "--workspace", w.ref]) else { continue }
+            for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
+                let t = line.trimmingCharacters(in: .whitespaces)
+                guard t.hasPrefix("claude_code=") else { continue }
+                let value = t.dropFirst("claude_code=".count).split(separator: " ").first.map { $0.lowercased() } ?? ""
+                if ["running", "waiting", "idle"].contains(value) { out[w.directory] = value }
+            }
+        }
+        lock.lock(); statusCache = (Date(), out); lock.unlock()
+        return out
     }
 
     /// Custom workspace titles by directory.
@@ -36,7 +57,7 @@ enum CmuxNames {
             for w in list {
                 guard let dir = w["current_directory"] as? String, !dir.isEmpty, seen.insert(dir).inserted else { continue }
                 let title = (w["has_custom_title"] as? Bool) == true ? (w["custom_title"] as? String).flatMap { $0.isEmpty ? nil : $0 } : nil
-                out.append(Workspace(directory: dir, title: title))
+                out.append(Workspace(directory: dir, title: title, ref: (w["ref"] as? String) ?? ""))
             }
         }
         return out

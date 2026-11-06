@@ -108,7 +108,7 @@ The bar apps' installs, *Restart bar launcher* and *Keep the screen on while som
 
 ### 8a. Local helpers Deckhand runs
 
-Besides `adb`, Deckhand runs one other local program: when cmux is installed, `/Applications/cmux.app/Contents/Resources/bin/cmux list-windows` and `cmux workspace list --window <id> --json` (fixed path, never `PATH`, 3 s timeout, at most every 30 s while the Claude bar app asks for data), to list the Claude Code sessions open in cmux and show them under their workspace names. Only each workspace's custom title and directory are used; nothing is sent anywhere else.
+Besides `adb`, Deckhand runs one other local program: when cmux is installed, `/Applications/cmux.app/Contents/Resources/bin/cmux list-windows` and `cmux workspace list --window <id> --json` and `cmux sidebar-state --workspace <ref>` (every 5 s, for the running / waiting / idle status) (fixed path, never `PATH`, 3 s timeout, at most every 30 s while the Claude bar app asks for data), to list the Claude Code sessions open in cmux and show them under their workspace names. Only each workspace's custom title and directory are used; nothing is sent anywhere else.
 
 ### 9. What leaves the Mac, and to whom
 
