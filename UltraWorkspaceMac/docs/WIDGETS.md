@@ -43,11 +43,9 @@ Proposed manifest sketch (format 1):
 
 Data/permissions a widget can request (so authors don't each re-implement): clock/timezone, weather, system stats (cpu/mem/net/disk/uptime), battery, now-playing, calendar, custom HTTP (declared hosts only). Deckhand provides these to the widget; the widget never gets raw system access.
 
-## Marketplace (start on GitHub)
+## Marketplace and the shared format
 
-- A public repo with `widgets/<id>/` folders and a top-level `registry.json` (id, name, author, version, sizes, download URL, checksum).
-- Deckhand fetches `registry.json`, lists widgets, installs by downloading the bundle into the user's widgets dir, and renders it like a built-in.
-- Curation via PRs; later add signing + an in-app store (see ROADMAP.md).
+The marketplace is a separate public repo shared with the Windows client: [DeNoronha/openbarx-marketplace](https://github.com/DeNoronha/openbarx-marketplace). It holds one `index.json` (format 1: widgets, bar apps and hotkey packs, each with a checksum), its schema, a validator that CI runs on every change, and the shared [widget format, version 1](https://github.com/DeNoronha/openbarx-marketplace/blob/main/docs/widget-format.md), which replaces the manifest sketch above. The vendor's nine hotkey packs are listed there as links to the vendor's own downloads with their checksums, not copied. Deckhand does not read that index yet; its own bar apps are still listed in `site/marketplace/registry.json` for the website.
 
 ## For now
 

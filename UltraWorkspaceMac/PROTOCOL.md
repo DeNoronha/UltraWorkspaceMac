@@ -1,5 +1,8 @@
 # CoreBar local protocol (as implemented here)
 
+> **Sources.** This reference is being merged with TheDeveloperIncognito's findings from the Windows side. Facts carry a tag: **[DNC]** found or verified by De Noronha Consulting (Deckhand, macOS), **[TDI]** by TheDeveloperIncognito (Windows), **[BOTH]** confirmed independently by both. Everything in this file without a tag is [DNC], and states the firmware it was seen on where that matters (launcher 1.0.3 as shipped, or 1.0.9 from the vendor's GitHub release).
+
+
 Recovered from the decompiled "VivoCube Weather Tool" (.NET), the official UltraWorkSpace 1.0.1.0 macOS binary (Qt, not stripped — the highest authority on what a PC client *sends*), and the LineOS 1.0.9 launcher APK (the authority on what the device *accepts*). Everything below is the **local** PC↔CoreBar protocol; the CoreBar relays to its attached QuantumLink modules (VivoCube, SenseCube, KnobKey, DotKey, PC-Boot card). Statements are tagged **CONFIRMED** (read from code/disassembly, usually matching both sides) or **HYPOTHESIS** (inferred, to be verified on hardware) where the distinction matters; the detailed evidence is in `docs/research/` (`official-client-findings.md`, `vivocube-findings.md`, `corebar-pages-findings.md` and the older reports).
 
 ## Transports (device bridges)
