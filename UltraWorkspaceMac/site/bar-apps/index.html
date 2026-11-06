@@ -49,7 +49,7 @@
         <h2>A page in the app, settings from Deckhand.</h2>
       </div>
       <ol class="steps">
-        <li><b>Every app carries its page.</b><span>The page is part of the app, so it appears at once, with or without the Mac. It is the same page Deckhand can show in a browser on your Mac: one design, two places.</span></li>
+        <li><b>Every app carries its page.</b><span>The page is part of the app, so it appears at once, with or without the Mac.</span></li>
         <li><b>Six fetch their own data.</b><span>Flights (adsb.lol and adsbdb, with an OpenStreetMap road map cached on the bar), Crypto (CoinGecko), Weather (Open-Meteo), Headlines (the feed you pick), Verse (bible-api) and Sun &amp; Moon (computed on the bar) go to those services from the bar itself and keep running when the Mac sleeps.</span></li>
         <li><b>Five ask the Mac.</b><span>Monitor, Claude, Music, Calendar and Tasks show what only your Mac knows, so they ask Deckhand for it on your LAN (port 7432): Mac stats every second, Claude sessions and Music every two seconds, the calendar every minute, Linear every twenty seconds while the page is open. Every five seconds Deckhand sends a UDP beacon on port 5320, so the apps find it with nothing to configure. The three buttons that change something (Music transport, Tasks Done) go to the Mac as a POST with a marker header that no other site can send.</span></li>
         <li><b>Deckhand keeps the settings.</b><span>Your location, units, flight radius, coins and currency and news source live in Deckhand, as one settings file with a section per app. Change one and Deckhand pushes it to the bar over the debug bridge within seconds; the apps keep their copy, so the Mac can be off.</span></li>
@@ -184,7 +184,7 @@
       </ol>
       <div class="callout" style="margin-top:2.5rem">
         <p class="eyebrow">Note</p>
-        <p>The pages only show while <em>Serve the pages from this Mac</em> is on and Deckhand is running. Close Deckhand and the apps show "Waiting for the Mac…" until it is back.</p>
+        <p>Monitor, Claude, Music, Calendar and Tasks need Deckhand running on the Mac. Close Deckhand and they show "Waiting for the Mac…" until it is back; the other six carry on.</p>
       </div>
     </div>
   </section>
@@ -198,7 +198,7 @@
       </div>
       <ol class="steps">
         <li><b>Draw for 1424 × 280 at 160 dpi.</b><span>One screenful, no scrolling, large type: the bar is read from arm's length. Plain HTML and canvas work well; the bar's WebView is a current Chromium.</span></li>
-        <li><b>Listen for the beacon on UDP 5320.</b><span>Deckhand broadcasts and unicasts <code>{"deckhand":"monitor","url":"http://&lt;mac&gt;:7432/monitor","base":"http://&lt;mac&gt;:7432","v":2}</code> every five seconds. Open <code>base + "/" + yourPage</code>. Serve that page yourself if you are not using Deckhand. Do what Deckhand's apps do: accept only http URLs on a private LAN address, whoever sent the beacon, and keep the WebView on that host.</span></li>
+        <li><b>Carry your page; listen for the beacon on UDP 5320 if you need the Mac.</b><span>Deckhand's apps load their page from inside the APK. For data from the Mac, Deckhand broadcasts and unicasts <code>{"deckhand":"monitor","url":"http://&lt;mac&gt;:7432/monitor","base":"http://&lt;mac&gt;:7432","v":2}</code> every five seconds; <code>base</code> is where its data API answers (the selected bar only). Do what Deckhand's apps do: accept a beacon only when it names its own sender on a private LAN address.</span></li>
         <li><b>Give the bar a way back.</b><span>A ✕ in the corner and a long press should return to the cards: the apps call <code>finish()</code> through a small JavaScript bridge.</span></li>
         <li><b>List it.</b><span>Add an entry to the marketplace registry and open a pull request. A screenshot at 1424 × 280 and a link to the source are the only hard requirements.</span></li>
       </ol>

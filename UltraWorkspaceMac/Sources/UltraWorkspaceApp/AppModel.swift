@@ -111,10 +111,11 @@ final class AppModel: ObservableObject {
     /// SHA-256 over the layer images of the last accepted cube package — an unchanged package is not sent again.
     var lastCubeDigest: Data?
     var claudeWatchTask: Task<Void, Never>?
-    // Monitor page (AppModel+Monitor) and presence-aware screen (AppModel+Presence).
-    var monitorTask: Task<Void, Never>?
-    @Published var monitorURL: String?
-    @Published var monitorError: String?
+    // The bar apps' data server (AppModel+Monitor) and presence-aware screen (AppModel+Presence).
+    var barDataTask: Task<Void, Never>?
+    /// `http://<this Mac>:7432` as the selected bar reaches it, nil while the server is not running.
+    @Published var barDataURL: String?
+    @Published var barDataError: String?
     let barPages = BarPages()
     @Published var barAppBusy: String?
     var presenceTask: Task<Void, Never>?

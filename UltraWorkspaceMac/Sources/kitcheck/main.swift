@@ -228,48 +228,6 @@ var failures = 0
 check(CoreBarSession.CubeWiFiState.isConnected(1) && !CoreBarSession.CubeWiFiState.isConnected(3), "cube wifi: 1 = connected, 3 = connecting")
 check(CoreBarSession.CubeWiFiState.label(3) == "still connecting" && CoreBarSession.CubeWiFiState.label(nil) == "not read yet", "cube wifi labels")
 
-// Sun & moon (SkyMath): Sassenheim, 2026-11-04. Reference: sunrise 07:41, sunset 17:07 CET (timeanddate),
-// new moon 2026-11-09, full moon 2026-11-24.
-do {
-    var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
-    let noon = cal.date(from: DateComponents(year: 2026, month: 11, day: 4, hour: 12))!
-    let s = SkyMath.sunDay(at: noon, lat: 52.2258, lon: 4.5131, calendar: cal)
-    func hm(_ d: Date?) -> String { guard let d else { return "—" }; let f = DateFormatter(); f.timeZone = cal.timeZone; f.dateFormat = "HH:mm"; return f.string(from: d) }
-    func minutes(_ d: Date?) -> Int { guard let d else { return -9999 }; let c = cal.dateComponents([.hour, .minute], from: d); return c.hour! * 60 + c.minute! }
-    check(abs(minutes(s.sunrise) - (7 * 60 + 41)) <= 6, "sunrise Sassenheim 2026-11-04 ≈ 07:41", hm(s.sunrise))
-    check(abs(minutes(s.sunset) - (17 * 60 + 7)) <= 6, "sunset Sassenheim 2026-11-04 ≈ 17:07", hm(s.sunset))
-    check(s.now.elevation > 15 && s.now.elevation < 25, "sun elevation at noon in November ≈ 20°", "\(s.now.elevation)")
-    check(s.dayLength > 9 * 3600 && s.dayLength < 10 * 3600, "day length ≈ 9.4 h", "\(Int(s.dayLength / 60)) min")
-    let m = SkyMath.moonInfo(at: noon, lat: 52.2258, lon: 4.5131, calendar: cal)
-    let newMoon = cal.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 12))!, fullMoon = cal.date(from: DateComponents(year: 2026, month: 11, day: 24, hour: 12))!
-    check(abs(m.nextNew.timeIntervalSince(newMoon)) < 36 * 3600, "next new moon ≈ 2026-11-09", "\(m.nextNew)")
-    check(abs(m.nextFull.timeIntervalSince(fullMoon)) < 36 * 3600, "next full moon ≈ 2026-11-24", "\(m.nextFull)")
-    check(!m.waxing && m.illumination < 0.4, "2026-11-04: waning crescent", "\(m.name) \(m.illumination)")
-    check(m.rise != nil || m.set != nil, "moon rise/set found", "rise \(hm(m.rise)) set \(hm(m.set))")
-}
-
-// RSS parsing (CDATA titles, RFC 822 dates) and the verse of the day
-do {
-    let rss = """
-    <?xml version="1.0"?><rss version="2.0"><channel><title>Feed</title>
-    <item><title><![CDATA[First & foremost]]></title><link>https://x/1</link><pubDate>Wed, 04 Nov 2026 10:00:00 GMT</pubDate><description><![CDATA[<p>Body &amp; more</p>]]></description></item>
-    <item><title>Second</title><link>https://x/2</link><pubDate>Wed, 04 Nov 2026 09:00:00 +0100</pubDate></item>
-    </channel></rss>
-    """
-    let items = NewsFeed.parse(Data(rss.utf8))
-    check(items.count == 2 && items[0].title == "First & foremost" && items[0].summary == "Body & more", "rss: CDATA title and stripped description", items.map(\.title).joined(separator: "|"))
-    check(items[0].date != nil && items[1].date != nil && items[0].date! > items[1].date!, "rss: RFC 822 dates parsed", "\(String(describing: items[0].date))")
-    let lite = #"<ul><li class="card--lite"><a href="/2026/11/04/us/story-a">Story &amp; A</a></li><li class="card--lite"><a href="/2026/10/01/us/old">Old</a></li></ul>"#
-    var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC")!
-    let liteNow = utc.date(from: DateComponents(year: 2026, month: 11, day: 5, hour: 12))!
-    let cnn = NewsFeed.parseCNNLite(lite, now: liteNow)
-    check(cnn.count == 1 && cnn[0].title == "Story & A" && cnn[0].link == "https://lite.cnn.com/2026/11/04/us/story-a" && cnn[0].day != nil, "cnn lite: headline, link and day; stale items dropped", cnn.map(\.title).joined(separator: "|"))
-    let r1 = DailyVerse.reference(for: Date()), r2 = DailyVerse.reference(for: Date())
-    check(r1 == r2 && DailyVerse.references.contains(r1), "verse of the day is deterministic", r1)
-    check(Set(DailyVerse.references).count == DailyVerse.references.count, "verse list has no duplicates")
-    check(Flights.compass(0) == "N" && Flights.compass(44) == "NE" && Flights.compass(359) == "N" && Flights.compass(225) == "SW", "compass points")
-}
-
 // /upload reply classification: only hotspot-no-IP and module-not-found are retried by `upload`.
 do {
     typealias R = CoreBarSession.UploadReply
@@ -385,9 +343,6 @@ do {
     check(CoreBarSession.layerWidgetValue(layer: 1, widget: 101) == 0x1_0065, "property 9 = (layer << 16) | widget")
 }
 
-// Compass never traps: NaN/negative/huge bearings (values come straight from the ADS-B feed).
-check(Flights.compass(.nan) == "N" && Flights.compass(-10) == "N" && Flights.compass(-100) == "W" && Flights.compass(1e9).count >= 1, "compass: non-finite and negative bearings")
-
 // Discovery reply parsing: tcpPort may be a number or a string, ip falls back to the sender.
 do {
     let a = Discovery.parse(Data(#"{"serialNo":"S1","ver":"1.0.9(9)","ip":"192.168.1.9","name":"ultrabar","tcpPort":7431}"#.utf8), from: "10.0.0.1")
@@ -413,13 +368,10 @@ do {
     check(MonitorServer.header("host", in: "GET /host: x HTTP/1.1\r\nHost: 1.2.3.4\r\n") == "1.2.3.4", "header: the request line is not a header")
     check(MonitorServer.hasActionMarker("POST /a HTTP/1.1\r\nX-Deckhand: Action\r\n"), "action marker: header present")
     check(!MonitorServer.hasActionMarker("POST /a HTTP/1.1\r\nReferer: http://x/x-deckhand: action\r\n"), "action marker: the string inside another header does not count")
-    check(MonitorServer.peerMayAct("127.0.0.1", peers: ["10.0.0.5"]) && MonitorServer.peerMayAct("::1", peers: []), "action peers: loopback always may")
-    check(MonitorServer.peerMayAct("10.0.0.5", peers: ["10.0.0.5"]) && MonitorServer.peerMayAct("::ffff:10.0.0.5", peers: ["10.0.0.5"]), "action peers: the listed bar may (also IPv4-mapped)")
-    check(!MonitorServer.peerMayAct("10.0.0.6", peers: ["10.0.0.5"]) && !MonitorServer.peerMayAct(nil, peers: nil), "action peers: another host may not; unknown peer may not")
-    check(MonitorServer.peerMayAct("10.0.0.6", peers: nil), "action peers: nil = any peer (default)")
-    check(MonitorServer.peerMayRead("10.0.0.6", peers: ["10.0.0.5"], pagesOnly: false), "pages only for the bar: off → any peer may read")
-    check(MonitorServer.peerMayRead("10.0.0.5", peers: ["10.0.0.5"], pagesOnly: true) && MonitorServer.peerMayRead("127.0.0.1", peers: [], pagesOnly: true), "pages only for the bar: on → the bar and loopback may read")
-    check(!MonitorServer.peerMayRead("10.0.0.6", peers: ["10.0.0.5"], pagesOnly: true) && !MonitorServer.peerMayRead("10.0.0.6", peers: [], pagesOnly: true), "pages only for the bar: on → another host may not, nor anyone when no bar is selected")
+    check(MonitorServer.peerIsAllowed("127.0.0.1", peers: ["10.0.0.5"]) && MonitorServer.peerIsAllowed("::1", peers: []), "allowed peers: loopback always is")
+    check(MonitorServer.peerIsAllowed("10.0.0.5", peers: ["10.0.0.5"]) && MonitorServer.peerIsAllowed("::ffff:10.0.0.5", peers: ["10.0.0.5"]), "allowed peers: the listed bar is (also IPv4-mapped)")
+    check(!MonitorServer.peerIsAllowed("10.0.0.6", peers: ["10.0.0.5"]) && !MonitorServer.peerIsAllowed(nil, peers: ["10.0.0.5"]), "allowed peers: another host is not; an unknown peer is not")
+    check(!MonitorServer.peerIsAllowed("10.0.0.6", peers: []), "allowed peers: nobody but loopback when no bar is selected")
     // Discovery replies are unauthenticated LAN data.
     let spoof = Discovery.parse(Data(#"{"serialNo":"S9","tcpPort":7431,"ip":"evil.example"}"#.utf8), from: "10.0.0.9")
     check(spoof?.ip == "10.0.0.9", "discovery: an ip that is not an IPv4 literal → sender address", spoof?.ip ?? "nil")
@@ -438,7 +390,6 @@ do {
     MonitorServer.shared.setRoute { path in
         if path == "/a b" { return .text("hit") }
         if path == "/j" { return .json(["ok": true]) }
-        if path == "/h" { return .html("<p>hi</p>") }
         return nil
     }
     MonitorServer.shared.setActionRoute { path in path == "/act" ? .json(["did": true]) : nil }
@@ -470,8 +421,6 @@ do {
         check(hit.0 == 200 && hit.1 == "hit", "monitor server: route gets the percent-decoded path without the query", "\(hit)")
         let miss = await get("/nope")
         check(miss.0 == 404, "monitor server: unknown path → 404", "\(miss.0)")
-        let ico = await get("/favicon.ico")
-        check(ico.0 == 204 && ico.1.isEmpty, "monitor server: /favicon.ico → 204 without a body (browsers on the Mac ask for it)", "\(ico.0)")
         let post = await get("/a%20b", method: "POST")
         check(post.0 == 403, "monitor server: POST without the X-Deckhand header → 403", "\(post.0)")
         let put = await get("/a%20b", method: "PUT")
@@ -490,23 +439,17 @@ do {
         check(rebind.text.hasPrefix("HTTP/1.1 421"), "monitor server: a DNS name in Host → 421 (rebinding)", rebind.text.prefix(30).description)
         let v6 = raw("GET /j HTTP/1.1\r\nHost: [::1]:7432\r\n\r\n", timeout: 5)
         check(v6.text.hasPrefix("HTTP/1.1 200"), "monitor server: an IPv6 literal in Host is fine", v6.text.prefix(30).description)
-        let html = raw("GET /h HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", timeout: 5)
-        check(html.text.contains("Content-Security-Policy: default-src 'none'") && html.text.contains("X-Content-Type-Options: nosniff") && html.text.contains("X-Frame-Options: DENY"),
-              "monitor server: HTML carries CSP, nosniff and no-frame headers", html.text.prefix(300).replacingOccurrences(of: "\r\n", with: " | "))
         let json = raw("GET /j HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", timeout: 5)
-        check(!json.text.contains("Content-Security-Policy") && json.text.contains("nosniff"), "monitor server: JSON gets nosniff but no CSP")
-        MonitorServer.shared.setActionPeers(["10.9.9.9"])   // not this Mac; loopback is always allowed
+        check(json.text.contains("X-Content-Type-Options: nosniff") && json.text.contains("X-Frame-Options: DENY"), "monitor server: responses carry nosniff and no-frame headers")
+        MonitorServer.shared.setAllowedPeers(["10.9.9.9"])   // not this Mac; loopback is always allowed
         let act = raw("POST /act HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Deckhand: action\r\nContent-Length: 0\r\n\r\n", timeout: 5)
         check(act.text.hasPrefix("HTTP/1.1 200") && act.text.hasSuffix("{\"did\":true}"), "monitor server: POST with X-Deckhand: action from loopback runs the action", act.text.prefix(30).description)
         let forged = raw("POST /act HTTP/1.1\r\nHost: 127.0.0.1\r\nReferer: http://a/?x-deckhand: action\r\nContent-Length: 0\r\n\r\n", timeout: 5)
         check(forged.text.hasPrefix("HTTP/1.1 403"), "monitor server: the marker inside another header does not count", forged.text.prefix(30).description)
         let wrong = raw("POST /act HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Deckhand: nope\r\nContent-Length: 0\r\n\r\n", timeout: 5)
         check(wrong.text.hasPrefix("HTTP/1.1 403"), "monitor server: X-Deckhand with another value → 403", wrong.text.prefix(30).description)
-        // "Pages only for the bar" (2026-11-04): GET is answered to the action peers and loopback only.
-        MonitorServer.shared.setPagesOnlyForPeers(true)
-        check(MonitorServer.shared.isPagesOnlyForPeers, "monitor server: pages-only flag set")
         let own = await get("/j")
-        check(own.0 == 200, "monitor server: pages only for the bar → loopback still reads", "\(own.0)")
+        check(own.0 == 200, "monitor server: loopback reads whatever the allowed peers", "\(own.0)")
         // From this Mac's LAN address the peer is not loopback: 403 unless that address is the bar's.
         if let lan = LocalIP.address(reaching: "192.168.255.254"), !lan.hasPrefix("127.") {
             func lanGet(_ path: String) async -> Int {
@@ -515,19 +458,14 @@ do {
                 return (resp as? HTTPURLResponse)?.statusCode ?? -1
             }
             let other = await lanGet("/j")
-            check(other == 403, "monitor server: pages only for the bar → another address gets 403", "\(other) via \(lan)")
-            MonitorServer.shared.setActionPeers([lan])
+            check(other == 403, "monitor server: another address gets 403", "\(other) via \(lan)")
+            MonitorServer.shared.setAllowedPeers([lan])
             let bar = await lanGet("/j")
-            check(bar == 200, "monitor server: pages only for the bar → the bar's address reads", "\(bar) via \(lan)")
-            MonitorServer.shared.setPagesOnlyForPeers(false)
-            MonitorServer.shared.setActionPeers(["10.9.9.9"])
-            let open = await lanGet("/j")
-            check(open == 200, "monitor server: pages-only off → any address reads again", "\(open) via \(lan)")
+            check(bar == 200, "monitor server: the bar's address reads", "\(bar) via \(lan)")
         } else {
-            print("  (skipped the LAN-address checks for pages-only: no LAN address on this Mac)")
+            print("  (skipped the LAN-address checks: no LAN address on this Mac)")
         }
-        MonitorServer.shared.setPagesOnlyForPeers(false)
-        MonitorServer.shared.setActionPeers(nil)
+        MonitorServer.shared.setAllowedPeers([])
         MonitorServer.shared.stop()
         check(!MonitorServer.shared.isRunning, "monitor server: stopped")
     } catch { check(false, "monitor server: start", "\(error)") }

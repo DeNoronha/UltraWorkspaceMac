@@ -6,7 +6,7 @@ const tiles={};
 // A tile that failed (OSM unreachable, Mac busy) is dropped from the cache after 30 s so it is asked for again,
 // instead of staying a blank hole until the page is reopened.
 function tile(z,x,y){ const k=z+'/'+x+'/'+y; if(tiles[k]) return tiles[k]; const im=new Image(); im.onerror=()=>setTimeout(()=>{ if(tiles[k]===im) delete tiles[k]; },30000); im.src='/flights/tile/'+z+'/'+x+'/'+y+'.png'; tiles[k]=im; return im; }
-// OpenStreetMap road tiles, toned down and cached by the Mac (see MapTiles.swift), scaled so the circle is exactly R km across.
+// OpenStreetMap road tiles, toned down and cached by the bar app (LocalSite.kt), scaled so the circle is exactly R km across.
 function map(cx,cy,r,lat,lon,R){ if(lat==null||lon==null) return false;
   const mpp=R*1000/r, zf=Math.log2(156543.03*Math.cos(lat*Math.PI/180)/mpp), z=Math.max(2,Math.min(17,Math.floor(zf))), s=Math.pow(2,zf-z), n=Math.pow(2,z);
   const wx=(lon+180)/360*n*256, lr=lat*Math.PI/180, wy=(1-Math.log(Math.tan(lr)+1/Math.cos(lr))/Math.PI)/2*n*256;

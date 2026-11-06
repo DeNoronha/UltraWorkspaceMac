@@ -146,14 +146,6 @@ struct AppsView: View {
             Text("Installing goes over the bar's debug bridge (Settings → Debug bridge). Afterwards, put its card on the CoreBar page and publish.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         Divider()
-        Panel("Pages from this Mac", footer: "All Deckhand apps show pages this Mac serves on your LAN (plain HTTP, read-only, only while this is on). The apps find them by themselves.") {
-            HStack(spacing: 12) {
-                Toggle("Serve the pages from this Mac", isOn: $settings.monitorServe).toggleStyle(.switch)
-                    .onChange(of: settings.monitorServe) { _ in model.startMonitor(settings: settings) }
-                if let url = model.monitorURL { Text(String(url.dropLast("/monitor".count))).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-                if let e = model.monitorError { Label("The pages could not start: \(e)", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.caption) }
-            }
-        }
         appSettings(app.page)
     }
 
@@ -163,13 +155,13 @@ struct AppsView: View {
         case "flights":
             Panel("Flights settings") {
                 HStack { Stepper("Within \(settings.flightsRadiusKm) km", value: $settings.flightsRadiusKm, in: 1...25); Text("of the location below.").font(.caption).foregroundStyle(.secondary) }
-                Text("Positions every 10 s while the page is open on the bar, every 2 min otherwise.").font(.caption).foregroundStyle(.secondary)
+                Text("The bar fetches the positions itself, every 10 s while the page is on screen.").font(.caption).foregroundStyle(.secondary)
             }
             LocationPanel()
         case "news":
             Panel("Headlines settings") {
                 Picker("Source", selection: $settings.newsSource) { ForEach(NewsFeed.sources) { s in Text(s.name).tag(s.id) } }.frame(width: 260)
-                Text("Fetched every 10 minutes.").font(.caption).foregroundStyle(.secondary)
+                Text("The bar fetches the headlines itself, every 10 minutes.").font(.caption).foregroundStyle(.secondary)
             }
         case "tasks":
             Panel("Tasks settings", footer: "Linear → Settings → Security & access → Personal API keys. The key is kept in a user-only file on this Mac and only sent to api.linear.app.") {
@@ -181,14 +173,14 @@ struct AppsView: View {
             }
         case "sky":
             LocationPanel()
-            Text("Sun and moon are computed on this Mac for this location; nothing is fetched.").font(.caption).foregroundStyle(.secondary)
+            Text("Sun and moon are computed on the bar for this location; nothing is fetched.").font(.caption).foregroundStyle(.secondary)
         case "weather": AddonSettingsPanel(t: .weather)
         case "crypto": AddonSettingsPanel(t: .crypto)
         case "calendar": AddonSettingsPanel(t: .calendar)
         case "claude": AddonSettingsPanel(t: .claude)
         case "music": AddonSettingsPanel(t: .music)
         case "verse":
-            Text("No settings. One of 98 well-known passages, picked by the day of the year; the text comes from bible-api.com.").font(.caption).foregroundStyle(.secondary)
+            Text("No settings. One of 98 well-known passages, picked by the day of the year; the bar fetches the text from bible-api.com.").font(.caption).foregroundStyle(.secondary)
         default:
             Text("No settings: it shows this Mac as it is.").font(.caption).foregroundStyle(.secondary)
         }

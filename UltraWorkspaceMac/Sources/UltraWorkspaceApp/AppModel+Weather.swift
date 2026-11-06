@@ -8,13 +8,13 @@ extension AppModel {
         return modules.first(where: { $0.isVivoCube })?.serial
     }
 
-    /// How long a resolved location is reused. The Flights page asks every 10 s and Sun & Moon every minute;
+    /// How long a resolved location is reused. The bar apps' config document asks every 10 s;
     /// CoreLocation and Apple's reverse geocoder are not meant to be hit at that rate (the geocoder starts
     /// refusing after a burst), and nothing here moves that fast.
     static let locationCacheSeconds: TimeInterval = 300
 
     /// Where "here" is: manual lat/lon, manual city, Mac location, IP — the one chain for the weather card,
-    /// the clock-card cover, the bar's WEATHER card and the Flights / Sun & Moon pages. Cached (see above);
+    /// the clock-card cover, the bar's WEATHER card and the on-bar apps' config document. Cached (see above);
     /// a change of the location settings invalidates the cache at once.
     func resolveLocation(settings: AppSettings) async throws -> (lat: Double, lon: Double, name: String) {
         let key = "\(settings.locationMode.rawValue)|\(settings.manualCity)|\(settings.manualLat)|\(settings.manualLon)"

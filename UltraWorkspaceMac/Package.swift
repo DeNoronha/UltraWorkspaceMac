@@ -13,7 +13,8 @@ let package = Package(
         .executableTarget(
             name: "UltraWorkspaceApp",
             dependencies: ["UltraBarKit"],
-            resources: [.copy("Resources/pages")]
+            // The bar apps' pages: built into each APK (android/DeckhandMonitor/app/build.gradle.kts), not used by the Mac app.
+            exclude: ["Resources/pages"]
         ),
         .executableTarget(name: "kitcheck", dependencies: ["UltraBarKit"]),
     ]

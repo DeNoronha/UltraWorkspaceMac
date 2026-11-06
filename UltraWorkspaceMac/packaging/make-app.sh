@@ -19,11 +19,6 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/UltraWorkspaceApp"
 cp "$ROOT/packaging/Info.plist" "$APP/Contents/Info.plist"
 [ -f "$ROOT/packaging/AppIcon.icns" ] && cp "$ROOT/packaging/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns" || true
-# The bar pages (Sources/UltraWorkspaceApp/Resources/pages) travel in SwiftPM's resource bundle; the app
-# looks for it in Contents/Resources (BarPages.resourceURL), so a missing bundle means "Page missing" on the bar.
-BUNDLE="$ROOT/.build/$CONF/UltraWorkspaceMac_UltraWorkspaceApp.bundle"
-[ -d "$BUNDLE" ] || { echo "resource bundle not found: $BUNDLE"; exit 1; }
-cp -R "$BUNDLE" "$APP/Contents/Resources/"
 # The bar's Deckhand apps (android/DeckhandMonitor flavors), installed from Settings over ADB.
 if ls "$ROOT"/dist/bar-apps/*.apk >/dev/null 2>&1; then mkdir -p "$APP/Contents/Resources/bar-apps"; cp "$ROOT"/dist/bar-apps/*.apk "$APP/Contents/Resources/bar-apps/"; fi
 

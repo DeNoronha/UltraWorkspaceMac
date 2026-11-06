@@ -225,6 +225,8 @@ extension AppModel {
             if let now = try? await resolveWeather(settings: settings, metric: settings.units == .metric) {
                 add("Mac", "Weather (Open-Meteo)", .ok, "\(Int(now.temperature.rounded()))\(now.unitSuffix) \(now.sky.label) in \(now.place)")
             } else { add("Mac", "Weather (Open-Meteo)", .fail, "No location or forecast. Set a city under Widgets → Weather.", DoctorAction(title: "Open Widgets") { [weak self] in self?.nav = .widgets; self?.selectedAddon = .weather }) }
+            if let e = barDataError { add("Mac", "Data for the bar apps", .fail, "Not served: \(e). Monitor, Claude, Music, Calendar and Tasks wait for this Mac; is another Deckhand running?") }
+            else if let base = barDataURL { add("Mac", "Data for the bar apps", .ok, "Served at \(base) to the selected bar only.") }
             if settings.deckhandPagePublished {
                 add("Mac", "Clock picture", .info, lastCoverRefreshAt.map { "Updated \($0.formatted(date: .omitted, time: .shortened)); refreshed hourly while Deckhand runs." } ?? "Not refreshed yet in this session (hourly while Deckhand runs).")
             }

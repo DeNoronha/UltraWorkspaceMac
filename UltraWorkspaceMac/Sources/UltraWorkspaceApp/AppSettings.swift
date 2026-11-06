@@ -51,11 +51,6 @@ final class AppSettings: ObservableObject {
     /// Your own daily token budget (for the % on the card); 0 = no percentage.
     @Published var claudeDailyBudget: Int = 0 { didSet { save() } }
     @Published var claudeNotifyWaiting: Bool = true { didSet { save() } }
-    /// Serve the live Monitor page for the bar's Monitor app (LAN, read-only Mac stats).
-    @Published var monitorServe: Bool = false { didSet { save() } }
-    /// Serve the pages only to the paired bar (and this Mac): any other host on the LAN gets 403. Off by default
-    /// so the pages can be previewed in a browser on another machine (SECURITY.md, path 2).
-    @Published var pagesOnlyForBar: Bool = false { didSet { save() } }
     /// Presence-aware bar screen over ADB: on while the SenseCube sees someone, off after `presenceSleepMinutes`.
     @Published var presenceWake: Bool = false { didSet { save() } }
     @Published var presenceSleepMinutes: Int = 10 { didSet { save() } }
@@ -125,8 +120,6 @@ final class AppSettings: ObservableObject {
         var claudePlan: ClaudePlan? = nil
         var claudeDailyBudget: Int? = nil
         var claudeNotifyWaiting: Bool? = nil
-        var monitorServe: Bool? = nil
-        var pagesOnlyForBar: Bool? = nil
         var presenceWake: Bool? = nil
         var presenceSleepMinutes: Int? = nil
         var flightsRadiusKm: Int? = nil
@@ -209,8 +202,6 @@ final class AppSettings: ObservableObject {
             claudePlan = p.claudePlan ?? .max5
             claudeDailyBudget = p.claudeDailyBudget ?? 0
             claudeNotifyWaiting = p.claudeNotifyWaiting ?? true
-            monitorServe = p.monitorServe ?? false
-            pagesOnlyForBar = p.pagesOnlyForBar ?? false
             presenceWake = p.presenceWake ?? false
             presenceSleepMinutes = p.presenceSleepMinutes ?? 10
             flightsRadiusKm = p.flightsRadiusKm ?? 3
@@ -228,7 +219,7 @@ final class AppSettings: ObservableObject {
                           vivoSwitchMode: vivoSwitchMode, vivoPicturePath: vivoPicturePath,
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
-                          claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, monitorServe: monitorServe, pagesOnlyForBar: pagesOnlyForBar, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes,
+                          claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes,
                           flightsRadiusKm: flightsRadiusKm, newsSource: newsSource)
         do {
             try JSONEncoder().encode(p).write(to: url, options: .atomic)

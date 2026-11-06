@@ -4,10 +4,9 @@ import Network
 import Darwin
 #endif
 
-/// The small HTTP server behind the bar's Monitor app (2026-11-04): a fixed port on every
-/// interface, GET/HEAD for pages and data, POST with a marker header for the few actions, routes answered by closures. Nothing on disk is ever served.
-/// The page is a live view of this Mac (CPU, memory, network, disk) — read-only, LAN-only, and
-/// only while the user has the Monitor switched on (see SECURITY.md).
+/// The small HTTP server behind the bar apps' data API: a fixed port on every interface, GET/HEAD for data, POST
+/// with a marker header for the few actions, routes answered by closures. It serves JSON and images only, never a
+/// page and never anything on disk, and answers only the allowed peers (the selected bar) and loopback (see SECURITY.md).
 public final class MonitorServer: @unchecked Sendable {
     public static let shared = MonitorServer()
     public static let defaultPort: UInt16 = 7432
@@ -16,14 +15,13 @@ public final class MonitorServer: @unchecked Sendable {
         public var status: String; public var type: String; public var body: Data
         public init(_ status: String = "200 OK", type: String, body: Data) { self.status = status; self.type = type; self.body = body }
         public static func text(_ s: String, type: String = "text/plain; charset=utf-8") -> Response { Response(type: type, body: Data(s.utf8)) }
-        public static func html(_ s: String) -> Response { .text(s, type: "text/html; charset=utf-8") }
         public static func json(_ obj: Any) -> Response {
             Response(type: "application/json", body: (try? JSONSerialization.data(withJSONObject: obj)) ?? Data("{}".utf8))
         }
     }
     public typealias Route = @Sendable (_ path: String) -> Response?
     /// Routes that change something (play/next, mark a task done): called only for a POST that carries the
-    /// `X-Deckhand: action` header, which a cross-site <img> or form cannot send; the served pages set it.
+    /// `X-Deckhand: action` header, which a cross-site <img> or form cannot send; the bar apps set it.
     public typealias ActionRoute = @Sendable (_ path: String) -> Response?
 
     private let lock = NSLock()
@@ -31,11 +29,9 @@ public final class MonitorServer: @unchecked Sendable {
     private var connections: [ObjectIdentifier: NWConnection] = [:]
     private var route: Route = { _ in nil }
     private var actionRoute: ActionRoute = { _ in nil }
-    /// Addresses that may trigger actions (the paired bar); nil = any peer. Loopback is always allowed.
-    private var actionPeers: Set<String>?
-    /// When set, GET/HEAD too are answered only to `actionPeers` (plus loopback): the pages carry calendar
-    /// titles, Claude transcripts and the weather location, which not every LAN should be able to read.
-    private var pagesOnlyForPeers = false
+    /// Addresses that are answered at all (the paired bar); loopback always is. The data carries calendar titles,
+    /// Claude transcripts and what is playing, which not every LAN should be able to read. Empty: loopback only.
+    private var allowedPeers: Set<String> = []
     public private(set) var port: UInt16 = 0
     public var isRunning: Bool { lock.lock(); defer { lock.unlock() }; return listener?.state == .ready }
 
@@ -47,13 +43,9 @@ public final class MonitorServer: @unchecked Sendable {
 
     public func setRoute(_ r: @escaping Route) { lock.lock(); route = r; lock.unlock() }
     public func setActionRoute(_ r: @escaping ActionRoute) { lock.lock(); actionRoute = r; lock.unlock() }
-    /// Only these peer addresses (plus loopback) may POST actions; nil (the default) lets any peer. The app
-    /// sets it to the selected bar's address so another host on the LAN cannot drive Music or close issues.
-    public func setActionPeers(_ peers: Set<String>?) { lock.lock(); actionPeers = peers; lock.unlock() }
-    /// `true`: pages and data (`GET`/`HEAD`) are served only to the action peers and loopback, everyone else gets
-    /// 403 ("pages only for the bar", off by default so a browser on the LAN can still preview the pages).
-    public func setPagesOnlyForPeers(_ on: Bool) { lock.lock(); pagesOnlyForPeers = on; lock.unlock() }
-    public var isPagesOnlyForPeers: Bool { lock.lock(); defer { lock.unlock() }; return pagesOnlyForPeers }
+    /// Only these peer addresses (plus loopback) get an answer; everyone else gets 403. The app sets it to the
+    /// selected bar's address, so another host on the LAN can neither read the data nor drive Music or close issues.
+    public func setAllowedPeers(_ peers: Set<String>) { lock.lock(); allowedPeers = peers; lock.unlock() }
 
     /// Start on `port` (idempotent). Throws when the port is taken.
     public func start(port requested: UInt16 = MonitorServer.defaultPort) throws {
@@ -91,10 +83,10 @@ public final class MonitorServer: @unchecked Sendable {
         WireLog.shared.event("monitor server stopped")
     }
 
-    /// `http://<ip>:<port>/monitor` as seen from `peerIP`.
-    public func url(reachableFrom peerIP: String) -> String? {
+    /// `http://<ip>:<port>` as seen from `peerIP`.
+    public func baseURL(reachableFrom peerIP: String) -> String? {
         guard port != 0, let ip = LocalIP.address(reaching: peerIP) else { return nil }
-        return "http://\(ip):\(port)/monitor"
+        return "http://\(ip):\(port)"
     }
 
     // MARK: - Requests (same shape as PreviewServer)
@@ -144,9 +136,9 @@ public final class MonitorServer: @unchecked Sendable {
     public static func hasActionMarker(_ head: String) -> Bool { header("x-deckhand", in: head)?.lowercased() == "action" }
 
     /// Whether the request's `Host` is acceptable: an IPv4/IPv6 literal (optionally with a port), `localhost`, or no
-    /// Host at all (HTTP/1.0). A DNS name is refused: the pages have no login, so a web page the user visits could
-    /// otherwise point a name it controls at this Mac's address (DNS rebinding) and read them from the browser,
-    /// same-origin, including the headers an action needs. The bar and the Mac's own browser always use the IP.
+    /// Host at all (HTTP/1.0). A DNS name is refused: the data has no login, so a web page the user visits could
+    /// otherwise point a name it controls at this Mac's address (DNS rebinding) and read it from the browser,
+    /// same-origin, including the headers an action needs. The bar always uses the IP.
     public static func hostIsAllowed(_ head: String) -> Bool {
         guard var host = header("host", in: head) else { return true }
         host = host.lowercased()
@@ -174,17 +166,11 @@ public final class MonitorServer: @unchecked Sendable {
         }
     }
 
-    /// Loopback (any form), the listed peers, or anyone when `peers` is nil.
-    public static func peerMayAct(_ address: String?, peers: Set<String>?) -> Bool {
+    /// Loopback (any form) or one of the listed peers (also IPv4-mapped).
+    public static func peerIsAllowed(_ address: String?, peers: Set<String>) -> Bool {
         guard let address else { return false }
         if address.hasPrefix("127.") || address == "::1" || address.hasPrefix("::ffff:127.") { return true }
-        guard let peers else { return true }
         return peers.contains(address) || (address.hasPrefix("::ffff:") && peers.contains(String(address.dropFirst(7))))
-    }
-
-    /// Whether a `GET`/`HEAD` from `address` is answered: anyone unless `pagesOnly`, then the same rule as for actions.
-    public static func peerMayRead(_ address: String?, peers: Set<String>?, pagesOnly: Bool) -> Bool {
-        pagesOnly ? peerMayAct(address, peers: peers) : true
     }
 
     private func readRequest(_ conn: NWConnection, buffer: Data) {
@@ -199,14 +185,10 @@ public final class MonitorServer: @unchecked Sendable {
         }
     }
 
-    /// Response head: no caching, no sniffing, no referrer, no framing, and for HTML a policy that keeps the page
-    /// to inline script/style and same-origin data and images (what the served pages use).
+    /// Response head: no caching, no sniffing, no referrer, no framing.
     static func responseHead(_ status: String, _ type: String, _ length: Int) -> Data {
         var h = "HTTP/1.1 \(status)\r\nContent-Type: \(type)\r\nContent-Length: \(length)\r\nCache-Control: no-store\r\n"
         h += "X-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\n"
-        if type.hasPrefix("text/html") {
-            h += "Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'\r\n"
-        }
         return Data((h + "Connection: close\r\n\r\n").utf8)
     }
 
@@ -217,29 +199,19 @@ public final class MonitorServer: @unchecked Sendable {
             WireLog.shared.http("monitor ← \(method) \(target) 421 (Host is not an address)")
             send(conn, header("421 Misdirected Request", "text/plain", 0)); return
         }
+        guard method == "POST" || method == "GET" || method == "HEAD" else { send(conn, header("405 Method Not Allowed", "text/plain", 0)); return }
         let path = target.removingPercentEncoding ?? target
+        let notFound = Response("404 Not Found", type: "text/plain", body: Data("not found".utf8))
+        lock.lock(); let r = route, a = actionRoute, peers = allowedPeers; lock.unlock()
         let resp: Response
-        if method == "POST" {
-            // Actions: POST + a custom header, so a page on another origin cannot trigger them (no CORS preflight
-            // passes), and only from the paired bar (or this Mac) when the app has set the peers.
-            lock.lock(); let a = actionRoute, peers = actionPeers; lock.unlock()
-            if !Self.hasActionMarker(requestHead) {
-                resp = Response("403 Forbidden", type: "text/plain", body: Data("actions need the X-Deckhand header".utf8))
-            } else if !Self.peerMayAct(Self.peerAddress(conn), peers: peers) {
-                resp = Response("403 Forbidden", type: "text/plain", body: Data("actions are accepted from the paired bar only".utf8))
-            } else {
-                resp = a(path) ?? Response("404 Not Found", type: "text/plain", body: Data("not found".utf8))
-            }
+        if !Self.peerIsAllowed(Self.peerAddress(conn), peers: peers) {
+            resp = Response("403 Forbidden", type: "text/plain", body: Data("answered for the paired bar only".utf8))
+        } else if method == "POST" {
+            // Actions: POST + a custom header, so a page on another origin cannot trigger them (no CORS preflight passes).
+            resp = Self.hasActionMarker(requestHead) ? (a(path) ?? notFound)
+                : Response("403 Forbidden", type: "text/plain", body: Data("actions need the X-Deckhand header".utf8))
         } else {
-            guard method == "GET" || method == "HEAD" else { send(conn, header("405 Method Not Allowed", "text/plain", 0)); return }
-            lock.lock(); let r = route, peers = actionPeers, pagesOnly = pagesOnlyForPeers; lock.unlock()
-            if !Self.peerMayRead(Self.peerAddress(conn), peers: peers, pagesOnly: pagesOnly) {
-                resp = Response("403 Forbidden", type: "text/plain", body: Data("pages are served to the paired bar only".utf8))
-            } else {
-                resp = r(path) ?? (path == "/favicon.ico"
-                    ? Response("204 No Content", type: "text/plain", body: Data())   // browsers on the Mac ask; the pages carry no icon
-                    : Response("404 Not Found", type: "text/plain", body: Data("not found".utf8)))
-            }
+            resp = r(path) ?? notFound
         }
         if !target.hasSuffix(".json") { WireLog.shared.http("monitor ← \(method) \(target) \(resp.status)") }
         var out = header(resp.status, resp.type, resp.body.count)
@@ -252,16 +224,16 @@ public final class MonitorServer: @unchecked Sendable {
     }
 }
 
-/// UDP beacon the Monitor app listens for: `{"deckhand":"monitor","url":…,"v":1}` to 255.255.255.255:5320.
+/// UDP beacon the bar apps listen for: `{"deckhand":"monitor","v":2,"base":"http://<mac>:7432","url":"<base>/monitor"}`
+/// to 255.255.255.255:5320. The apps use `base`; `url` is the v1 field, kept so the wire format stays as documented.
 public enum MonitorBeacon {
     public static let port: UInt16 = 5320
 
     /// One beacon: broadcast plus a unicast copy to `host` (the bar's IP) — the bar's Wi-Fi does not pass
     /// 255.255.255.255 broadcasts to it (checked 2026-11-04), the unicast always arrives.
     @discardableResult
-    public static func send(url: String, base: String? = nil, to host: String? = nil) -> Bool {
-        var obj: [String: Any] = ["deckhand": "monitor", "url": url, "v": base == nil ? 1 : 2]
-        if let base { obj["base"] = base }   // v2: each bar app opens base + "/" + its page
+    public static func send(base: String, to host: String? = nil) -> Bool {
+        let obj: [String: Any] = ["deckhand": "monitor", "v": 2, "base": base, "url": base + "/monitor"]
         guard let payload = try? JSONSerialization.data(withJSONObject: obj) else { return false }
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else { return false }

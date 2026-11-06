@@ -1,19 +1,16 @@
 import Foundation
 import UltraBarKit
 
-/// The bar's Monitor app (android/DeckhandMonitor) opens a full-screen page that this Mac serves:
-/// `GET /monitor` (the page) and `GET /monitor/stats.json` (one sample per second). The app finds
-/// the page through a UDP beacon this Mac sends every 5 s while the Monitor is on (2026-11-04).
+/// The bar apps' data API (bar apps 2.0). Every Deckhand app on the bar carries its own page; this Mac answers the
+/// data requests of the ones that show what only it knows (`/monitor/stats.json`, one sample per second, and the
+/// `BarPages` routes), serves `/config.json`, and sends the UDP beacon every 5 s that tells the apps where it is.
+/// It runs as long as Deckhand runs and answers only the selected bar and this Mac itself.
 extension AppModel {
-    nonisolated static let monitorPackage = "nl.denoronha.deckhand.monitor"
-
-    func startMonitor(settings: AppSettings) {
-        monitorTask?.cancel(); monitorTask = nil
-        guard settings.monitorServe else { if MonitorServer.shared.isRunning { MonitorServer.shared.stop() }; barPages.stop(); monitorURL = nil; return }
+    func startBarDataServer(settings: AppSettings) {
+        barDataTask?.cancel(); barDataTask = nil
         let sys = SystemStats(), net = NetworkStats()
         _ = sys.sample(); _ = net.sample()
         let host = Host.current().localizedName ?? "Mac"
-        let page = Self.monitorPage
         barPages.start(model: self, settings: settings)
         let pages = barPages
         MonitorServer.shared.setActionRoute { [weak self] path in
@@ -21,39 +18,32 @@ extension AppModel {
             return pages.action(path, model: self)
         }
         MonitorServer.shared.setRoute { [weak self] path in
-            switch path {
-            case "/", "/monitor", "/monitor/": return .html(page)
-            case "/monitor/stats.json":
+            if path == "/monitor/stats.json" {
                 let s = sys.sample(), n = net.sample()
                 return .json(["cpu": Int(s.cpuPercent.rounded()), "mem": Int(s.memPercent.rounded()),
                               "memUsedGB": (s.memUsedGB * 10).rounded() / 10, "memTotalGB": (s.memTotalGB * 10).rounded() / 10,
                               "down": Int(n.downBytesPerSec), "up": Int(n.upBytesPerSec),
                               "disk": Self.diskUsedPercent(), "host": host, "t": Int(Date().timeIntervalSince1970)])
-            default:
-                guard let self else { return nil }
-                return pages.route(path, model: self)
             }
+            guard let self else { return nil }
+            return pages.route(path, model: self)
         }
-        do { try MonitorServer.shared.start() } catch { monitorError = "\(error)"; say("Monitor page could not start: \(error)"); return }
-        monitorError = nil
-        monitorTask = Task { [weak self] in
+        MonitorServer.shared.setAllowedPeers(Set([ipForSelected()].compactMap { $0 }))
+        do { try MonitorServer.shared.start() } catch { barDataError = "\(error)"; say("The bar apps' data could not be served: \(error)"); return }
+        barDataError = nil
+        barDataTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
+                // Data and actions go to the selected bar only (and this Mac); picking another bar moves them within 5 s.
                 let peer = self.ipForSelected()
-                // Actions (Music, Linear) come from the selected bar only; the pages stay readable on the LAN
-                // unless Settings → "Serve the pages only to the bar" is on (then GET is peer-checked too).
-                MonitorServer.shared.setActionPeers(Set([peer].compactMap { $0 }))
-                MonitorServer.shared.setPagesOnlyForPeers(settings.pagesOnlyForBar)
-                let url = MonitorServer.shared.url(reachableFrom: peer ?? "192.168.255.255")
-                if url != self.monitorURL { self.monitorURL = url }
-                if let url { MonitorBeacon.send(url: url, base: String(url.dropLast("/monitor".count)), to: peer) }
+                MonitorServer.shared.setAllowedPeers(Set([peer].compactMap { $0 }))
+                let base = MonitorServer.shared.baseURL(reachableFrom: peer ?? "192.168.255.255")
+                if base != self.barDataURL { self.barDataURL = base }
+                if let base { MonitorBeacon.send(base: base, to: peer) }
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
-        say("Monitor page is on — the bar's Monitor app finds it by itself.")
     }
-
-    var monitorInstalled: Bool { barApps.contains { $0.packageName == Self.monitorPackage } }
 
     /// The bar apps (android/DeckhandMonitor flavors): page id, label, bundled APK name. Order = order on the Apps page.
     static let barAppPages: [(page: String, label: String, apk: String)] = [
@@ -128,9 +118,4 @@ extension AppModel {
             refreshAppStore()
         }
     }
-
-    /// Full-screen page for the 1424×280 bar: a moving CPU area chart, memory and disk bars, network
-    /// up/down sparkline, clock. Plain canvas, no libraries; polls stats.json once a second.
-    /// Lives in `Resources/pages/monitor.html`, served through the `BarPages` resource cache.
-    nonisolated static var monitorPage: String { BarPages.html("monitor") }
 }
