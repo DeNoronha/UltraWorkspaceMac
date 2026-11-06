@@ -143,6 +143,7 @@ public enum ClaudeUsage {
     public struct Session: Sendable, Identifiable {
         public enum State: String, Sendable { case working, waiting, question }
         public var id: String          // session file name
+        public var cwd: String         // the session's working directory ("" when unknown)
         public var project: String     // the session's own name (`/rename`, as in cmux) if it has one, else the cwd's last path component
         public var title: String       // Claude's title for the session, else the first user prompt, trimmed
         public var state: State
@@ -220,7 +221,7 @@ public enum ClaudeUsage {
             guard now.timeIntervalSince(at) <= window else { continue }
             let folder = cwd.isEmpty ? url.deletingLastPathComponent().lastPathComponent.split(separator: "-").last.map(String.init) ?? "?" : (cwd as NSString).lastPathComponent
             let name = names?.custom ?? "", ai = names?.ai ?? ""
-            out.append(Session(id: id, project: name.isEmpty ? folder : name, title: trim(ai.isEmpty ? title : ai, 70),
+            out.append(Session(id: id, cwd: cwd, project: name.isEmpty ? folder : name, title: trim(ai.isEmpty ? title : ai, 70),
                                state: state, lastAt: at, lastText: trim(last, 140)))
         }
         return out.sorted { $0.lastAt > $1.lastAt }

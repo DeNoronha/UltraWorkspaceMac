@@ -50,13 +50,14 @@ final class BarPages {
                 if let s = self, !s.wanted("claude"), !s.wanted("music") { try? await Task.sleep(nanoseconds: 2_000_000_000); continue }
                 // Low priority and incremental (ClaudeUsage.snapshot): this must never crowd out the link.
                 let s = await Task.detached(priority: .utility) { ClaudeUsage.sessions() }.value
+                let cmux = await Task.detached(priority: .utility) { CmuxNames.byDirectory() }.value
                 let snap = await Task.detached(priority: .utility) { ClaudeUsage.snapshot() }.value
                 // Music's state comes from the model's own 3 s poll (and is refreshed at once by the page's
                 // play/next/previous): asking Music again here ran a second AppleScript on the main thread every 2 s.
                 let np = model.nowPlaying
                 guard let self else { return }
                 let now = Date()
-                self.claude = ["sessions": s.prefix(6).map { ["project": $0.project, "title": $0.title, "state": $0.state.rawValue, "ago": Int(now.timeIntervalSince($0.lastAt)), "last": $0.lastText] },
+                self.claude = ["sessions": s.prefix(6).map { ["project": cmux[$0.cwd] ?? $0.project, "title": $0.title, "state": $0.state.rawValue, "ago": Int(now.timeIntervalSince($0.lastAt)), "last": $0.lastText] },
                                "tokens": ClaudeUsage.shortTokens(snap.todayTokens), "active": snap.activeSessions, "waiting": s.filter { $0.state != .working }.count]
                 let key = np.title + "|" + np.artist + "|" + np.album
                 if np.hasTrack, self.art?.key != key {
