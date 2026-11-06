@@ -41,6 +41,8 @@ final class AppModel: ObservableObject {
     @Published var corebarPages: [CoreBarSession.PageInfo] = []
     /// Apps installed on the bar (GET_APP_LIST). Each becomes an "Open <app>" bar card (`APP:<package>`).
     @Published var barApps: [CoreBarSession.AppInfo] = []
+    /// Firmware apps Android has turned off on the bar (`pm list packages -d`), see AppModel+Apps.
+    @Published var turnedOffApps: Set<String> = []
     /// Apps page: the vendor marketplace catalogue, per-package install status, the package being worked on.
     @Published var storeApps: [BarAppStore.StoreApp] = []
     @Published var storeScreensavers: [BarAppStore.StoreApp] = []

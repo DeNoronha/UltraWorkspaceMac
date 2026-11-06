@@ -37,15 +37,21 @@ struct AppsView: View {
     private struct Entry: Identifiable {
         let package: String, name: String, version: String, icon: URL?
         let installed: CoreBarSession.AppInfo?, store: BarAppStore.StoreApp?
+        /// Turned off by Android (firmware apps only); the bar does not list it while it is off.
+        var off = false
         var id: String { package }
-        var system: Bool { installed?.systemApp ?? false }
+        var system: Bool { off || (installed?.systemApp ?? false) }
     }
     private var entries: [Entry] {
         var out: [String: Entry] = [:]
         for s in model.storeApps { out[s.package] = Entry(package: s.package, name: s.name, version: s.versionName, icon: s.iconURL, installed: nil, store: s) }
         for a in model.barApps where !a.isScreensaver && !a.packageName.hasPrefix(BarPages.packagePrefix) {
             let s = out[a.packageName]?.store
-            out[a.packageName] = Entry(package: a.packageName, name: s?.name ?? a.appName, version: a.versionName, icon: s?.iconURL ?? a.iconUrl.flatMap(URL.init), installed: a, store: s)
+            out[a.packageName] = Entry(package: a.packageName, name: s?.name ?? a.appName, version: a.versionName, icon: s?.iconURL ?? a.iconUrl.flatMap(URL.init), installed: a, store: s,
+                                       off: model.turnedOffApps.contains(a.packageName))
+        }
+        for p in model.turnedOffApps where out[p]?.installed == nil {
+            out[p] = Entry(package: p, name: model.turnedOffName(p) ?? out[p]?.name ?? p, version: "", icon: out[p]?.icon, installed: nil, store: out[p]?.store, off: true)
         }
         return out.values.sorted { ($0.installed == nil ? 1 : 0, $0.name.lowercased()) < ($1.installed == nil ? 1 : 0, $1.name.lowercased()) }
     }
@@ -83,7 +89,7 @@ struct AppsView: View {
                     if !firmware.isEmpty {
                         Section("Built into the firmware") {
                             ForEach(firmware) { e in
-                                LibraryRow(title: e.name, caption: e.version, inUse: true, busy: model.appBusy == e.package, updateAvailable: updateAvailable(e)) {
+                                LibraryRow(title: e.name, caption: e.off ? "turned off" : e.version, inUse: !e.off, busy: model.appBusy == e.package, updateAvailable: updateAvailable(e)) {
                                     AppIcon(url: e.icon, fallback: "app.badge", size: 18)
                                 }.tag(e.package)
                             }
@@ -207,16 +213,26 @@ struct AppsView: View {
 
     @ViewBuilder private func entryDetail(_ e: Entry) -> some View {
         let busy = model.appBusy == e.package, update = updateAvailable(e)
-        let tag: (String, Color) = update ? ("update \(e.store?.versionName ?? "")", .orange) : (model.staleCatalogueNote(e.package).map { ($0, .secondary) } ?? (e.system ? ("built in", .secondary) : (e.installed != nil ? ("installed", .green) : ("not installed", .secondary))))
+        let tag: (String, Color) = update ? ("update \(e.store?.versionName ?? "")", .orange) : (model.staleCatalogueNote(e.package).map { ($0, .secondary) } ?? (e.off ? ("turned off", .secondary) : e.system ? ("built in", .secondary) : (e.installed != nil ? ("installed", .green) : ("not installed", .secondary))))
         DetailTitle(title: e.name, version: e.installed == nil ? e.store?.versionName : e.version, tag: tag, subtitle: e.package + (e.store == nil ? " · not in the marketplace" : "")) {
             AppIcon(url: e.icon, fallback: e.system ? "app.badge" : "app", size: 48)
         }
         if let s = e.store, !s.summary.isEmpty { Text(s.summary).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+        if e.system {
+            InstalledToggle(title: "Turned on", isOn: !e.off, busy: busy, disabled: model.appBusy != nil || !AppModel.canTurnOff(e.package) || model.adbStatus.wifi != true,
+                            note: !AppModel.canTurnOff(e.package) ? "The bar needs this app; it cannot be turned off." : (model.adbStatus.wifi != true ? "Needs the debug bridge (Settings)." : nil),
+                            confirmOff: "Turn off \(e.name)? It disappears from the bar and does not run until you turn it on again here.") { on in
+                if !on { setIcon(AppModel.appCardPrefix + e.package, false) }
+                model.setAppTurnedOn(e.package, name: e.name, on)
+            }
+        }
         HStack(spacing: 14) {
+            if !e.system {
             InstalledToggle(title: "On the bar", isOn: e.installed != nil, busy: busy, disabled: model.appBusy != nil || !model.link.isConnected || e.system || (e.installed == nil && e.store == nil),
                             note: e.system ? "Part of the firmware; it cannot be removed." : nil, confirmOff: "Remove \(e.name) from the bar?") { on in
                 if !on { setIcon(AppModel.appCardPrefix + e.package, false) }
                 if on { model.installApp(e.package, name: e.name) } else { model.uninstallApp(e.package, name: e.name) }
+            }
             }
             if update, let s = e.store, !busy {
                 Button { model.installApp(e.package, name: e.name) } label: { Label("Update to \(s.versionName)", systemImage: "arrow.down.circle") }
@@ -233,7 +249,7 @@ struct AppsView: View {
         if let s = e.store, !s.changeLog.isEmpty {
             Panel("What's new in \(s.versionName)") { Text(s.changeLog).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
         }
-        Text(e.system ? "Part of the bar's system image: updatable from the marketplace, not removable." : "The bar downloads and installs the app itself (it needs internet), one at a time, in about ten seconds. No settings on this side; the app has its own on the bar.")
+        Text(e.system ? "Part of the bar's system image: updatable from the marketplace, not removable. Turning it off is Android's own switch: the app stays on the bar but does not run and is not shown, until you turn it on again." : "The bar downloads and installs the app itself (it needs internet), one at a time, in about ten seconds. No settings on this side; the app has its own on the bar.")
             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
     }
 }

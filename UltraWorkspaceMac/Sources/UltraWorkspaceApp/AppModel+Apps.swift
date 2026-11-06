@@ -13,6 +13,7 @@ extension AppModel {
                 do { self.storeScreensavers = try await BarAppStore.fetch(appType: BarAppStore.screensaversType) }
                 catch { self.appStoreError = "The screensaver catalogue did not answer: \(error.localizedDescription)" }
                 if let list = try? await session.listApps() { self.barApps = list }
+                self.refreshTurnedOffApps()
                 if let c = try? await session.readScreensaver() { self.screensaver = c }
                 for a in apps + self.storeScreensavers { if let st = try? await session.appStatus(package: a.package) { self.appStatus[a.package] = st } }
             } catch {
@@ -116,6 +117,62 @@ extension AppModel {
                 say(ok ? "Bar: \(name) removed." : "Bar: could not remove \(name).")
                 if ok { self.appStoreError = nil } else { self.appStoreError = "The bar refused to remove \(name)." }
             } catch { self.appStoreError = "Uninstall failed: \(FriendlyError.text(error))" }
+        }
+    }
+}
+
+// MARK: Turning firmware apps off (2026-11-06)
+
+/// Firmware apps cannot be removed, but Android can turn them off (`pm disable-user`): they disappear from the bar
+/// until they are turned on again, and nothing of them runs. The launcher, the module hub, the keyboard, Android's own
+/// packages and Deckhand's apps are never offered, so the bar cannot be broken this way.
+@MainActor
+extension AppModel {
+    private static let turnedOffNamesKey = "turnedOffAppNames"
+
+    static func canTurnOff(_ package: String) -> Bool {
+        let keep: Set<String> = ["com.ultrabar.launch", "com.ultrabar.hub", "com.ultrabar.inputmethod"]
+        return !keep.contains(package) && !package.hasPrefix(BarPages.packagePrefix)
+            && !package.hasPrefix("android") && !package.hasPrefix("com.android.") && !package.hasPrefix("com.google.")
+            && package.range(of: #"^[A-Za-z0-9_.]+$"#, options: .regularExpression) != nil
+    }
+
+    /// The name an app had when it was turned off (the bar no longer lists it while it is off).
+    func turnedOffName(_ package: String) -> String? {
+        (UserDefaults.standard.dictionary(forKey: Self.turnedOffNamesKey) as? [String: String])?[package]
+    }
+
+    /// Read which packages Android has turned off (`pm list packages -d`).
+    func refreshTurnedOffApps() {
+        guard let adb = AdbBridge.find(), let ip = ipForSelected() else { return }
+        Task {
+            let bridge = AdbBridge(path: adb, ip: ip)
+            guard await bridge.connect() else { return }
+            let out = await bridge.shell("pm list packages -d")
+            turnedOffApps = Set(out.split(separator: "\n").compactMap { l in
+                l.hasPrefix("package:") ? String(l.dropFirst(8)).trimmingCharacters(in: .whitespaces) : nil
+            }.filter(Self.canTurnOff))
+        }
+    }
+
+    func setAppTurnedOn(_ package: String, name: String, _ on: Bool) {
+        guard Self.canTurnOff(package), appBusy == nil, let adb = AdbBridge.find(), let ip = ipForSelected() else { return }
+        appBusy = package
+        Task {
+            defer { appBusy = nil }
+            let bridge = AdbBridge(path: adb, ip: ip)
+            guard await bridge.connect() else { say("The bar refuses ADB on \(ip):5555 — Settings → Debug bridge."); return }
+            let out = await bridge.shell(on ? "pm enable \(package)" : "pm disable-user --user 0 \(package)")
+            var names = (UserDefaults.standard.dictionary(forKey: Self.turnedOffNamesKey) as? [String: String]) ?? [:]
+            if on { names[package] = nil } else { names[package] = name }
+            UserDefaults.standard.set(names, forKey: Self.turnedOffNamesKey)
+            if out.contains(on ? "enabled" : "disabled") {
+                if on { turnedOffApps.remove(package) } else { turnedOffApps.insert(package) }
+                say(on ? "\(name) is turned on again." : "\(name) is turned off on the bar.")
+            } else {
+                say("The bar did not \(on ? "turn on" : "turn off") \(name): \(out.trimmingCharacters(in: .whitespacesAndNewlines))")
+            }
+            if let session = selectedCoreBar.flatMap(session(for:)), let list = try? await session.listApps() { barApps = list }
         }
     }
 }
