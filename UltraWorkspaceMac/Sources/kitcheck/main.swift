@@ -98,6 +98,18 @@ if let i = CommandLine.arguments.firstIndex(of: "readprop"), CommandLine.argumen
     exit(0)
 }
 
+// `kitcheck raw <ip> <serial> <act> [json-object]` — any act with a JSON object as data (default {}), prints the reply.
+if let i = CommandLine.arguments.firstIndex(of: "raw"), CommandLine.arguments.count > i + 3, let act = Int(CommandLine.arguments[i + 3]) {
+    let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2]
+    var payload: [String: Any] = [:]
+    if CommandLine.arguments.count > i + 4, let d = CommandLine.arguments[i + 4].data(using: .utf8),
+       let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] { payload = j }
+    guard let token = Store.shared.loadToken(serial: serial) else { print("no stored token"); exit(2) }
+    let s = CoreBarSession(ip: ip, token: token, certPin: Store.shared.certPin(for: serial))
+    do { print(try await s.rawRequest(act: act, data: payload, timeout: 10)) } catch { print("request failed: \(error)") }
+    exit(0)
+}
+
 // `kitcheck writeprop <ip> <serial> <moduleSerial> <propertyId> <int|true|false>` — MODULE_PROPERTY_WRITE, prints the reply code.
 if let i = CommandLine.arguments.firstIndex(of: "writeprop"), CommandLine.arguments.count > i + 5 {
     let ip = CommandLine.arguments[i + 1], serial = CommandLine.arguments[i + 2], mod = CommandLine.arguments[i + 3]
