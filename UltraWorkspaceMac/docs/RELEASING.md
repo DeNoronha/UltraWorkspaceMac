@@ -28,10 +28,12 @@ gh release create "v$VER" dist/Deckhand.dmg \
   --notes "Signed with a Developer ID and notarized — opens without a Gatekeeper warning."
 ```
 
+Publishing the release runs `.github/workflows/pages.yml`, which redeploys the site with the new `Deckhand.dmg` behind its download buttons. The repository's `github-pages` environment allows deployments from `main` and from tags `v*` (the tag rule was added 2026-11-06; without it the release-triggered deploy is rejected). To redeploy by hand: `gh workflow run pages.yml --repo DeNoronha/UltraWorkspaceMac --ref main`.
+
 ## Signing & notarization (set up 2026-11-01, automatic in the scripts)
 
 1. `packaging/make-app.sh` picks the first `Developer ID Application: …` identity from the keychain (`security find-identity`) and signs with `--options runtime --timestamp`; override with `DECKHAND_SIGN_IDENTITY="Developer ID Application: …"`, or force ad-hoc with `DECKHAND_SIGN_IDENTITY=-`.
-2. `packaging/make-dmg.sh` signs the DMG with the same identity and, when notary credentials exist under the keychain profile `deckhand-notary` (override with `DECKHAND_NOTARY_PROFILE`), runs `xcrun notarytool submit --wait`, staples the ticket and checks it with `spctl`. One-time setup: `xcrun notarytool store-credentials "deckhand-notary" --apple-id <apple-id> --team-id <TEAMID> --password <app-specific-password>`.
+2. `packaging/make-dmg.sh` signs the DMG with the same identity and, when notary credentials exist under the keychain profile `deckhand-notary` (override with `DECKHAND_NOTARY_PROFILE`), runs `xcrun notarytool submit --wait`, staples the ticket and checks it with `spctl`. One-time setup, in your own Terminal: `xcrun notarytool store-credentials "deckhand-notary" --apple-id <apple-id> --team-id <TEAMID>`; it asks for an app-specific password (account.apple.com → Sign-In and Security → App-Specific Passwords; Apple shows it only once, so create a new one when it is lost).
 3. Releases built this way install with no Gatekeeper warning; the DMG's "Read Me First" says so (the text is chosen after the notarization decision, so it never claims a notarization that did not happen). Without the identity or the credentials the script says why it did not notarize; a DMG that Gatekeeper rejects after stapling aborts the build. v0.1.0 was ad-hoc signed; v0.2.0 was the first notarized release.
 
 Gotcha in these scripts: never pipe `codesign … | grep -q` under `pipefail` — SIGPIPE makes codesign exit 141 and the test silently fails.
