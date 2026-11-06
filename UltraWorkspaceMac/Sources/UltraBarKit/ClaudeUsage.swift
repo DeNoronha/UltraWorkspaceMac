@@ -148,13 +148,26 @@ public enum ClaudeUsage {
         public var title: String       // Claude's title for the session, else the first user prompt, trimmed
         public var state: State
         public var lastAt: Date
-        public var lastText: String    // last assistant text, trimmed
+        public var lastText: String    // the newest assistant text, trimmed
     }
 
     /// Session names per transcript: the newest `custom-title` (the name given with `/rename`, which cmux shows too)
     /// and `ai-title`. Found once by scanning the whole file, then kept up to date from each tail read.
     private static let titleLock = NSLock()
     nonisolated(unsafe) private static var titles: [String: (custom: String, ai: String)] = [:]
+
+    /// The title entries in a whole transcript, found by byte search (transcripts reach 100 MB+; decoding them as
+    /// text took seconds). Only the lines that contain a title are parsed.
+    private static func titleEntries(_ data: Data, into t: inout (custom: String, ai: String)) {
+        let needle = Data("-title\"".utf8), newline = UInt8(ascii: "\n")
+        var from = data.startIndex
+        while let hit = data.range(of: needle, in: from..<data.endIndex) {
+            let start = data[..<hit.lowerBound].lastIndex(of: newline).map { $0 + 1 } ?? data.startIndex
+            let end = data[hit.upperBound...].firstIndex(of: newline) ?? data.endIndex
+            titleLines(Substring(String(decoding: data[start..<end], as: UTF8.self)), into: &t)
+            from = end
+        }
+    }
 
     private static func titleLines(_ text: Substring, into t: inout (custom: String, ai: String)) {
         for line in text.split(separator: "\n") where line.contains("-title\"") {
@@ -221,8 +234,8 @@ public enum ClaudeUsage {
             let id = url.deletingPathExtension().lastPathComponent
             let tailText = String(decoding: tailData, as: UTF8.self)
             titleLock.lock(); var names = titles[id]; titleLock.unlock()
-            if names == nil, let whole = try? String(contentsOf: url, encoding: .utf8) {
-                var t = (custom: "", ai: ""); titleLines(Substring(whole), into: &t); names = t
+            if names == nil, let whole = try? Data(contentsOf: url, options: .alwaysMapped) {
+                var t = (custom: "", ai: ""); titleEntries(whole, into: &t); names = t
             } else if var t = names { titleLines(Substring(tailText), into: &t); names = t }
             titleLock.lock(); titles[id] = names; titleLock.unlock()
             var state = Session.State.working, last = "", lastAt: Date?
@@ -239,15 +252,35 @@ public enum ClaudeUsage {
                     if tools.contains("AskUserQuestion") { state = .question }
                     else if tools.isEmpty { state = .waiting }
                     else { state = .working }
-                    last = content.compactMap { ($0["type"] as? String) == "text" ? $0["text"] as? String : nil }.joined(separator: " ")
                     break
+                }
+            }
+            // What Claude last said: the newest assistant entry with text, also while it is busy with tools. A busy
+            // session's last 64 KB can be all tool output, so look further back (512 KB, then 4 MB) when needed.
+            func newestText(_ text: String) -> String? {
+                for line in text.split(separator: "\n").reversed() where line.contains("\"assistant\"") {
+                    guard let obj = parse(line), (obj["type"] as? String) == "assistant",
+                          let content = (obj["message"] as? [String: Any])?["content"] as? [[String: Any]] else { continue }
+                    let t = content.compactMap { ($0["type"] as? String) == "text" ? $0["text"] as? String : nil }.joined(separator: " ")
+                    if !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return t }
+                }
+                return nil
+            }
+            if let t = newestText(tailText) { last = t }
+            else {
+                for span in [UInt64(512_000), 4_000_000] where size > 64_000 {
+                    guard let h2 = try? FileHandle(forReadingFrom: url) else { break }
+                    try? h2.seek(toOffset: size > span ? size - span : 0)
+                    let more = (try? h2.readToEnd()) ?? Data(); try? h2.close()
+                    if let t = newestText(String(decoding: more, as: UTF8.self)) { last = t; break }
+                    if size <= span { break }
                 }
             }
             let at = lastAt ?? mod
             let folder = cwd.isEmpty ? url.deletingLastPathComponent().lastPathComponent.split(separator: "-").last.map(String.init) ?? "?" : (cwd as NSString).lastPathComponent
             let name = names?.custom ?? "", ai = names?.ai ?? ""
             return Session(id: id, cwd: cwd, project: name.isEmpty ? folder : name, title: trim(ai.isEmpty ? title : ai, 70),
-                           state: state, lastAt: at, lastText: trim(last, 140))
+                           state: state, lastAt: at, lastText: trim(last, 220))
     }
 
     private static func parse(_ line: Substring) -> [String: Any]? {

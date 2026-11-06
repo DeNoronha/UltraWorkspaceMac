@@ -3,6 +3,13 @@ const POLL=2000;
 function fontOf(size,weight){ return (weight||'400')+' '+size+'px -apple-system,Roboto,Helvetica,Arial,sans-serif'; }
 function fit(s,maxW,size,weight){ s=s||''; g.font=fontOf(size,weight); if(g.measureText(s).width<=maxW) return s;
   while(s.length>1 && g.measureText(s+'…').width>maxW) s=s.slice(0,-1); return s+'…'; }
+// Up to `n` lines that fit `maxW`, breaking at spaces; the last line ends in an ellipsis when text is left over.
+function lines(s,maxW,size,n){ s=(s||'').replace(/\s+/g,' ').trim(); const out=[]; g.font=fontOf(size);
+  while(s && out.length<n){ if(out.length===n-1){ out.push(fit(s,maxW,size)); break; }
+    let cut=s.length; while(cut>1 && g.measureText(s.slice(0,cut)).width>maxW) cut--;
+    if(cut<s.length){ const sp=s.lastIndexOf(' ',cut); if(sp>cut*0.5) cut=sp; }
+    out.push(s.slice(0,cut).trim()); s=s.slice(cut).trim(); }
+  return out; }
 function two(s,maxW,size){ s=(s||'').trim(); g.font=fontOf(size); if(g.measureText(s).width<=maxW) return [s,''];
   let cut=s.length; while(cut>1 && g.measureText(s.slice(0,cut)).width>maxW) cut--;
   const sp=s.lastIndexOf(' ',cut); if(sp>cut*0.6) cut=sp; return [s.slice(0,cut), fit(s.slice(cut).trim(),maxW,size)]; }
@@ -37,8 +44,9 @@ function render(d){
     const label=s.state==='question'?'asks a question': wait?'waiting for you': run?'running':'idle';
     if(run){ g.fillStyle='#4C8DFF'; g.beginPath(); g.arc(x+P+5,Y+59,5,0,7); g.fill(); }
     txt(fit(label,IW-(run?16:0),small,'600'),x+P+(run?16:0),Y+64,small, wait?'#fde047': run?'#7aa7ff':'#8b94a6','left','600');
-    const [t1,t2]=two(s.title,IW,small); txt(t1,x+P,Y+98,small,'#c7cdd8'); if(t2) txt(t2,x+P,Y+98+small+6,small,'#c7cdd8');
-    const ls=small-1, [l1,l2]=two(s.last,IW,ls); txt(l1,x+P,Y+160,ls,'#8b94a6'); if(l2) txt(l2,x+P,Y+160+ls+6,ls,'#8b94a6');
+    // What Claude last said, as large as the tile allows (the session's title is in the name already).
+    const ls=Math.min(19,Math.round(W/10)), lh=ls+6, top=Y+98, n=Math.max(1,Math.floor((Y+H-40-top)/lh)+1);
+    lines(s.last,IW,ls,n).forEach((l,k)=>txt(l,x+P,top+k*lh,ls,'#d6dbe6'));
     txt(ago(s.ago)+' ago',x+P,Y+H-16,13,'#6b7280');
   });
 }
