@@ -31,6 +31,13 @@ final class BarPages {
     /// Seconds since a page last asked for its data (nil: never) — `AppModel.musicWanted` slows the Music poll on it.
     func secondsSinceHit(_ page: String) -> TimeInterval? { lastHit[page].map { Date().timeIntervalSince($0) } }
     private var tasks: [Task<Void, Never>] = []
+    /// When the Claude/Music and Calendar feeds last produced data.
+    private var updated: [String: Date] = [:]
+    /// The Claude/Music and Calendar feeds run only while their bar app asked for data in the last ten minutes,
+    /// so a Mac without those apps on a bar spends nothing on them.
+    private func wanted(_ page: String) -> Bool { lastHit[page].map { Date().timeIntervalSince($0) < 600 } ?? false }
+    /// The feed behind each gated page.
+    private nonisolated static let feedOf: [String: String] = ["claude": "claude", "music": "claude", "calendar": "calendar"]
     /// What the on-bar apps need from this Mac, at most every few minutes: where, which units, which coins.
     private var barConfig: [String: Any] = [:]
 
@@ -40,6 +47,7 @@ final class BarPages {
         startConfigFeed(model: model, settings: settings)
         tasks.append(Task { [weak self] in   // Claude sessions + Music: 2 s
             while !Task.isCancelled {
+                if let s = self, !s.wanted("claude"), !s.wanted("music") { try? await Task.sleep(nanoseconds: 2_000_000_000); continue }
                 // Low priority and incremental (ClaudeUsage.snapshot): this must never crowd out the link.
                 let s = await Task.detached(priority: .utility) { ClaudeUsage.sessions() }.value
                 let snap = await Task.detached(priority: .utility) { ClaudeUsage.snapshot() }.value
@@ -56,11 +64,13 @@ final class BarPages {
                     self.art = (key, jpeg ?? Data())
                 }
                 self.music = ["playing": np.isPlaying, "hasTrack": np.hasTrack, "title": np.title, "artist": np.artist, "album": np.album, "artKey": key.hashValue]
+                self.updated["claude"] = Date()
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
         })
         tasks.append(Task { [weak self] in   // calendar: 1 min
             while !Task.isCancelled {
+                if let s = self, !s.wanted("calendar") { try? await Task.sleep(nanoseconds: 2_000_000_000); continue }
                 let events = await CalendarSource.upcoming(limit: 40, calendarIDs: settings.calendarIDs, days: 3)
                 guard let self else { return }
                 let cal = Calendar.current, today = cal.startOfDay(for: Date())
@@ -78,6 +88,7 @@ final class BarPages {
                     days.append(["name": name, "date": d.formatted(.dateTime.day().month(.abbreviated)), "events": evs])
                 }
                 self.calendar = ["days": days, "authorized": CalendarSource.authStatus() == .authorized]
+                self.updated["calendar"] = Date()
                 try? await Task.sleep(nanoseconds: 60_000_000_000)
             }
         })
@@ -222,7 +233,17 @@ final class BarPages {
         let parts = path.split(separator: "/").map(String.init)
         if parts == ["config.json"] { return .json(DispatchQueue.main.sync { self.barConfig }) }
         guard parts.count == 2, let page = parts.first, Self.macPages.contains(page) else { return nil }
-        if parts[1] == "data.json" { return .json(DispatchQueue.main.sync { self.lastHit[page] = Date(); return self.data(page) }) }
+        if parts[1] == "data.json" {
+            // A request that wakes an idle feed gets 503: the page retries in 2 s and then gets fresh data, instead
+            // of showing what the feed had before it went idle until its next poll.
+            let body: [String: Any]? = DispatchQueue.main.sync {
+                let feed = Self.feedOf[page]
+                let fresh = feed.map { f in self.wanted(page) && (self.updated[f].map { Date().timeIntervalSince($0) < 600 } ?? false) } ?? true
+                self.lastHit[page] = Date()
+                return fresh ? self.data(page) : nil
+            }
+            return body.map { .json($0) } ?? MonitorServer.Response("503 Service Unavailable", type: "text/plain", body: Data())
+        }
         if page == "music", parts[1] == "art.jpg" {
             let jpeg = DispatchQueue.main.sync { self.art?.jpeg } ?? Data()
             return jpeg.isEmpty ? nil : MonitorServer.Response(type: "image/jpeg", body: jpeg)
