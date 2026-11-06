@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>OpenBarX marketplace — apps and cards for the UltraBar X</title>
-<meta name="description" content="Apps for the CoreBar's screen and cards for the VivoCube, installed through Deckhand. A public, curated index.">
+<meta name="description" content="Apps, VivoCube cards, screensavers and hotkey packs for the UltraBar X, from one shared public index.">
 <meta property="og:title" content="OpenBarX marketplace — apps and cards for the UltraBar X">
-<meta property="og:description" content="Eleven bar apps and seven cube cards today, curated through pull requests. Installed through Deckhand.">
+<meta property="og:description" content="Bar apps, VivoCube cards, screensavers and hotkey packs, from the shared openbarx-marketplace index.">
 <meta property="og:image" content="https://denoronha.github.io/UltraWorkspaceMac/assets/img/screens/bar-monitor.png">
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,17 +14,82 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,700;0,6..12,900&family=JetBrains+Mono:wght@400&display=swap">
 <link rel="stylesheet" href="../assets/site.css">
 <style>
-  .filters { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:2rem }
-  .filters button { all:unset; cursor:pointer; min-height:44px; padding:.4rem 1rem; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); font:700 .875rem/1.5 var(--font-sans); color:var(--text) }
-  .filters button[aria-pressed="true"] { background:var(--ink-900); color:#fff; border-color:var(--ink-900) }
-  .filters button:focus-visible { box-shadow:var(--shadow-ring) }
-  .count { margin-bottom:1rem }
-  .cards-grid { display:grid; gap:1.5rem; grid-template-columns:repeat(auto-fill,minmax(14rem,1fr)) }
-  .cube { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:1.25rem; display:grid; gap:.5rem; min-width:0 }
-  .cube .sq { width:3rem; height:3rem; border-radius:3px; background:var(--ink-900); display:grid; place-items:center; color:var(--accent); font:700 .75rem/1 var(--font-mono); letter-spacing:.04em }
-  .cube h3 { font-size:1.125rem }
-  .cube p { color:var(--ink-500); font-size:.875rem; line-height:1.375rem }
-  .submit { display:grid; gap:1.5rem; max-width:44rem }
+  /* Store layout: dark, in the site's own palette (ink ramp, viking cyan). */
+  .store { background:var(--ink-900); color:#f2f2f2; --card:#1c1c1c; --card-2:#232323; --line:#2e2e2e; --soft:#a8a8a8; --badge-bg:rgba(100,215,214,.14); }
+  .store a { color:inherit }
+  .store-wrap { display:grid; grid-template-columns:15rem minmax(0,1fr); max-width:96rem; margin:0 auto; min-height:70vh }
+  .store-side { position:sticky; top:0; align-self:start; padding:1.5rem 1rem; display:grid; gap:.25rem }
+  .store-side button { all:unset; cursor:pointer; display:flex; align-items:center; gap:.75rem; min-height:44px; padding:0 .875rem; border-radius:10px; font:600 1rem/1 var(--font-sans); color:#e6e6e6 }
+  .store-side button .ic { width:1.75rem; height:1.75rem; border-radius:7px; display:grid; place-items:center; font-size:1rem; background:var(--card-2); color:var(--viking-400) }
+  .store-side button[aria-current="true"] { background:#262626; color:#fff }
+  .store-side button:focus-visible { box-shadow:var(--shadow-ring) }
+  .store-side .count { margin-left:auto; font:400 .8125rem/1 var(--font-mono); color:var(--soft) }
+  .store-main { padding:1.25rem 1.5rem 4rem; border-left:1px solid var(--line); min-width:0 }
+  .store-top { display:flex; gap:1rem; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:1.5rem }
+  .store-top h1 { font:900 1.75rem/1.2 var(--font-sans); color:#fff; margin:0 }
+  .store-top h1 i { color:var(--viking-400); font-style:normal }
+  .search { flex:0 1 28rem; display:flex; align-items:center; gap:.5rem; background:#1e1e1e; border:1px solid var(--line); border-radius:999px; padding:0 1rem; min-height:44px; color:#8a8a8a }
+  .search input { all:unset; flex:1; font:400 1rem/1.4 var(--font-sans); color:#fff; min-width:0 }
+  .search input::placeholder { color:#8a8a8a }
+  .search:focus-within { box-shadow:var(--shadow-ring) }
+  .row { margin:0 0 2.5rem }
+  .row-head { display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; margin-bottom:.875rem }
+  .row-head h2 { font:800 1.375rem/1.2 var(--font-sans); color:#fff; margin:0 }
+  .row-head p { margin:.25rem 0 0; color:var(--soft); font-size:.875rem }
+  .row-head .see { all:unset; cursor:pointer; color:var(--viking-400); font:600 .875rem/1 var(--font-sans); white-space:nowrap; min-height:44px; display:flex; align-items:center }
+  .rail { position:relative }
+  .track { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(17rem,22rem); gap:1.25rem; overflow-x:auto; scroll-snap-type:x mandatory; padding:.25rem .125rem .75rem; scrollbar-width:thin; scrollbar-color:#3a3a3a transparent }
+  .grid { display:grid; gap:1.5rem 1.25rem; grid-template-columns:repeat(auto-fill,minmax(17rem,1fr)) }
+  .next { all:unset; cursor:pointer; position:absolute; right:-.5rem; top:4.5rem; width:44px; height:44px; border-radius:50%; background:rgba(28,28,28,.92); border:1px solid #444; display:grid; place-items:center; color:#fff; font-size:1.25rem }
+  .next:focus-visible { box-shadow:var(--shadow-ring) }
+  .item { all:unset; cursor:pointer; scroll-snap-align:start; display:grid; gap:.75rem; min-width:0; align-content:start }
+  .item:focus-visible .banner { box-shadow:var(--shadow-ring) }
+  .banner { position:relative; aspect-ratio:2/1; border-radius:14px; overflow:hidden; background:var(--card); border:1px solid var(--line); transition:transform var(--dur) var(--ease) }
+  .item:hover .banner { transform:translateY(-2px) }
+  .banner img.shot { position:absolute; inset:0; width:100%; height:100%; object-fit:cover }
+  .banner.strip { display:grid; place-items:center; background:radial-gradient(120% 90% at 20% 10%,#2a3b3b 0%,#151515 70%) }
+  .banner.strip img.shot { position:static; width:92%; height:auto; object-fit:contain; border-radius:6px; box-shadow:0 10px 30px -10px rgba(0,0,0,.8) }
+  .banner .blur { position:absolute; inset:-20%; background-size:cover; background-position:center; filter:blur(28px) saturate(1.3); opacity:.55 }
+  .banner .glyph { position:absolute; inset:0; display:grid; place-items:center }
+  .banner .glyph img { width:34%; aspect-ratio:1; object-fit:contain; border-radius:18%; box-shadow:0 12px 30px -8px rgba(0,0,0,.7) }
+  .banner .glyph span { font-size:4.5rem; filter:drop-shadow(0 8px 18px rgba(0,0,0,.5)) }
+  .banner .tagline { position:absolute; left:1rem; bottom:.875rem; font:700 .6875rem/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.75) }
+  .info { display:grid; grid-template-columns:4rem minmax(0,1fr); gap:.875rem; align-items:start }
+  .info .ico { width:4rem; height:4rem; border-radius:14px; overflow:hidden; background:var(--card-2); border:1px solid var(--line); display:grid; place-items:center; font-size:1.75rem }
+  .info .ico img { width:100%; height:100%; object-fit:cover }
+  .info h3 { font:700 1.0625rem/1.3 var(--font-sans); color:#fff; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .info .by { color:var(--soft); font-size:.875rem; margin:.125rem 0 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .info .sum { color:#d4d4d4; font-size:.875rem; margin:.25rem 0 .5rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.35 }
+  .badges { display:flex; flex-wrap:wrap; gap:.375rem }
+  .badge-v { font:700 .75rem/1 var(--font-mono); padding:.3rem .55rem; border-radius:999px; background:var(--badge-bg); color:var(--viking-400); border:1px solid rgba(100,215,214,.35); white-space:nowrap }
+  .badge-s { font:600 .75rem/1 var(--font-sans); padding:.3rem .55rem; border-radius:999px; background:#262626; color:#cfcfcf; border:1px solid var(--line); white-space:nowrap }
+  .empty { border:1px dashed #3a3a3a; border-radius:14px; padding:1.5rem; color:#cfcfcf; max-width:40rem }
+  .empty a, .status a { color:var(--viking-400) }
+  .status { color:var(--soft); margin:0 0 1.5rem; font-size:.875rem; overflow-wrap:anywhere }
+  dialog.detail { border:1px solid var(--line); border-radius:16px; background:#181818; color:#eee; padding:0; width:min(44rem,calc(100vw - 2rem)); max-height:calc(100vh - 2rem) }
+  dialog.detail::backdrop { background:rgba(0,0,0,.6) }
+  dialog.detail .d-banner { border-radius:0; border:0 }
+  dialog.detail .d-body { padding:1.25rem 1.5rem 1.5rem; display:grid; gap:1rem }
+  dialog.detail h2 { margin:0; color:#fff; font:800 1.5rem/1.25 var(--font-sans); display:flex; gap:.625rem; align-items:center; flex-wrap:wrap }
+  dialog.detail .by { color:var(--soft); margin:.25rem 0 0 }
+  dialog.detail dl { display:grid; grid-template-columns:7rem minmax(0,1fr); gap:.5rem 1rem; margin:0; font-size:.875rem }
+  dialog.detail dt { color:var(--soft) }
+  dialog.detail dd { margin:0; overflow-wrap:anywhere }
+  dialog.detail dd code { font:400 .75rem/1.4 var(--font-mono); color:#cfcfcf }
+  dialog.detail .links { display:flex; gap:1rem; flex-wrap:wrap }
+  dialog.detail .links a { color:var(--viking-400); font-weight:700; min-height:44px; display:inline-flex; align-items:center }
+  dialog.detail .close { all:unset; cursor:pointer; position:absolute; top:.75rem; right:.75rem; width:44px; height:44px; border-radius:50%; background:rgba(0,0,0,.6); color:#fff; display:grid; place-items:center; font-size:1.25rem; z-index:2 }
+  @media (max-width:52rem) {
+    .store-wrap { grid-template-columns:minmax(0,1fr) }
+    .store-side { min-width:0; position:static; grid-auto-flow:column; grid-auto-columns:max-content; overflow-x:auto; padding:1rem 1rem 0 }
+    .store-side .count { display:none }
+    .store-main { border-left:0; padding:1rem 1rem 3rem }
+    .track { grid-auto-columns:minmax(15rem,82vw) }
+    .next { display:none }
+    .search { flex:1 1 100%; max-width:100% }
+    .store-top h1 { font-size:1.375rem }
+    .status { overflow-wrap:anywhere }
+  }
 </style>
 </head>
 <body>
@@ -46,75 +111,20 @@
   </div>
 </header>
 
-<main>
-  <section class="hero hero-compact">
-    <div class="container">
-      <p class="eyebrow">OpenBarX marketplace <span class="sep">·</span> <span id="updated">index</span></p>
-      <h1>Apps and cards for the bar.</h1>
-      <p class="lede">Everything here installs through Deckhand. Bar apps run on the CoreBar's own screen and get their data from your Mac; cube cards are drawn on the Mac and shown on the VivoCube. The index is one public JSON file, curated through pull requests.</p>
+<main class="store">
+  <div class="store-wrap">
+    <nav class="store-side" aria-label="Marketplace sections" id="side"></nav>
+    <div class="store-main">
+      <div class="store-top">
+        <h1>OpenBar<i>X</i> marketplace</h1>
+        <label class="search"><span aria-hidden="true">⌕</span><input id="q" type="search" placeholder="Search apps, cards, screensavers and packs" aria-label="Search the marketplace"></label>
+      </div>
+      <p class="status" id="status">Loading the index…</p>
+      <div id="view"></div>
+      <noscript><p class="empty">This page needs JavaScript to show the index. The index itself is plain JSON: <a href="https://github.com/DeNoronha/openbarx-marketplace/blob/main/index.json">openbarx-marketplace/index.json</a>.</p></noscript>
     </div>
-  </section>
-
-  <section class="section" id="bar-apps">
-    <div class="container">
-      <div class="section-head">
-        <p class="eyebrow">Bar apps</p>
-        <h2>Full width, near real time.</h2>
-      </div>
-      <div class="filters" role="group" aria-label="Filter">
-        <button type="button" aria-pressed="true" data-filter="all">All</button>
-        <button type="button" aria-pressed="false" data-filter="bundled">Ships with Deckhand</button>
-        <button type="button" aria-pressed="false" data-filter="community">Community</button>
-      </div>
-      <p class="meta count" id="count">Loading the index…</p>
-      <div class="apps" id="apps"></div>
-      <noscript><p class="lede">This page needs JavaScript to render <a href="registry.json">registry.json</a>. The bar apps are also described on the <a href="../bar-apps/">bar apps page</a>.</p></noscript>
-    </div>
-  </section>
-
-  <section class="section" id="cube-cards">
-    <div class="container">
-      <div class="section-head">
-        <p class="eyebrow">VivoCube cards</p>
-        <h2>Seven cards, 240 × 240.</h2>
-        <p class="lede">Rendered on the Mac, uploaded to the cube as one package and switched in place. All of these ship inside Deckhand; pick them on the VivoCube page.</p>
-      </div>
-      <div class="cards-grid" id="cards"></div>
-    </div>
-  </section>
-
-  <section class="section" id="submit">
-    <div class="container">
-      <div class="section-head">
-        <p class="eyebrow">Submit an app</p>
-        <h2>Phase 1: a pull request.</h2>
-      </div>
-      <div class="submit">
-        <ol class="steps">
-          <li><b>Build a bar app.</b><span>Any Android app with a launcher activity shows up on the bar. The simplest kind is a kiosk WebView that opens a page your Mac serves, which is how Deckhand's own apps work; the Android project is in the repository as a template; see <a href="../bar-apps/#build">build your own</a>.</span></li>
-          <li><b>Add an entry to registry.json.</b><span>Id, name, package, version, a one-line summary, an icon, a screenshot at 1424 × 280 and a link to the source. Keep the shape of the existing entries.</span></li>
-          <li><b>Open a pull request.</b><span>Apps are reviewed for what they do on the bar and on the network before they are listed. Nothing in the index may need an account or send data off the LAN without saying so.</span></li>
-        </ol>
-        <pre><code>{
-  "id": "my-app",
-  "name": "My app",
-  "kind": "bar-app",
-  "package": "com.example.myapp",
-  "version": "1.0",
-  "summary": "One line on what it shows.",
-  "icon": "https://example.com/icon.png",
-  "screenshot": "https://example.com/bar.png",
-  "requires": { "deckhand": "&gt;=0.1", "wifiAdb": true },
-  "source": "https://github.com/example/my-app",
-  "distribution": "apk",
-  "apk": "https://github.com/example/my-app/releases/latest/download/my-app.apk",
-  "publisher": "Example",
-  "license": "MIT"
-}</code></pre>
-        <p class="meta">Full registry: <a href="registry.json">registry.json</a>. Format and open decisions: <a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/docs/WIDGETS.md">WIDGETS.md</a>.</p>
-      </div>
-    </div>
-  </section>
+  </div>
+  <dialog class="detail" id="detail" aria-labelledby="d-title"></dialog>
 </main>
 
 <footer class="site-footer">
@@ -140,7 +150,7 @@
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac">Source on GitHub</a></li>
           <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/PROTOCOL.md">The CoreBar protocol</a></li>
           <li><a href="../bar-apps/#build">Build a bar app</a></li>
-          <li><a href="registry.json">Marketplace registry (JSON)</a></li>
+          <li><a href="https://github.com/DeNoronha/openbarx-marketplace">Marketplace index (GitHub)</a></li>
         </ul>
       </div>
     </div>
@@ -150,42 +160,116 @@
 
 <script>
 (function () {
-  var appsEl = document.getElementById('apps'), cardsEl = document.getElementById('cards'), countEl = document.getElementById('count');
-  var all = [], filter = 'all';
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function render() {
-    var list = all.filter(function (a) { return filter === 'all' || (filter === 'bundled' ? a.distribution === 'bundled' : a.distribution !== 'bundled'); });
-    countEl.textContent = list.length + (list.length === 1 ? ' app' : ' apps') + (filter === 'all' ? '' : ' · ' + filter);
-    appsEl.innerHTML = list.length ? list.map(function (a) {
-      var bundled = a.distribution === 'bundled';
-      return '<article class="app">' +
-        '<div class="icon">' + (a.icon ? '<img src="' + esc(a.icon) + '" alt="">' : '') + '</div>' +
-        '<div class="body"><div class="title"><h3>' + esc(a.name) + '</h3><span class="badge">' + esc(a.version) + '</span>' +
-        (bundled ? '<span class="badge badge-ok">ships with Deckhand</span>' : '<span class="badge">community</span>') + '</div>' +
-        '<p>' + esc(a.summary) + '</p>' +
-        '<div class="meta-row meta"><span>' + esc(a.package) + '</span><span class="sep">·</span><span>' + esc(a.publisher || '') + '</span><span class="sep">·</span><span>' + esc(a.license || '') + '</span>' +
-        (a.requires && a.requires.wifiAdb ? '<span class="sep">·</span><span>needs Wi-Fi ADB</span>' : '') + '</div>' +
-        '<div class="meta-row">' + (a.source ? '<a href="' + esc(a.source) + '">Source <span class="arrow">→</span></a>' : '') +
-        (bundled ? '<span class="meta">Install: Deckhand → Apps → Deckhand apps</span>' : (a.apk ? '<a href="' + esc(a.apk) + '">APK <span class="arrow">→</span></a>' : '')) + '</div></div>' +
-        (a.screenshot ? '<div class="shot"><img src="' + esc(a.screenshot) + '" alt="' + esc(a.name) + ' on the bar" loading="lazy"></div>' : '') +
-        '</article>';
-    }).join('') : '<p class="lede">No community apps yet. Yours could be the first; see below.</p>';
+  // The index lives in its own repo, shared with every UltraBar client.
+  var INDEX = 'https://raw.githubusercontent.com/DeNoronha/openbarx-marketplace/main/index.json';
+  var REPO = 'https://github.com/DeNoronha/openbarx-marketplace';
+  var SECTIONS = [
+    { id: 'home', label: 'Home', ic: '⌂' },
+    { id: 'bar-app', label: 'Bar apps', ic: '▭' },
+    { id: 'cube-card', label: 'VivoCube cards', ic: '▢' },
+    { id: 'hotkey-pack', label: 'Hotkey packs', ic: '⌘' },
+    { id: 'screensaver', label: 'Screensavers', ic: '✦' },
+    { id: 'widget', label: 'Widgets', ic: '◫' }
+  ];
+  var CARD_GLYPH = { weather: '⛅', music: '🎵', claude: '✳️', crypto: '🪙', calendar: '📅', date: '🗓️', picture: '🖼️' };
+  var items = [], section = 'home', query = '';
+  var side = document.getElementById('side'), view = document.getElementById('view'), status = document.getElementById('status'), dlg = document.getElementById('detail');
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function safeUrl(u) { return /^https:\/\//.test(u || '') ? u : ''; }
+  function isDeckhand(i) { return i.publisher === 'De Noronha Consulting'; }
+  function glyph(i) { return CARD_GLYPH[i.id.split('.').pop()] || '▢'; }
+  function where(i) {
+    if (i.distribution === 'bundled-with-deckhand') return 'Ships with Deckhand';
+    if (i.distribution === 'vendor-store') return "Vendor's store";
+    if (i.kind === 'hotkey-pack') return "Vendor's download";
+    return 'Download';
   }
-  document.querySelectorAll('.filters button').forEach(function (b) {
-    b.addEventListener('click', function () {
-      filter = b.dataset.filter;
-      document.querySelectorAll('.filters button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
-      render();
-    });
-  });
-  fetch('registry.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (reg) {
-    all = reg.apps || [];
-    document.getElementById('updated').textContent = 'updated ' + (reg.updated || '');
-    render();
-    cardsEl.innerHTML = (reg.cards || []).map(function (c) {
-      return '<article class="cube"><div class="sq">240²</div><h3>' + esc(c.name) + '</h3><p>' + esc(c.summary) + '</p></article>';
+  function banner(i, extra) {
+    var c = 'banner' + (extra ? ' ' + extra : ''), b = safeUrl(i.banner), ic = safeUrl(i.icon);
+    if (i.kind === 'cube-card') return '<div class="' + c + '" style="background:radial-gradient(110% 100% at 30% 20%,#1e7a7d 0%,#1c575b 35%,#141414 80%)"><div class="glyph"><span>' + glyph(i) + '</span></div><span class="tagline">VivoCube · 240 × 240</span></div>';
+    if (b && /\/screens\/bar-/.test(b)) return '<div class="' + c + ' strip"><img class="shot" src="' + esc(b) + '" alt="" loading="lazy"><span class="tagline">On the CoreBar</span></div>';
+    if (b && b !== ic) return '<div class="' + c + '"><img class="shot" src="' + esc(b) + '" alt="" loading="lazy"></div>';
+    return '<div class="' + c + '">' + (ic ? '<div class="blur" style="background-image:url(&quot;' + esc(ic) + '&quot;)"></div><div class="glyph"><img src="' + esc(ic) + '" alt="" loading="lazy"></div>' : '') + '</div>';
+  }
+  function card(i) {
+    var ic = safeUrl(i.icon), icon = i.kind === 'cube-card' || !ic ? '<span>' + glyph(i) + '</span>' : '<img src="' + esc(ic) + '" alt="" loading="lazy">';
+    return '<button class="item" type="button" data-id="' + esc(i.id) + '">' + banner(i) +
+      '<div class="info"><div class="ico">' + icon + '</div><div>' +
+      '<h3>' + esc(i.name) + '</h3><p class="by">by ' + esc(i.publisher) + (i.category ? ' · ' + esc(i.category) : '') + '</p>' +
+      '<p class="sum">' + esc(i.summary) + '</p>' +
+      '<div class="badges"><span class="badge-v">v' + esc(i.version) + '</span><span class="badge-s">' + esc(where(i)) + '</span></div>' +
+      '</div></div></button>';
+  }
+  function row(title, sub, list, see) {
+    if (!list.length) return '';
+    return '<section class="row"><div class="row-head"><div><h2>' + esc(title) + '</h2>' + (sub ? '<p>' + esc(sub) + '</p>' : '') + '</div>' +
+      (see ? '<button class="see" type="button" data-see="' + see + '">See all →</button>' : '') + '</div>' +
+      '<div class="rail"><div class="track">' + list.map(card).join('') + '</div>' + (list.length > 3 ? '<button class="next" type="button" aria-label="Scroll right">→</button>' : '') + '</div></section>';
+  }
+  function emptyWidgets() {
+    return '<section class="row"><div class="row-head"><div><h2>Widgets</h2><p>Cards drawn from a small web page, for every client.</p></div></div>' +
+      '<div class="empty"><b>No widgets yet.</b> The shared format is out as a draft: <a href="' + REPO + '/blob/main/docs/widget-format.md">widget format, version 1</a>. Build one and open a pull request on <a href="' + REPO + '">openbarx-marketplace</a>.</div></section>';
+  }
+  function render() {
+    side.innerHTML = SECTIONS.map(function (s) {
+      var n = s.id === 'home' ? items.length : items.filter(function (i) { return i.kind === s.id; }).length;
+      return '<button type="button" data-section="' + s.id + '" aria-current="' + (section === s.id && !query) + '"><span class="ic" aria-hidden="true">' + s.ic + '</span>' + s.label + '<span class="count">' + n + '</span></button>';
     }).join('');
-  }).catch(function () { countEl.textContent = 'The index could not be loaded. Open registry.json directly.'; });
+    var q = query.trim().toLowerCase();
+    if (q) {
+      var hits = items.filter(function (i) { return (i.name + ' ' + i.summary + ' ' + i.publisher + ' ' + (i.category || '')).toLowerCase().indexOf(q) >= 0; });
+      view.innerHTML = '<section class="row"><div class="row-head"><h2>' + hits.length + ' result' + (hits.length === 1 ? '' : 's') + '</h2></div><div class="grid">' + hits.map(card).join('') + '</div></section>';
+      return;
+    }
+    if (section === 'home') {
+      view.innerHTML =
+        row('Deckhand picks', 'Full-width apps for the CoreBar. Six of them run on the bar by themselves.', items.filter(function (i) { return i.kind === 'bar-app' && isDeckhand(i); }), 'bar-app') +
+        row('For the VivoCube', 'Cards Deckhand draws for the cube.', items.filter(function (i) { return i.kind === 'cube-card'; }), 'cube-card') +
+        row('Hotkey packs', "The vendor's official packs: shortcuts, websites and text on a key.", items.filter(function (i) { return i.kind === 'hotkey-pack'; }), 'hotkey-pack') +
+        row('From Sanytron', "Apps from the vendor's own store, installed by the bar.", items.filter(function (i) { return i.kind === 'bar-app' && !isDeckhand(i); }), 'bar-app') +
+        row('Screensavers', 'For the CoreBar while it idles.', items.filter(function (i) { return i.kind === 'screensaver'; }), 'screensaver') +
+        emptyWidgets();
+    } else if (section === 'widget' && !items.some(function (i) { return i.kind === 'widget'; })) {
+      view.innerHTML = emptyWidgets();
+    } else {
+      var s = SECTIONS.filter(function (x) { return x.id === section; })[0];
+      var list = items.filter(function (i) { return i.kind === section; });
+      view.innerHTML = '<section class="row"><div class="row-head"><div><h2>' + esc(s.label) + '</h2><p>' + list.length + ' in the index</p></div></div><div class="grid">' + list.map(card).join('') + '</div></section>';
+    }
+  }
+  function open(id) {
+    var i = items.filter(function (x) { return x.id === id; })[0]; if (!i) return;
+    var install = i.distribution === 'bundled-with-deckhand' ? (i.kind === 'cube-card' ? 'Deckhand → VivoCube → add the card' : 'Deckhand → Apps → switch it on') :
+      i.distribution === 'vendor-store' ? 'Deckhand → Apps → Marketplace (the bar downloads it from the vendor)' :
+      i.kind === 'hotkey-pack' ? "The vendor's own client imports it; Deckhand's importer is planned" : 'Download, check the SHA-256, install';
+    var dl = safeUrl(i.download), src = safeUrl(i.source), home = safeUrl(i.homepage);
+    dlg.innerHTML = '<button class="close" type="button" aria-label="Close">✕</button>' + banner(i, 'd-banner') +
+      '<div class="d-body"><div><h2 id="d-title">' + esc(i.name) + ' <span class="badge-v">v' + esc(i.version) + '</span></h2>' +
+      '<p class="by">by ' + esc(i.publisher) + (i.category ? ' · ' + esc(i.category) : '') + '</p></div>' +
+      '<p style="margin:0">' + esc(i.summary) + '</p><dl>' +
+      '<dt>Install</dt><dd>' + esc(install) + '</dd>' +
+      (i.buttons ? '<dt>Buttons</dt><dd>' + esc(i.buttons) + (i.platform === 'windows' ? ' (shortcuts written for Windows)' : '') + '</dd>' : '') +
+      '<dt>Licence</dt><dd>' + esc(i.license) + '</dd><dt>Id</dt><dd><code>' + esc(i.id) + '</code></dd>' +
+      (i.sha256 ? '<dt>SHA-256</dt><dd><code>' + esc(i.sha256) + '</code></dd>' : '') + '</dl><div class="links">' +
+      (dl ? '<a href="' + esc(dl) + '" rel="noopener">Download →</a>' : '') +
+      (src ? '<a href="' + esc(src) + '" rel="noopener">Source →</a>' : '') +
+      (home ? '<a href="' + esc(home) + '">More →</a>' : '') +
+      '<a href="' + REPO + '/blob/main/index.json" rel="noopener">Index entry →</a></div></div>';
+    dlg.showModal();
+  }
+  side.addEventListener('click', function (e) { var b = e.target.closest('[data-section]'); if (!b) return; section = b.dataset.section; query = ''; document.getElementById('q').value = ''; render(); window.scrollTo({ top: 0 }); });
+  view.addEventListener('click', function (e) {
+    var see = e.target.closest('[data-see]'); if (see) { section = see.dataset.see; render(); window.scrollTo({ top: 0 }); return; }
+    var nx = e.target.closest('.next'); if (nx) { var t = nx.parentNode.querySelector('.track'); t.scrollBy({ left: t.clientWidth * 0.8, behavior: 'smooth' }); return; }
+    var it = e.target.closest('.item'); if (it) open(it.dataset.id);
+  });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg || e.target.closest('.close')) dlg.close(); });
+  document.getElementById('q').addEventListener('input', function (e) { query = e.target.value; render(); });
+  fetch(INDEX, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw r.status; return r.json(); }).then(function (idx) {
+    items = idx.items || [];
+    status.innerHTML = items.length + ' items · index updated ' + esc(idx.updated || '') + ' · <a href="' + REPO + '">openbarx-marketplace on GitHub</a>';
+    render();
+  }).catch(function () { status.innerHTML = 'The index could not be loaded. It is plain JSON on GitHub: <a href="' + REPO + '/blob/main/index.json">openbarx-marketplace/index.json</a>.'; });
 })();
 </script>
 </body>
