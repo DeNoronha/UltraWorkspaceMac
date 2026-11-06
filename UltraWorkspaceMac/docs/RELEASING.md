@@ -19,7 +19,7 @@ bash packaging/make-dmg.sh          # calls make-app.sh release, then -> dist/De
 
 ```sh
 git remote -v                        # upstream must show "DISABLED (push)"
-VER=0.2.3
+VER=0.3.0
 git tag -a "v$VER" -m "Deckhand v$VER"
 git push origin "v$VER"              # origin only
 gh release create "v$VER" dist/Deckhand.dmg \
@@ -40,4 +40,4 @@ Privacy usage descriptions to keep in mind for a signed build: local network (Co
 
 ## Versioning
 
-Bump `CFBundleShortVersionString` / `CFBundleVersion` in `packaging/Info.plist` before tagging. The About panel reads these at runtime. The bar apps have their own version: `versionCode` / `versionName` in `android/DeckhandMonitor/app/build.gradle.kts`, `AppModel.barAppsVersion` (what the Apps page compares the bar's copy against) and the `version` fields in `site/marketplace/registry.json` move together (1.9 / versionCode 10 today). Deckhand Home is versioned separately: `android/DeckhandMonitor/home/build.gradle.kts` and `AppModel.homeVersion` / `homeVersionCode` (1.0 / 1 today).
+Bump `CFBundleShortVersionString` / `CFBundleVersion` in `packaging/Info.plist` before tagging. The About panel reads these at runtime. The bar apps have their own version: `versionCode` / `versionName` in `android/DeckhandMonitor/app/build.gradle.kts`, `AppModel.barAppsVersion` (what the Apps page compares the bar's copy against) and the `version` fields in `site/marketplace/registry.json` move together (2.0 / versionCode 11 today). Deckhand Home is versioned separately: `android/DeckhandMonitor/home/build.gradle.kts` and `AppModel.homeVersion` / `homeVersionCode` (1.0 / 1 today).

@@ -3,6 +3,7 @@ package nl.denoronha.deckhand.monitor
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.net.wifi.WifiManager
@@ -35,20 +36,21 @@ import java.net.SocketTimeoutException
 import kotlin.math.abs
 
 /**
- * Full-screen kiosk WebView that shows Deckhand's monitor page.
+ * Full-screen kiosk WebView for one Deckhand page on the CoreBar (1424×280).
  *
- * The page URL comes from (in order of precedence) the `url` intent extra, a UDP beacon
- * Deckhand broadcasts on port 5320, or the last URL remembered in SharedPreferences.
- * Whatever the source, only http(s) URLs whose host is a private (LAN) IPv4 address are
- * loaded, and the WebView never navigates away from that host.
+ * Since 1.9 every flavor carries its page (the Mac app's own page files, packaged as assets) and shows it at once
+ * from `https://deckhand.invalid/<page>`, answered by [LocalSite]; nothing is ever loaded from anywhere else.
  *
- * On-bar flavors (1.9: flights, crypto, weather, sky, news, verse; `BuildConfig.ON_BAR`) carry their page and
- * fetch their own data ([LocalSite]); for them the beacon only says where Deckhand is, so its `/config.json`
- * (place, units, coins, news source) can be picked up and kept. They work with the Mac off.
+ * - On-bar flavors (flights, crypto, weather, sky, news, verse; `BuildConfig.ON_BAR`) fetch their own data and
+ *   work with the Mac off. Deckhand only gives them their settings: pushed over adb (see `onbar/ConfigReceiver`),
+ *   or fetched here as `/config.json` when the beacon is heard.
+ * - Mac flavors (monitor, claude, music, calendar, tasks) show what only the Mac knows; [LocalSite] passes their
+ *   data requests to Deckhand's data API at the address the beacon names. Without a Mac the page says
+ *   "Waiting for the Mac…" by itself and fills in as soon as a beacon arrives.
  *
- * A page that cannot be loaded (transport error or an HTTP error status on the main frame)
- * gives way to the "Looking for Deckhand…" page and is retried; a page whose beacons stop
- * for [BEACON_LOST_MS] gives way to it too, and the next beacon loads the page again.
+ * The beacon (UDP 5320, every 5 s from Deckhand) is only accepted when it names its own sender on a private LAN
+ * address. The last address is remembered, so a Mac page works straight after a restart of the app. The `url`
+ * intent extra sets the address by hand (adb testing), under the same rule.
  */
 class MainActivity : Activity() {
 
@@ -56,64 +58,22 @@ class MainActivity : Activity() {
         private const val TAG = "DeckhandMonitor"
         private const val BEACON_PORT = 5320
         private const val PREFS = "monitor"
-        private const val PREF_URL = "lastUrl"
-        private const val FALLBACK_DELAY_MS = 4_000L
+        private const val PREF_BASE = "macBase"
         private const val RETRY_DELAY_MS = 5_000L
-        private const val BEACON_LOST_MS = 60_000L   // Deckhand beacons every 5 s
         private const val LONG_PRESS_MS = 700L
         private const val CONFIG_EVERY_MS = 300_000L    // on-bar flavors: config.json from the Mac at most every 5 min
-        private const val LOOKING_HTML = """<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>html,body{margin:0;height:100%;background:#000;color:#888;font:16px -apple-system,Roboto,sans-serif;
-display:flex;align-items:center;justify-content:center;user-select:none}</style></head>
-<body>Looking for Deckhand…</body></html>"""
     }
 
     private lateinit var web: WebView
     private val main = Handler(Looper.getMainLooper())
-
-    private var currentUrl: String? = null      // the page we are showing / trying to show
-    private var lastLoadFailed = false
-    private var showingLookingPage = false
-    private var errorInThisLoad = false       // main-frame error seen since the last onPageStarted of currentUrl
+    private val site by lazy { LocalSite(applicationContext, BuildConfig.PAGE, BuildConfig.TITLE) }
+    private val pageUrl = LocalSite.ORIGIN + "/" + BuildConfig.PAGE
 
     private var beacon: BeaconListener? = null
-    private val local: LocalSite? by lazy { if (BuildConfig.ON_BAR) LocalSite(applicationContext, BuildConfig.PAGE, BuildConfig.TITLE) else null }
-    private var configAt = 0L
     private var multicastLock: WifiManager.MulticastLock? = null
+    private var configAt = 0L
 
-    private val fallbackToRemembered = Runnable {
-        if (currentUrl == null) {
-            val remembered = prefs().getString(PREF_URL, null)?.takeIf { isLocalHttpUrl(it) }
-            if (remembered != null) {
-                Log.i(TAG, "No beacon yet, loading remembered url $remembered")
-                load(remembered)
-            }
-        }
-    }
-
-    private val retry = Runnable {
-        val url = currentUrl
-        if (url != null && lastLoadFailed && !isFinishing && !isDestroyed) {
-            Log.i(TAG, "Retrying $url")
-            web.loadUrl(url)
-        }
-    }
-
-    /**
-     * No beacon for [BEACON_LOST_MS] while a page is shown: Deckhand is gone (quit, asleep,
-     * other network), so show "Looking for Deckhand…" instead of a frozen page. The URL stays
-     * remembered; the next beacon loads it again at once (see [onBeacon]). Armed by every
-     * beacon and by onResume, cancelled in onPause/onDestroy.
-     */
-    private val beaconLost = Runnable {
-        if (isFinishing || isDestroyed) return@Runnable
-        if (currentUrl != null && !showingLookingPage) {
-            Log.i(TAG, "No beacon for ${BEACON_LOST_MS / 1000} s, looking for Deckhand again")
-            showLookingPage()
-        }
-    }
-
+    private val reload = Runnable { if (!isFinishing && !isDestroyed) web.loadUrl(pageUrl) }
     private val longPressFinish = Runnable { finish() }
 
     // ---- lifecycle ---------------------------------------------------------------------------
@@ -124,12 +84,10 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         web = WebView(this).apply {
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.parseColor("#1c2029"))
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
-                // The pages are plain http on the LAN (cleartext is allowed in the manifest);
-                // nothing legitimately mixes https and http, so never allow it.
                 mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 cacheMode = WebSettings.LOAD_NO_CACHE
                 mediaPlaybackRequiresUserGesture = false
@@ -146,26 +104,21 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
             isHorizontalScrollBarEnabled = false
         }
         setContentView(web)
-        showLookingPage()
 
-        if (local != null) load(LocalSite.ORIGIN + "/" + BuildConfig.PAGE) else loadFromIntent(intent)
+        site.macBase = prefs().getString(PREF_BASE, null)?.takeIf { isLanHttpUrl(it) }
+        baseFromIntent(intent)
+        web.loadUrl(pageUrl)
     }
 
-    override fun onNewIntent(intent: android.content.Intent?) {
+    override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        loadFromIntent(intent)
+        baseFromIntent(intent)
     }
 
-    /** The `url` extra (adb / another app): same rules as a beacon, anything else is ignored. */
-    private fun loadFromIntent(intent: android.content.Intent?) {
-        if (local != null) return   // an on-bar page never loads anything else
+    /** The `url` extra (adb testing): a Deckhand address on the LAN, e.g. http://192.168.50.207:7432 or any page URL on it. */
+    private fun baseFromIntent(intent: Intent?) {
         val url = intent?.getStringExtra("url")?.trim()?.takeIf { it.isNotEmpty() } ?: return
-        if (isLocalHttpUrl(url)) {
-            Log.i(TAG, "Loading url from intent extra: $url")
-            load(url)
-        } else {
-            Log.w(TAG, "Ignoring url extra that is not a LAN http url: $url")
-        }
+        if (isLanHttpUrl(url)) setMac(baseOf(url)) else Log.w(TAG, "Ignoring url extra that is not a LAN http url: $url")
     }
 
     override fun onResume() {
@@ -174,20 +127,10 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
         acquireMulticastLock()
         startBeaconListener()
         web.onResume()
-        if (currentUrl == null) {
-            main.removeCallbacks(fallbackToRemembered)
-            main.postDelayed(fallbackToRemembered, FALLBACK_DELAY_MS)
-        } else if (lastLoadFailed) {
-            main.removeCallbacks(retry)
-            main.post(retry)
-        }
-        armBeaconLost()
     }
 
     override fun onPause() {
-        main.removeCallbacks(fallbackToRemembered)
-        main.removeCallbacks(retry)
-        main.removeCallbacks(beaconLost)
+        main.removeCallbacks(reload)
         main.removeCallbacks(longPressFinish)
         stopBeaconListener()
         releaseMulticastLock()
@@ -197,8 +140,6 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
 
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
-        // Detach first: destroy() on a WebView that is still in the view tree logs a warning
-        // and keeps the window's reference alive until the activity is gone.
         (web.parent as? ViewGroup)?.removeView(web)
         web.stopLoading()
         web.destroy()
@@ -218,133 +159,74 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
     @Suppress("DEPRECATION")
     private fun hideSystemBars() {
         window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_FULLSCREEN
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_FULLSCREEN
     }
-
-    // ---- loading -----------------------------------------------------------------------------
 
     private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    private fun showLookingPage() {
-        showingLookingPage = true
-        main.removeCallbacks(beaconLost)
-        web.loadDataWithBaseURL(null, LOOKING_HTML, "text/html", "utf-8", null)
+    // ---- Deckhand's address --------------------------------------------------------------------
+
+    private fun baseOf(url: String): String {
+        val u = Uri.parse(url)
+        return "${u.scheme}://${u.host}${if (u.port > 0) ":" + u.port else ""}"
     }
 
-    /** (Re)start the beacon-loss clock while a page is shown; a no-op on the looking page. */
-    private fun armBeaconLost() {
-        main.removeCallbacks(beaconLost)
-        if (local != null) return   // the page does not depend on the Mac
-        if (currentUrl != null && !showingLookingPage) main.postDelayed(beaconLost, BEACON_LOST_MS)
+    /** A beacon (or the url extra) named Deckhand at [base]: Mac pages ask it for data, on-bar pages for settings. */
+    private fun setMac(base: String) {
+        if (base != site.macBase) {
+            Log.i(TAG, "Deckhand at $base")
+            site.macBase = base
+            prefs().edit().putString(PREF_BASE, base).apply()
+        }
+        if (BuildConfig.ON_BAR) fetchConfig(base)
     }
 
-    /**
-     * Load [url] now and remember it. A no-op when [url] is already on screen; a page that
-     * failed, or gave way to the looking page, is loaded again.
-     */
-    private fun load(url: String) {
-        main.removeCallbacks(fallbackToRemembered)
-        main.removeCallbacks(retry)
-        if (url == currentUrl && !lastLoadFailed && !showingLookingPage) return
-        if (url != currentUrl) prefs().edit().putString(PREF_URL, url).apply()
-        currentUrl = url
-        lastLoadFailed = false
-        showingLookingPage = false
-        web.loadUrl(url)
+    /** On-bar flavors: Deckhand's settings document, at most every 5 min (the adb push is the fast path). */
+    private fun fetchConfig(base: String) {
+        val now = System.currentTimeMillis()
+        if (now - configAt < CONFIG_EVERY_MS) return
+        configAt = now
+        pool.execute {
+            val cfg = httpJson("$base/config.json", 5_000) ?: return@execute
+            if (cfg.optInt("v", 0) >= 2 && BarConfig.save(applicationContext, cfg)) {
+                Log.i(TAG, "New settings from Deckhand at $base")
+                site.reloadConfig()
+            }
+        }
     }
 
     private fun onBeacon(url: String) {
         if (isFinishing || isDestroyed) return
-        if (local != null) { fetchConfig(url); return }
-        if (url != currentUrl) Log.i(TAG, "Beacon url $url")
-        load(url)          // no-op while that page is already up; otherwise (re)load it now
-        armBeaconLost()
+        setMac(baseOf(url))
     }
 
-    /**
-     * On-bar flavors: Deckhand is at the beacon's address, so ask it for `/config.json` (at most every 5 min) and
-     * keep it. The beacon was already checked to name its own sender on the LAN (see [parseBeacon]).
-     */
-    private fun fetchConfig(beaconUrl: String) {
-        val now = System.currentTimeMillis()
-        if (now - configAt < CONFIG_EVERY_MS) return
-        configAt = now
-        val u = Uri.parse(beaconUrl)
-        val base = "${u.scheme}://${u.host}${if (u.port > 0) ":" + u.port else ""}"
-        pool.execute {
-            val cfg = httpJson("$base/config.json", 5_000) ?: return@execute
-            if (BarConfig.save(applicationContext, cfg)) {
-                Log.i(TAG, "New settings from Deckhand at ${u.host}")
-                local?.reloadConfig()
-            }
-        }
-    }
+    // ---- WebView ---------------------------------------------------------------------------------
 
     private inner class Client : WebViewClient() {
-        /** On-bar flavors: every request to the private origin is answered by [LocalSite], never the network. */
-        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-            val site = local ?: return null
-            return if (request.url.host == LocalSite.HOST) site.handle(request.url) else null
-        }
+        /** Every request to the private origin is answered by [LocalSite], never the network. */
+        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+            if (request.url.host == LocalSite.HOST) site.handle(request.url, request.method ?: "GET") else null
 
-        /** Kiosk: the page may only navigate within the host it was loaded from. */
+        /** Kiosk: the page never navigates anywhere. */
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-            val target = request.url
-            val current = currentUrl?.let(Uri::parse)
-            val allowed = current != null && target.scheme.isHttpScheme() &&
-                target.host.equals(current.host, ignoreCase = true) && target.port == current.port
-            if (!allowed) Log.w(TAG, "Blocked navigation to $target")
-            return !allowed
+            val ok = request.url.scheme == "https" && request.url.host == LocalSite.HOST
+            if (!ok) Log.w(TAG, "Blocked navigation to ${request.url}")
+            return !ok
         }
 
-        override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
-            if (url != null && url == currentUrl) errorInThisLoad = false
-        }
-
-        override fun onPageFinished(view: WebView, url: String?) {
-            if (url != null && url == currentUrl && !errorInThisLoad) {
-                lastLoadFailed = false
-                showingLookingPage = false
-                main.removeCallbacks(retry)
-            }
-        }
-
+        /** The page is local, so this should never happen; if it does, try again shortly instead of a blank screen. */
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (!request.isForMainFrame) return
-            mainFrameFailed("error ${error.errorCode} ${error.description}", request.url)
-        }
-
-        /**
-         * An HTTP error status on the main frame (403 from a Mac that refuses us, 503 while
-         * "Serve the pages" is off, 404 for a page this Deckhand does not have) is a failure
-         * like any other: show the looking page instead of the server's error body and retry.
-         * Sub-resource errors (a 404 for data.json, a tile) are the page's own business.
-         */
-        override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
-            if (!request.isForMainFrame) return
-            mainFrameFailed("HTTP ${errorResponse.statusCode} ${errorResponse.reasonPhrase}", request.url)
-        }
-
-        private fun mainFrameFailed(what: String, url: Uri) {
-            Log.w(TAG, "Main frame $what for $url")
-            errorInThisLoad = true
-            lastLoadFailed = true
-            showLookingPage()
-            main.removeCallbacks(retry)
-            main.postDelayed(retry, RETRY_DELAY_MS)
+            Log.w(TAG, "Main frame error ${error.errorCode} ${error.description}")
+            main.removeCallbacks(reload); main.postDelayed(reload, RETRY_DELAY_MS)
         }
     }
 
     private inner class Bridge {
         @JavascriptInterface
-        fun close() {
-            main.post { finish() }
-        }
+        fun close() { main.post { finish() } }
 
         @JavascriptInterface
         fun version(): String = BuildConfig.VERSION_NAME
@@ -364,9 +246,7 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
                 main.postDelayed(longPressFinish, LONG_PRESS_MS)
             }
             MotionEvent.ACTION_MOVE -> {
-                if (abs(event.x - downX) > slop || abs(event.y - downY) > slop) {
-                    main.removeCallbacks(longPressFinish)
-                }
+                if (abs(event.x - downX) > slop || abs(event.y - downY) > slop) main.removeCallbacks(longPressFinish)
             }
             MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
                 main.removeCallbacks(longPressFinish)
@@ -379,10 +259,7 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
         if (multicastLock != null) return
         try {
             val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            multicastLock = wifi.createMulticastLock(TAG).apply {
-                setReferenceCounted(false)
-                acquire()
-            }
+            multicastLock = wifi.createMulticastLock(TAG).apply { setReferenceCounted(false); acquire() }
         } catch (e: Exception) {
             Log.w(TAG, "MulticastLock unavailable", e)
         }
@@ -395,17 +272,10 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
 
     private fun startBeaconListener() {
         if (beacon != null) return
-        try {
-            beacon = BeaconListener().also { it.start() }
-        } catch (e: Exception) {
-            Log.w(TAG, "Beacon listener could not start", e)
-        }
+        try { beacon = BeaconListener().also { it.start() } } catch (e: Exception) { Log.w(TAG, "Beacon listener could not start", e) }
     }
 
-    private fun stopBeaconListener() {
-        beacon?.stop()
-        beacon = null
-    }
+    private fun stopBeaconListener() { beacon?.stop(); beacon = null }
 
     /**
      * One UDP listener on port 5320. Owns its socket, so stopping an old listener can never
@@ -432,11 +302,7 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
                 val packet = DatagramPacket(buf, buf.size)
                 while (!Thread.currentThread().isInterrupted && !socket.isClosed) {
                     packet.setLength(buf.size)
-                    try {
-                        socket.receive(packet)
-                    } catch (_: SocketTimeoutException) {
-                        continue
-                    }
+                    try { socket.receive(packet) } catch (_: SocketTimeoutException) { continue }
                     val text = String(packet.data, packet.offset, packet.length, Charsets.UTF_8)
                     val url = parseBeacon(text, packet.address) ?: continue
                     main.post { onBeacon(url) }
@@ -450,20 +316,17 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
     }
 
     /**
-     * v2 beacons carry `base` (Deckhand's http root): open base + "/" + [BuildConfig.PAGE].
-     * v1 beacons only carry `url`: open that as-is. The result must be a LAN http(s) URL
-     * (see [isLocalHttpUrl]) whose host is the address the beacon came from: Deckhand always
-     * names its own address, so a beacon that points elsewhere was not sent by Deckhand and is
-     * dropped, instead of letting any host on the Wi-Fi put its own page on the bar.
+     * `{"deckhand":"monitor","v":2,"base":"http://<mac>:7432","url":…}` → Deckhand's address. The address must be
+     * a LAN http(s) URL whose host is the beacon's sender: Deckhand always names itself, so anything else is a
+     * forged beacon and is dropped.
      */
     private fun parseBeacon(text: String, from: InetAddress?): String? = try {
         val json = JSONObject(text.trim())
         if (json.optString("deckhand") != "monitor") null
         else {
-            val base = json.optString("base").trimEnd('/')
-            val url = if (base.isHttp()) "$base/${BuildConfig.PAGE}" else json.optString("url")
+            val base = json.optString("base").trimEnd('/').ifEmpty { json.optString("url") }
             val sender = from?.hostAddress
-            url.takeIf { isLocalHttpUrl(it) && sender != null && Uri.parse(it).host == sender }.also {
+            base.takeIf { isLanHttpUrl(it) && sender != null && Uri.parse(it).host == sender }.also {
                 if (it == null) Log.w(TAG, "Ignoring beacon from $from: not a LAN url of the sender")
             }
         }
@@ -471,27 +334,14 @@ display:flex;align-items:center;justify-content:center;user-select:none}</style>
         null
     }
 
-    /**
-     * True for `http(s)://<private IPv4>[:port]/...`: 10/8, 172.16/12, 192.168/16 or
-     * 169.254/16. The pages are only ever served by the Mac on the LAN, so nothing else is
-     * loaded, however it was handed to us.
-     */
-    private fun isLocalHttpUrl(url: String): Boolean {
+    /** True for `http(s)://<private IPv4>[:port]/...`: 10/8, 172.16/12, 192.168/16 or 169.254/16. */
+    private fun isLanHttpUrl(url: String): Boolean {
         val uri = try { Uri.parse(url) } catch (_: Exception) { return false }
-        if (local != null && uri.scheme == "https" && uri.host == LocalSite.HOST) return true
-        if (!uri.scheme.isHttpScheme()) return false
-        val host = uri.host ?: return false
-        val parts = host.split('.')
+        if (!(uri.scheme.equals("http", true) || uri.scheme.equals("https", true))) return false
+        val parts = (uri.host ?: return false).split('.')
         if (parts.size != 4) return false
         val o = parts.map { it.toIntOrNull() ?: return false }
         if (o.any { it !in 0..255 }) return false
-        return o[0] == 10 ||
-            (o[0] == 172 && o[1] in 16..31) ||
-            (o[0] == 192 && o[1] == 168) ||
-            (o[0] == 169 && o[1] == 254)
+        return o[0] == 10 || (o[0] == 172 && o[1] in 16..31) || (o[0] == 192 && o[1] == 168) || (o[0] == 169 && o[1] == 254)
     }
-
-    private fun String?.isHttpScheme() = this.equals("http", true) || this.equals("https", true)
-
-    private fun String.isHttp() = startsWith("http://") || startsWith("https://")
 }

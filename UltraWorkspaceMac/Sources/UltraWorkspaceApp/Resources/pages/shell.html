@@ -3,7 +3,7 @@
 <style>
   html,body{margin:0;background:#1c2029;color:#fff;font:18px -apple-system,Roboto,Helvetica,Arial,sans-serif;overflow:hidden;width:1424px;height:280px;-webkit-user-select:none}
   canvas{display:block}
-  #x{position:absolute;right:0;top:0;width:96px;height:96px;display:flex;align-items:center;justify-content:center;color:#e5e9f0;font-size:28px}
+  #x{position:absolute;right:0;top:0;z-index:2;width:96px;height:96px;display:flex;align-items:center;justify-content:center;color:#e5e9f0;font-size:28px}
   #x span{width:56px;height:56px;border-radius:28px;background:rgba(255,255,255,.16);line-height:56px;text-align:center}
   #x:active span{background:rgba(255,255,255,.34)}
   #wait{position:absolute;left:0;top:0;width:1424px;height:280px;display:flex;align-items:center;justify-content:center;color:#8b94a6;font-size:20px;background:#1c2029}
@@ -13,8 +13,11 @@
 <script>
 const c=document.getElementById('c'),g=c.getContext('2d'); let D=null, okAt=0;
 document.getElementById('x').onclick=()=>{ if(window.Deckhand) Deckhand.close(); };
-async function poll(){ try{ const r=await fetch(location.pathname.replace(/\/$/,'')+'/data.json',{cache:'no-store'}); D=await r.json(); okAt=Date.now();
-    document.getElementById('wait').style.display='none'; }catch(e){ if(Date.now()-okAt>8000) document.getElementById('wait').style.display='flex'; } }
+// One request at a time; a failure is retried after 2 s instead of a whole POLL interval (a slow page such as
+// Calendar polls every 30 s, and its first request can come before the app has heard where the Mac is).
+async function poll(){ try{ const r=await fetch(location.pathname.replace(/\/$/,'')+'/data.json',{cache:'no-store'}); if(!r.ok) throw r.status; D=await r.json(); okAt=Date.now();
+    document.getElementById('wait').style.display='none'; return true; }catch(e){ if(Date.now()-okAt>8000) document.getElementById('wait').style.display='flex'; return false; } }
+async function loop(){ const ok=await poll(); setTimeout(loop, ok?POLL:2000); }
 function act(p){ return fetch(p,{method:'POST',headers:{'X-Deckhand':'action'}}).catch(()=>{}); }
 function bg(){ g.fillStyle='#1c2029'; g.fillRect(0,0,1424,280); }
 function txt(s,x,y,size,col,align,weight){ g.fillStyle=col||'#fff'; g.font=(weight||'400')+' '+size+'px -apple-system,Roboto,Helvetica,Arial,sans-serif'; g.textAlign=align||'left'; g.fillText(s,x,y); }
@@ -23,5 +26,5 @@ function clip(s,n){ s=s||''; return s.length>n? s.slice(0,n-1)+'…':s; }
 function ago(s){ return s<60? s+' s' : s<3600? Math.round(s/60)+' min' : Math.round(s/3600)+' h'; }
 function frame(){ bg(); if(D) render(D); requestAnimationFrame(frame); }
 {{JS}}
-setInterval(poll, POLL); poll(); frame();
+loop(); frame();
 </script></body></html>

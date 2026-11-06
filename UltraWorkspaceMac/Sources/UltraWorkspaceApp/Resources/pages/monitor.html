@@ -3,7 +3,7 @@
 <style>
   html,body{margin:0;background:#1c2029;color:#fff;font:18px -apple-system,Roboto,Helvetica,Arial,sans-serif;overflow:hidden;width:1424px;height:280px;-webkit-user-select:none}
   canvas{display:block}
-  #x{position:absolute;right:0;top:0;width:96px;height:96px;display:flex;align-items:center;justify-content:center;color:#e5e9f0;font-size:28px}
+  #x{position:absolute;right:0;top:0;z-index:2;width:96px;height:96px;display:flex;align-items:center;justify-content:center;color:#e5e9f0;font-size:28px}
   #x span{width:56px;height:56px;border-radius:28px;background:rgba(255,255,255,.16);line-height:56px;text-align:center}
   #x:active span{background:rgba(255,255,255,.34)}
   #wait{position:absolute;left:0;top:0;width:1424px;height:280px;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:20px;background:#1c2029}
@@ -15,7 +15,7 @@ const N=120, cpu=new Array(N).fill(0), down=new Array(N).fill(0), up=new Array(N
 let last=null, shown={cpu:0,mem:0,disk:0,down:0,up:0}, okAt=0;
 document.getElementById('x').onclick=()=>{ if(window.Deckhand) Deckhand.close(); };
 async function poll(){
-  try{ const r=await fetch('/monitor/stats.json',{cache:'no-store'}); const j=await r.json();
+  try{ const r=await fetch('/monitor/stats.json',{cache:'no-store'}); if(!r.ok) throw r.status; const j=await r.json();
     last=j; okAt=Date.now(); cpu.push(j.cpu); cpu.shift(); down.push(j.down); down.shift(); up.push(j.up); up.shift();
     document.getElementById('wait').style.display='none';
   }catch(e){ if(Date.now()-okAt>6000) document.getElementById('wait').style.display='flex'; }

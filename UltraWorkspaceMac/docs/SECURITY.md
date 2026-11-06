@@ -107,6 +107,10 @@ The bar apps' installs, *Restart bar launcher* and *Keep the screen on while som
 
 ### 9. What leaves the Mac, and to whom
 
+Since bar apps 2.0 (Deckhand 0.3) six bar apps fetch public data from the bar itself, so these leave the **bar**, not the Mac: `api.adsb.lol` and `api.adsbdb.com` (Flights; coordinates rounded to three decimals), `tile.openstreetmap.org` (tiles cached on the bar for 30 days), `api.coingecko.com` (Crypto), `api.open-meteo.com` (Weather), the chosen news source (Headlines), `bible-api.com` (Verse), and `ipwho.is` only on a bar that has never received settings from Deckhand. User-Agent `Deckhand-bar/2.0 (+site)`. The settings document Deckhand pushes (location rounded to about 100 m, units, coins, news source, radius) contains nothing secret; the Linear key never leaves the Mac. The push uses `am broadcast` over ADB to a receiver guarded by `android.permission.DUMP`, so only the shell user can change the apps' settings.
+
+On the Mac:
+
 Outbound connections the app makes (no telemetry, no account, nothing else):
 
 - **The bar on your LAN** — UDP 5319 (discovery, broadcast or unicast), TCP 7431 (TLS control; one connection per request plus one persistent link that answers the bar's pushes), TCP 8080 (plain-HTTP upload of cube packages and page images), TCP 5555 (ADB, only for the features above), UDP 5320 (the beacon, only while the pages are served).
@@ -114,7 +118,7 @@ Outbound connections the app makes (no telemetry, no account, nothing else):
 - `ipwho.is` — IP geolocation, only when macOS Location is unavailable and no manual city is set; receives your public address (that is the point).
 - `api.coingecko.com` — prices and today's chart for the coins you pick (coin ids only).
 - `api.adsb.lol` — aircraft near the weather location; receives the coordinates rounded to three decimals (about 100 m) *(2026-11-04)* and the radius. `api.adsbdb.com` — airline and route per callsign seen (callsigns only, letters and digits, cached).
-- `tile.openstreetmap.org` — map tiles for the Flights radar, with the User-Agent `Deckhand/0.2 (+site)` OSM's policy asks for; tile coordinates imply the location at tile granularity.
+- `tile.openstreetmap.org` — map tiles for the Flights radar shown in a browser on the Mac, with the User-Agent `Deckhand/0.2 (+site)` OSM's policy asks for; tile coordinates imply the location at tile granularity. (The six on-bar pages' feeds on the Mac only run while a browser has that page open.)
 - `bible-api.com` — the day's reference.
 - The headline source you chose (`lite.cnn.com`, BBC, NYT, The Guardian, NOS, NU.nl) with a `Deckhand/1.3` User-Agent.
 - `api.linear.app` — with your personal API key: one read query, and one mutation when you press Done on the bar.

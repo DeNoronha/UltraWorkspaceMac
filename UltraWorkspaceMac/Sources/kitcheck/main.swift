@@ -674,7 +674,7 @@ do {
     let apk = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("dist/bar-apps/DeckhandMonitor.apk")
     if FileManager.default.fileExists(atPath: apk.path) {
         let info = try ApkInfo.read(apk: apk)
-        check(info.package == "nl.denoronha.deckhand.monitor" && info.versionCode == 10 && info.versionName == "1.9", "apk: DeckhandMonitor.apk manifest = nl.denoronha.deckhand.monitor 1.9 (10)", "\(info)")
+        check(info.package == "nl.denoronha.deckhand.monitor" && info.versionCode == 11 && info.versionName == "2.0", "apk: DeckhandMonitor.apk manifest = nl.denoronha.deckhand.monitor 2.0 (11)", "\(info)")
     } else { print("skip  apk: no dist/bar-apps/DeckhandMonitor.apk here") }
     do { _ = try ApkInfo.parseManifest(Data("<xml/>".utf8)); check(false, "apk: text XML rejected", "") }
     catch { check(true, "apk: text XML rejected", "") }

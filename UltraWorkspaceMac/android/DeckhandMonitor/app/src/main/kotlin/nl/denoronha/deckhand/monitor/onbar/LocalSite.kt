@@ -13,17 +13,27 @@ import android.webkit.WebResourceResponse
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 
 /**
- * The page and its data, served inside the app for an on-bar page (1.9). The WebView loads
+ * Every bar app (1.9) carries its own page; this class answers the page's requests. The WebView loads
  * `https://deckhand.invalid/<page>`; `.invalid` never resolves, and every request to that host is answered here
- * from `shouldInterceptRequest`, so nothing about it reaches the network:
+ * from `shouldInterceptRequest`, so nothing for that host reaches the network itself:
  *
- *  - `/<page>`                    the Mac's `shell.html` + `<page>.js` (APK assets, the same files Deckhand serves)
+ *  - `/<page>`                    the Mac's `shell.html` + `<page>.js`, or `monitor.html` (APK assets, the same files Deckhand serves)
+ *
+ * On-bar pages (flights, crypto, weather, sky, news, verse) also get their data here:
  *  - `/<page>/data.json`          [Feeds], fetched by the bar itself and cached ([Feed])
  *  - `/flights/tile/z/x/y.png`    OpenStreetMap tiles, toned down like the Mac's `MapTiles`, cached 30 days
+ *
+ * Mac pages (monitor, claude, music, calendar, tasks) show what only the Mac knows, so their data requests are
+ * passed on to Deckhand's data API at the address its beacon names ([macBase]): `/monitor/stats.json`,
+ * `/<page>/data.json`, `/music/art.jpg`, and the two actions (POST `/music/cmd/…`, `/tasks/done/…`, with the
+ * `X-Deckhand: action` header the Mac requires). Nothing else is forwarded. While no Mac is known the answer is
+ * 503 and the page shows "Waiting for the Mac…".
  */
 internal class LocalSite(private val ctx: Context, private val page: String, private val title: String) {
     companion object {
@@ -42,6 +52,9 @@ internal class LocalSite(private val ctx: Context, private val page: String, pri
         else -> null
     }
 
+    /** `http://<mac>:7432`, from the beacon (and remembered across restarts); null until a Mac was heard. */
+    @Volatile var macBase: String? = null
+
     @Volatile private var config: BarConfig? = null
     /** Drop the parsed config; the next data request reads the stored document again. */
     fun reloadConfig() { config = null }
@@ -55,11 +68,12 @@ internal class LocalSite(private val ctx: Context, private val page: String, pri
     private val tileDir = File(ctx.cacheDir, "tiles-v3").apply { mkdirs() }
     private val tileSlots = Semaphore(4)
 
-    fun handle(uri: Uri): WebResourceResponse {
+    fun handle(uri: Uri, method: String = "GET"): WebResourceResponse {
         val parts = (uri.path ?: "").split('/').filter { it.isNotEmpty() }
         return try {
             when {
                 parts == listOf(page) -> text(shell(), "text/html")
+                feed == null -> forward(parts, uri.encodedQuery, method)
                 parts == listOf(page, "data.json") && feed != null -> {
                     val c = cfg()
                     val key = if (page == "verse") Feeds.verseReference() + c.raw else c.raw
@@ -73,10 +87,41 @@ internal class LocalSite(private val ctx: Context, private val page: String, pri
         }
     }
 
+    /** The five Mac pages' data requests, passed to Deckhand unchanged. Only these shapes are forwarded. */
+    private fun forward(parts: List<String>, query: String?, method: String): WebResourceResponse {
+        val allowed = when {
+            method == "GET" && parts == listOf(page, "data.json") && page != "monitor" -> true
+            method == "GET" && page == "monitor" && parts == listOf("monitor", "stats.json") -> true
+            method == "GET" && page == "music" && parts == listOf("music", "art.jpg") -> true
+            method == "POST" && page == "music" && parts.size == 3 && parts[1] == "cmd" && parts[2] in setOf("play", "next", "previous") -> true
+            method == "POST" && page == "tasks" && parts.size == 3 && parts[1] == "done" && parts[2].matches(Regex("^[0-9a-fA-F-]{36}$")) -> true
+            else -> false
+        }
+        if (!allowed) return notFound()
+        val base = macBase ?: return status(503, "Service Unavailable")
+        val target = base + "/" + parts.joinToString("/") + (if (query.isNullOrEmpty()) "" else "?$query")
+        return try {
+            val c = URL(target).openConnection() as HttpURLConnection
+            c.connectTimeout = 4_000; c.readTimeout = 6_000; c.requestMethod = method
+            c.setRequestProperty("User-Agent", USER_AGENT)
+            if (method == "POST") { c.setRequestProperty("X-Deckhand", "action"); c.doOutput = true; c.setFixedLengthStreamingMode(0); c.outputStream.close() }
+            val code = c.responseCode
+            val body = (if (code in 200..299) c.inputStream else c.errorStream)?.use { it.readBytes() } ?: ByteArray(0)
+            val type = (c.contentType ?: "application/octet-stream").substringBefore(';').trim()
+            c.disconnect()
+            WebResourceResponse(type, "utf-8", code, if (code in 200..299) "OK" else "Error", mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(body))
+        } catch (e: Exception) {
+            status(502, "Bad Gateway")
+        }
+    }
+
+    private fun status(code: Int, reason: String) = WebResourceResponse("text/plain", "utf-8", code, reason, mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(ByteArray(0)))
+
     private var shellCache: String? = null
     private fun shell(): String = shellCache ?: run {
         fun asset(n: String) = ctx.assets.open(n).use { String(it.readBytes(), Charsets.UTF_8) }.removeSuffix("\n")
-        asset("shell.html").replace("{{TITLE}}", title).replace("{{WAIT}}", "Loading…").replace("\n{{JS}}\n", "\n" + asset("$page.js") + "\n")
+        if (page == "monitor") return@run asset("monitor.html").also { shellCache = it }
+        asset("shell.html").replace("{{TITLE}}", title).replace("{{WAIT}}", if (feed != null) "Loading…" else "Waiting for the Mac…").replace("\n{{JS}}\n", "\n" + asset("$page.js") + "\n")
             .also { shellCache = it }
     }
 

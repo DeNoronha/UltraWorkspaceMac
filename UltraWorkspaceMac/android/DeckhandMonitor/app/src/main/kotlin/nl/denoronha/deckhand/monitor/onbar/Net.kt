@@ -12,7 +12,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal const val TAG = "DeckhandMonitor"
-internal const val USER_AGENT = "Deckhand-bar/1.9 (+https://denoronha.github.io/UltraWorkspaceMac/)"
+internal const val USER_AGENT = "Deckhand-bar/2.0 (+https://denoronha.github.io/UltraWorkspaceMac/)"
 
 /** Background work for feed refreshes; three threads are plenty for one page per app. */
 internal val pool: ExecutorService = Executors.newFixedThreadPool(3)
