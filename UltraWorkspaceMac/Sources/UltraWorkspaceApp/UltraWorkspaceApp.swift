@@ -34,13 +34,15 @@ struct UltraWorkspaceApp: App {
             }
         }
 
-        MenuBarExtra("Deckhand", systemImage: "rectangle.on.rectangle", isInserted: Binding(
+        MenuBarExtra(isInserted: Binding(
             get: { presence.showsMenuBarIcon },
             set: { inserted in
                 // The user removed the icon with ⌘-drag: keep the Dock icon so Deckhand stays reachable.
                 if !inserted { presence = .dock; MacPresence.applyDockIcon(.dock) }
             })) {
             MenuBarMenu().environmentObject(model)
+        } label: {
+            Image(nsImage: MenuBarIcon.image)
         }
     }
 }
