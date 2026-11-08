@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var confirmForget = false
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
+    @AppStorage(MacPresence.key) private var presence: MacPresence = .dock
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -172,6 +173,18 @@ struct SettingsView: View {
                         if let b = model.barHomeBusy { ProgressView().controlSize(.small); Text(b).font(.callout).foregroundStyle(.secondary) }
                     }
                     Text("With Deckhand Home in front, the bar's card pages are one tap away on its UltraBar tile, and the bar's Back key returns to Deckhand Home from any app. The screen timeout above still applies.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+
+                Section("Deckhand on this Mac") {
+                    Picker("Show Deckhand in", selection: $presence) {
+                        ForEach(MacPresence.allCases) { Text($0.title).tag($0) }
+                    }
+                    Text(presence == .menuBar
+                         ? "Deckhand has no Dock icon and keeps running when you close its window. Open it again from the menu bar icon."
+                         : presence == .both
+                         ? "The menu bar icon shows whether the bar is connected and opens Deckhand."
+                         : "Deckhand is in the Dock like any other app.")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
 
