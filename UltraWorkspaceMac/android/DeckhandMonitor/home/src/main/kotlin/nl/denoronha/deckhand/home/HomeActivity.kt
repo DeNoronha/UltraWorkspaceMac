@@ -52,6 +52,9 @@ class HomeActivity : Activity() {
         private const val OUR_PREFIX = "nl.denoronha.deckhand."
         private const val VENDOR_LAUNCHER = "com.ultrabar.launch"
         private const val VENDOR_HOME = "com.ultrabar.launch.ui.activity.MainActivity"
+        private const val SETTINGS_PACKAGE = "com.android.settings"
+        /** Pinned on the right, so they are left out of the scrolling row. */
+        private val PINNED = setOf(SETTINGS_PACKAGE, VENDOR_LAUNCHER)
         private val OUR_ORDER = listOf("monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks")
 
         private const val BG = 0xFF000000.toInt()
@@ -68,6 +71,7 @@ class HomeActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var dot: View
     private lateinit var tiles: LinearLayout
+    private lateinit var pinned: LinearLayout
 
     private var beacon: BeaconListener? = null
     private var multicastLock: WifiManager.MulticastLock? = null
@@ -187,17 +191,12 @@ class HomeActivity : Activity() {
         }
         root.addView(scroller)
 
-        // Right: Settings and the bar's own launcher, always reachable
-        val right = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(dp(150), LinearLayout.LayoutParams.MATCH_PARENT).apply { leftMargin = dp(12) }
+        // Right: Settings and the bar's own launcher, always reachable, as the same tiles as every other app
+        pinned = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT).apply { leftMargin = dp(12) }
         }
-        right.addView(smallTile(getString(R.string.settings), android.R.drawable.ic_menu_preferences) {
-            launch(Intent(Settings.ACTION_SETTINGS))
-        })
-        right.addView(smallTile(getString(R.string.ultrabar), null) {
-            launch(Intent(Intent.ACTION_MAIN).setComponent(ComponentName(VENDOR_LAUNCHER, VENDOR_HOME)))
-        })
+        val right = pinned
         root.addView(right)
         return root
     }
@@ -209,13 +208,13 @@ class HomeActivity : Activity() {
     }
 
     /** One app tile: icon over a two-line label, 150 × 230 dp, pressed state, long press opens App info. */
-    private fun appTile(info: ResolveInfo): View {
+    private fun appTile(info: ResolveInfo, labelOverride: String? = null, gap: Boolean = true): View {
         val pm = packageManager
-        val label = info.loadLabel(pm).toString()
+        val label = labelOverride ?: info.loadLabel(pm).toString()
         val tile = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
             background = tileBackground()
-            layoutParams = LinearLayout.LayoutParams(dp(150), dp(230)).apply { rightMargin = dp(12) }
+            layoutParams = LinearLayout.LayoutParams(dp(150), dp(230)).apply { if (gap) rightMargin = dp(12) }
             isClickable = true; isFocusable = true
             contentDescription = label
         }
@@ -240,23 +239,6 @@ class HomeActivity : Activity() {
         return tile
     }
 
-    private fun smallTile(label: String, iconRes: Int?, onClick: () -> Unit): View {
-        val tile = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-            background = tileBackground()
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(108)).apply { topMargin = dp(6); bottomMargin = dp(6) }
-            isClickable = true; isFocusable = true
-            contentDescription = label
-            setOnClickListener { onClick() }
-        }
-        val icon = ImageView(this).apply { layoutParams = LinearLayout.LayoutParams(dp(44), dp(44)) }
-        if (iconRes != null) { icon.setImageResource(iconRes); icon.setColorFilter(INK) }
-        else icon.setImageDrawable(try { packageManager.getApplicationIcon(VENDOR_LAUNCHER) } catch (_: Exception) { getDrawable(android.R.drawable.sym_def_app_icon) })
-        tile.addView(icon)
-        tile.addView(TextView(this).apply { text = label; setTextColor(INK); textSize = 15f; setPadding(0, dp(6), 0, 0) })
-        return tile
-    }
-
     private fun launch(intent: Intent) {
         try { startActivity(intent) } catch (e: Exception) { Log.w(TAG, "Cannot start $intent", e) }
     }
@@ -266,19 +248,30 @@ class HomeActivity : Activity() {
         val pm = packageManager
         val all = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
             .filter { it.activityInfo.packageName != packageName }
+        populatePinned(all)
         fun rank(r: ResolveInfo): Int {
             val p = r.activityInfo.packageName
             if (!p.startsWith(OUR_PREFIX)) return 1000
             val i = OUR_ORDER.indexOf(p.removePrefix(OUR_PREFIX))
             return if (i >= 0) i else 100
         }
-        val sorted = all.sortedWith(compareBy<ResolveInfo> { rank(it) }.thenBy { it.loadLabel(pm).toString().lowercase() })
+        val sorted = all.filter { it.activityInfo.packageName !in PINNED }.sortedWith(compareBy<ResolveInfo> { rank(it) }.thenBy { it.loadLabel(pm).toString().lowercase() })
         tiles.removeAllViews()
         if (sorted.isEmpty()) {
             tiles.addView(TextView(this).apply { text = getString(R.string.no_apps); setTextColor(INK_DIM); textSize = 18f })
             return
         }
         for (r in sorted) tiles.addView(appTile(r))
+    }
+
+    /** Settings, then the bar's own launcher (labelled UltraBar), each left out when the bar does not have it. */
+    private fun populatePinned(all: List<ResolveInfo>) {
+        pinned.removeAllViews()
+        val settings = all.firstOrNull { it.activityInfo.packageName == SETTINGS_PACKAGE }
+        val vendor = all.firstOrNull { it.activityInfo.packageName == VENDOR_LAUNCHER && it.activityInfo.name == VENDOR_HOME }
+            ?: all.firstOrNull { it.activityInfo.packageName == VENDOR_LAUNCHER }
+        settings?.let { pinned.addView(appTile(it, getString(R.string.settings), gap = vendor != null)) }
+        vendor?.let { pinned.addView(appTile(it, getString(R.string.ultrabar), gap = false)) }
     }
 
     // ---- Deckhand status (beacon) --------------------------------------------------------------

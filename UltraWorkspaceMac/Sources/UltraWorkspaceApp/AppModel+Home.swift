@@ -24,8 +24,8 @@ extension AppModel {
     nonisolated static let homeComponent = homePackage + "/.HomeActivity"
     nonisolated static let vendorHomeComponent = VendorRelease.launcherPackage + "/.ui.activity.MainActivity"
     /// Keep in step with android/DeckhandMonitor/home/build.gradle.kts.
-    nonisolated static let homeVersion = "1.0"
-    nonisolated static let homeVersionCode = 1
+    nonisolated static let homeVersion = "1.1"
+    nonisolated static let homeVersionCode = 2
 
     private func homeBridge() async -> AdbBridge? {
         guard let adb = AdbBridge.find() else { barHome.message = "adb not found — brew install --cask android-platform-tools."; return nil }
