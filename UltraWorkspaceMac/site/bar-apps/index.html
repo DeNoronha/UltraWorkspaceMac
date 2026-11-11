@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bar apps — full-width live pages for the CoreBar · OpenBarX</title>
-<meta name="description" content="Eleven apps for the UltraBar X's 1424 × 280 screen, fed by your Mac: Monitor, Claude, Crypto, Weather, Music, Calendar, Flights, Sun & Moon, Headlines, Verse, Tasks. How they work, how to install them, how to build your own.">
+<meta name="description" content="Twelve apps for the UltraBar X's 1424 × 280 screen, fed by your Mac: Monitor, Claude, Crypto, Weather, Music, Calendar, Flights, Sun & Moon, Headlines, Verse, Tasks, Haven. How they work, how to install them, how to build your own.">
 <meta property="og:title" content="Bar apps for the UltraBar X">
-<meta property="og:description" content="Full-width, near real time, running on the bar. Eleven ship with Deckhand; build your own from the template.">
+<meta property="og:description" content="Full-width, near real time, running on the bar. Twelve ship with Deckhand; build your own from the template.">
 <meta property="og:image" content="https://denoronha.github.io/UltraWorkspaceMac/assets/img/screens/bar-monitor.png">
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,9 +36,9 @@
 <main>
   <section class="hero hero-compact">
     <div class="container">
-      <p class="eyebrow">Bar apps <span class="sep">·</span> version 2.0 <span class="sep">·</span> ship with Deckhand</p>
+      <p class="eyebrow">Bar apps <span class="sep">·</span> version 2.1 <span class="sep">·</span> ship with Deckhand</p>
       <h1>The whole bar, moving.</h1>
-      <p class="lede">The CoreBar's own cards are small and static. A bar app takes the full 1424 × 280 screen and refreshes as often as once a second. Since 2.0 every app carries its own page; six fetch their own data and run with the Mac off, five ask the Mac for what only the Mac knows.</p>
+      <p class="lede">The CoreBar's own cards are small and static. A bar app takes the full 1424 × 280 screen and refreshes as often as once a second. Since 2.0 every app carries its own page; six fetch their own data and run with the Mac off, six ask the Mac for what only the Mac knows.</p>
     </div>
   </section>
 
@@ -51,7 +51,7 @@
       <ol class="steps">
         <li><b>Every app carries its page.</b><span>The page is part of the app, so it appears at once, with or without the Mac.</span></li>
         <li><b>Six fetch their own data.</b><span>Flights (adsb.lol and adsbdb, with an OpenStreetMap road map cached on the bar), Crypto (CoinGecko), Weather (Open-Meteo), Headlines (the feed you pick), Verse (bible-api) and Sun &amp; Moon (computed on the bar) go to those services from the bar itself and keep running when the Mac sleeps.</span></li>
-        <li><b>Five ask the Mac.</b><span>Monitor, Claude, Music, Calendar and Tasks show what only your Mac knows, so they ask Deckhand for it on your LAN (port 7432): Mac stats every second, Claude sessions and Music every two seconds, the calendar every minute, Linear every twenty seconds while the page is open. Every five seconds Deckhand sends a UDP beacon on port 5320, so the apps find it with nothing to configure. The three buttons that change something (Music transport, Tasks Done) go to the Mac as a POST with a marker header that no other site can send.</span></li>
+        <li><b>Six ask the Mac.</b><span>Monitor, Claude, Music, Calendar, Tasks and Haven show what only your Mac knows or need a key it keeps, so they ask Deckhand for it on your LAN (port 7432): Mac stats every second, Claude sessions and Music every two seconds, the calendar every minute, Linear every twenty seconds and ships every ten seconds while the page is open. Every five seconds Deckhand sends a UDP beacon on port 5320, so the apps find it with nothing to configure. The three buttons that change something (Music transport, Tasks Done) go to the Mac as a POST with a marker header that no other site can send.</span></li>
         <li><b>Deckhand keeps the settings.</b><span>Your location, units, flight radius, coins and currency and news source live in Deckhand, as one settings file with a section per app. Change one and Deckhand pushes it to the bar over the debug bridge within seconds; the apps keep their copy, so the Mac can be off.</span></li>
         <li><b>One card per app on the page.</b><span>Each app is an ordinary Android app on the bar with an icon, so the CoreBar page gets an Open card for it. Tap the card and the app opens full screen; ✕, the bar's Back key or a long press returns to the cards.</span></li>
       </ol>
@@ -61,7 +61,7 @@
   <section class="section" id="apps">
     <div class="container">
       <div class="section-head">
-        <p class="eyebrow">The eleven</p>
+        <p class="eyebrow">The twelve</p>
         <h2>What ships with Deckhand 0.3.</h2>
         <p class="lede">Rendered at the bar's real size. The Claude, Calendar and Tasks pictures use demo data.</p>
       </div>
@@ -193,7 +193,7 @@
       </ol>
       <div class="callout" style="margin-top:2.5rem">
         <p class="eyebrow">Note</p>
-        <p>Monitor, Claude, Music, Calendar and Tasks need Deckhand running on the Mac. Close Deckhand and they show "Waiting for the Mac…" until it is back; the other six carry on.</p>
+        <p>Monitor, Claude, Music, Calendar, Tasks and Haven need Deckhand running on the Mac. Close Deckhand and they show "Waiting for the Mac…" until it is back; the other six carry on.</p>
       </div>
     </div>
   </section>
@@ -203,7 +203,7 @@
       <div class="section-head">
         <p class="eyebrow">Build your own</p>
         <h2>A bar app is a page and a beacon listener.</h2>
-        <p class="lede">The eleven apps are one Android project with eleven flavors, in the repository under <a href="https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor">android/DeckhandMonitor</a>. Fork it, or write the same thing in anything that runs on Android.</p>
+        <p class="lede">The twelve apps are one Android project with twelve flavors, in the repository under <a href="https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor">android/DeckhandMonitor</a>. Fork it, or write the same thing in anything that runs on Android.</p>
       </div>
       <ol class="steps">
         <li><b>Draw for 1424 × 280 at 160 dpi.</b><span>One screenful, no scrolling, large type: the bar is read from arm's length. Plain HTML and canvas work well; the bar's WebView is a current Chromium.</span></li>

@@ -78,6 +78,14 @@ final class HavenFeed {
     private(set) var connected = false
     private(set) var lastError: String?
     private(set) var messages = 0
+    /// When the last message arrived. aisstream can stall without closing the socket; a stream that has said nothing
+    /// for `idleLimit` is treated as dead, reported as not connected and reopened.
+    private var lastMessage = Date.distantPast
+    nonisolated static let idleLimit: TimeInterval = 120
+    /// Connected and still hearing from aisstream: what the bar and the settings show as "live".
+    /// Set by the watchdog when it aborts the socket on purpose, so the abort is not reported as an error.
+    private var aborted = false
+    var isLive: Bool { connected && Date().timeIntervalSince(lastMessage) < 60 }
     private var ships: [Int: Ship] = [:]
     private var socket: URLSessionWebSocketTask?
     private var loop: Task<Void, Never>?
@@ -110,7 +118,9 @@ final class HavenFeed {
     func stop() { loop?.cancel(); loop = nil; socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false }
 
     /// One connection: subscribe within aisstream's 3 s, then read until it closes, the key or the places change,
-    /// or nobody wants Haven any more (checked every 30 s).
+    /// nobody wants Haven any more, or the stream has been silent for `idleLimit` (checked every 30 s). The watchdog
+    /// aborts the task outright: a polite close waits for the server's close frame, which a stalled connection
+    /// never sends, and `receive()` would hang with it.
     private func run(key: String, places: [HavenPlace], stillWanted: @escaping @MainActor () -> Bool) async {
         let boxes = places.flatMap { p in [p.area] + (p.approach.map { [$0] } ?? []) }.map { b in [[b[0], b[2]], [b[1], b[3]]] }
         let sub: [String: Any] = ["APIKey": key, "BoundingBoxes": boxes,
@@ -120,18 +130,26 @@ final class HavenFeed {
         let ws = URLSession.shared.webSocketTask(with: url)
         socket = ws
         ws.resume()
+        lastMessage = Date()  // the first message gets the same grace as any gap
+        aborted = false
         do { try await ws.send(.string(text)) } catch { lastError = error.localizedDescription; return }
-        let watchdog = Task { [weak ws] in
+        let watchdog = Task { [weak self, weak ws] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 30_000_000_000)
-                if !stillWanted() { ws?.cancel(with: .goingAway, reason: nil); return }
+                guard let self else { return }
+                if !stillWanted() { self.aborted = true; ws?.cancel(); return }
+                if Date().timeIntervalSince(self.lastMessage) > Self.idleLimit {
+                    self.lastError = "no data from aisstream.io for \(Int(Self.idleLimit / 60)) minutes, reconnecting"
+                    WireLog.shared.event("haven: aisstream silent for \(Int(Self.idleLimit)) s, reconnecting")
+                    self.aborted = true; ws?.cancel(); return
+                }
             }
         }
         defer { watchdog.cancel(); ws.cancel(with: .goingAway, reason: nil); if socket === ws { socket = nil } }
         while !Task.isCancelled {
             let msg: URLSessionWebSocketTask.Message
             do { msg = try await ws.receive() } catch {
-                if ws.closeCode != .goingAway { lastError = Self.closeReason(ws) ?? error.localizedDescription }
+                if !aborted, ws.closeCode != .goingAway { lastError = Self.closeReason(ws) ?? error.localizedDescription }
                 return
             }
             let data: Data
@@ -140,6 +158,7 @@ final class HavenFeed {
             if let e = obj["error"] as? String { lastError = "aisstream.io: \(e)"; return }
             if !connected { connected = true; lastError = nil; WireLog.shared.event("haven: aisstream connected, \(boxes.count) boxes") }
             messages += 1
+            lastMessage = Date()
             ingest(obj)
         }
     }
@@ -234,7 +253,7 @@ final class HavenFeed {
                     "alongside": alongside.sorted { $0.0 < $1.0 }.prefix(16).map(\.1), "nAlongside": alongside.count,
                     "arriving": arriving.sorted { $0.0 < $1.0 }.prefix(16).map(\.1), "nArriving": arriving.count]
         }
-        var out: [String: Any] = ["hasKey": hasKey, "connected": connected, "places": list, "at": Int(now.timeIntervalSince1970)]
+        var out: [String: Any] = ["hasKey": hasKey, "connected": isLive, "places": list, "at": Int(now.timeIntervalSince1970)]
         if let e = lastError ?? placesError { out["error"] = e }
         return out
     }

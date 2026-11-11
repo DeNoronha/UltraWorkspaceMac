@@ -269,7 +269,7 @@ private struct HavenSettings: View {
                     let h = model.barPages.haven
                     if let e = h.lastError ?? h.placesError { Text(e).font(.caption).foregroundStyle(.orange) }
                     else if model.aisstreamKey.isEmpty { Text("No key yet.").font(.caption).foregroundStyle(.secondary) }
-                    else if h.connected { Text("Connected · \(h.messages) messages").font(.caption).foregroundStyle(.green) }
+                    else if h.isLive { Text("Connected · \(h.messages) messages").font(.caption).foregroundStyle(.green) }
                     else { Text("Saved. Connects while Haven is on the bar.").font(.caption).foregroundStyle(.secondary) }
                 }
             }
