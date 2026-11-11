@@ -115,6 +115,8 @@ final class AppModel: ObservableObject {
     @Published var lastCubeSentAt: Date?
     /// Personal API key for the Tasks bar app (Linear). Stored as a user-only file, never in settings.json.
     @Published var linearKey: String = Store.shared.loadSecret(name: "linear") ?? "" { didSet { Store.shared.saveSecret(linearKey, name: "linear") } }
+    /// aisstream.io API key for the Haven bar app (user-only file, like the Linear key; only sent to stream.aisstream.io).
+    @Published var aisstreamKey: String = Store.shared.loadSecret(name: "aisstream") ?? "" { didSet { Store.shared.saveSecret(aisstreamKey, name: "aisstream") } }
     @Published var linearError: String?
     /// SHA-256 over the layer images of the last accepted cube package — an unchanged package is not sent again.
     var lastCubeDigest: Data?

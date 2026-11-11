@@ -3,9 +3,10 @@ import AppKit
 import UltraBarKit
 
 /// The data API for the bar's Deckhand apps (bar apps 2.0). Every app carries its own page in its APK and loads it
-/// locally; the ones that show what only this Mac knows (Monitor, Claude, Music, Calendar, Tasks) ask this Mac for
+/// locally; the ones that show what only this Mac knows (Monitor, Claude, Music, Calendar, Tasks, Haven) ask this Mac for
 /// their data, served by `MonitorServer`. `BarPages` keeps that data fresh on its own cadence (calendar every
-/// minute, Claude sessions and Music every 2 s, Linear every 20 s to 2 min) so a request never waits on the network.
+/// minute, Claude sessions and Music every 2 s, Linear every 20 s to 2 min, Haven's AIS stream live) so a request never
+/// waits on the network.
 /// The six on-bar apps (Flights, Crypto, Weather, Sun & Moon, Headlines, Verse) fetch their own data; Deckhand only
 /// gives them their settings (`configDocument`).
 ///
@@ -14,7 +15,7 @@ import UltraBarKit
 @MainActor
 final class BarPages {
     /// Pages whose data comes from this Mac through `route` (Monitor's samples are served by `AppModel.startBarDataServer`).
-    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks"]
+    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
@@ -40,9 +41,17 @@ final class BarPages {
     private nonisolated static let feedOf: [String: String] = ["claude": "claude", "music": "claude", "calendar": "calendar"]
     /// What the on-bar apps need from this Mac, at most every few minutes: where, which units, which coins.
     private var barConfig: [String: Any] = [:]
+    /// Ships near the Haven places (aisstream.io), held open while the Haven app is on the bar.
+    let haven = HavenFeed()
+    private weak var model: AppModel?
+    private var settings: AppSettings?
 
     func start(model: AppModel, settings: AppSettings) {
         stop()
+        self.model = model; self.settings = settings
+        haven.start(key: { model.aisstreamKey }, wanted: { [weak self] in
+            model.barAppVersion("haven") != nil || (self?.lastHit["haven"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+        })
         startLinearFeed(model: model)
         startConfigFeed(model: model, settings: settings)
         tasks.append(Task { [weak self] in   // Claude sessions + Music: 2 s
@@ -120,7 +129,7 @@ final class BarPages {
         })
     }
 
-    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll() }
+    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); haven.stop() }
 
     /// Linear for the Tasks app.
     private func startLinearFeed(model: AppModel) {
@@ -283,6 +292,7 @@ final class BarPages {
         case "music": return music
         case "calendar": return calendar
         case "tasks": return linear
+        case "haven": return haven.snapshot(hasKey: !(model?.aisstreamKey.isEmpty ?? true), clock24h: settings?.clock24h ?? true)
         default: return [:]
         }
     }

@@ -50,7 +50,7 @@ extension AppModel {
         ("monitor", "Monitor", "DeckhandMonitor"), ("claude", "Claude", "DeckhandClaude"), ("crypto", "Crypto", "DeckhandCrypto"),
         ("weather", "Weather", "DeckhandWeather"), ("music", "Music", "DeckhandMusic"), ("calendar", "Calendar", "DeckhandCalendar"),
         ("flights", "Flights", "DeckhandFlights"), ("sky", "Sun & Moon", "DeckhandSky"), ("news", "Headlines", "DeckhandNews"),
-        ("verse", "Verse", "DeckhandVerse"), ("tasks", "Tasks", "DeckhandTasks")]
+        ("verse", "Verse", "DeckhandVerse"), ("tasks", "Tasks", "DeckhandTasks"), ("haven", "Haven", "DeckhandHaven")]
 
     /// APKs shipped inside Deckhand.app (packaging/make-app.sh copies dist/bar-apps) or next to the dev build.
     static func bundledAPK(_ name: String) -> URL? {
@@ -61,7 +61,7 @@ extension AppModel {
 
     func barAppVersion(_ page: String) -> String? { barApps.first { $0.packageName == BarPages.package(for: page) }?.versionName }
     /// Version of the APKs shipped with this build — keep in step with android/DeckhandMonitor/app/build.gradle.kts.
-    nonisolated static let barAppsVersion = "2.0"
+    nonisolated static let barAppsVersion = "2.1"
     /// The bar's copy is older than the one shipped with Deckhand.
     func barAppNeedsUpdate(_ page: String) -> Bool {
         guard let v = barAppVersion(page) else { return false }

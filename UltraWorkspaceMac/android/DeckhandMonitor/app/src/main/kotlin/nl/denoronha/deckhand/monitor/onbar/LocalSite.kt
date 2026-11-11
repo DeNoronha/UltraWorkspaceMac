@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit
  *  - `/<page>/data.json`          [Feeds], fetched by the bar itself and cached ([Feed])
  *  - `/flights/tile/z/x/y.png`    OpenStreetMap tiles, toned down like the Mac's `MapTiles`, cached 30 days
  *
- * Mac pages (monitor, claude, music, calendar, tasks) show what only the Mac knows, so their data requests are
+ * Mac pages (monitor, claude, music, calendar, tasks, haven) show what only the Mac knows, so their data requests are
  * passed on to Deckhand's data API at the address its beacon names ([macBase]): `/monitor/stats.json`,
  * `/<page>/data.json`, `/music/art.jpg`, and the two actions (POST `/music/cmd/…`, `/tasks/done/…`, with the
  * `X-Deckhand: action` header the Mac requires). Nothing else is forwarded. While no Mac is known the answer is
@@ -87,7 +87,7 @@ internal class LocalSite(private val ctx: Context, private val page: String, pri
         }
     }
 
-    /** The five Mac pages' data requests, passed to Deckhand unchanged. Only these shapes are forwarded. */
+    /** The six Mac pages' data requests, passed to Deckhand unchanged. Only these shapes are forwarded. */
     private fun forward(parts: List<String>, query: String?, method: String): WebResourceResponse {
         val allowed = when {
             method == "GET" && parts == listOf(page, "data.json") && page != "monitor" -> true

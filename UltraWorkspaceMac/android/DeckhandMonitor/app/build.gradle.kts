@@ -9,8 +9,8 @@ android {
     defaultConfig {
         minSdk = 29
         targetSdk = 34
-        versionCode = 11
-        versionName = "2.0"
+        versionCode = 12
+        versionName = "2.1"
     }
 
     buildFeatures {
@@ -41,6 +41,7 @@ android {
             Triple("news", "nl.denoronha.deckhand.news", "Headlines"),
             Triple("verse", "nl.denoronha.deckhand.verse", "Verse"),
             Triple("tasks", "nl.denoronha.deckhand.tasks", "Tasks"),
+            Triple("haven", "nl.denoronha.deckhand.haven", "Haven"),
         )
         // These fetch their own data on the bar (1.9): page and feeds in the APK, only config.json from the Mac.
         val onBar = setOf("flights", "crypto", "weather", "sky", "news", "verse")

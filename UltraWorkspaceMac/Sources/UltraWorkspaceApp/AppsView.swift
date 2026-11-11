@@ -9,6 +9,7 @@ struct AppsView: View {
         switch page {
         case "claude": return "sparkles"; case "crypto": return "bitcoinsign.circle"; case "weather": return "cloud.sun"; case "music": return "music.note"; case "calendar": return "calendar"
         case "flights": return "airplane"; case "sky": return "moon.stars"; case "news": return "newspaper"; case "verse": return "book.closed"; case "tasks": return "checklist"
+        case "haven": return "ferry"
         default: return "waveform.path.ecg" }
     }
     static func blurb(_ page: String) -> String {
@@ -24,6 +25,7 @@ struct AppsView: View {
         case "news": return "Headlines from the source you pick, four at a time, rotating."
         case "verse": return "A Bible verse for the day (World English Bible), one per day of the year."
         case "tasks": return "Your open Linear issues: started work first, then by priority and due date."
+        case "haven": return "Ships at the ports and terminals you choose, live from AIS: what lies alongside and what is on its way in, with a rough arrival time. Tap a place for its approach."
         default: return ""
         }
     }
@@ -194,6 +196,8 @@ struct AppsView: View {
                     else { Text(model.linearKey.isEmpty ? "No key yet." : "Saved.").font(.caption).foregroundStyle(.secondary) }
                 }
             }
+        case "haven":
+            HavenSettings()
         case "sky":
             LocationPanel()
             Text("Sun and moon are computed on the bar for this location; nothing is fetched.").font(.caption).foregroundStyle(.secondary)
@@ -251,5 +255,34 @@ struct AppsView: View {
         }
         Text(e.system ? "Part of the bar's system image: updatable from the marketplace, not removable. Turning it off is Android's own switch: the app stays on the bar but does not run and is not shown, until you turn it on again." : "The bar downloads and installs the app itself (it needs internet), one at a time, in about ten seconds. No settings on this side; the app has its own on the bar.")
             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Haven: the aisstream.io key and the places file.
+private struct HavenSettings: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        Panel("Haven settings", footer: "A free key from aisstream.io (sign in with GitHub). It is kept in a user-only file on this Mac and only sent to stream.aisstream.io; the bar asks Deckhand for the ships.") {
+            HStack {
+                SecureField("aisstream.io API key", text: $model.aisstreamKey).frame(width: 320)
+                TimelineView(.periodic(from: .now, by: 3)) { _ in
+                    let h = model.barPages.haven
+                    if let e = h.lastError ?? h.placesError { Text(e).font(.caption).foregroundStyle(.orange) }
+                    else if model.aisstreamKey.isEmpty { Text("No key yet.").font(.caption).foregroundStyle(.secondary) }
+                    else if h.connected { Text("Connected · \(h.messages) messages").font(.caption).foregroundStyle(.green) }
+                    else { Text("Saved. Connects while Haven is on the bar.").font(.caption).foregroundStyle(.secondary) }
+                }
+            }
+        }
+        Panel("Places", footer: "Each place has an area (alongside when a ship lies still in it), an approach (moving ships in it that close in, or whose AIS destination contains one of the match words, are on their way) and a kind: port (only ships of minLength m and up) or terminal (barges). Boxes are [latMin, latMax, lonMin, lonMax]. The file stays on this Mac; Deckhand reads it again within 30 s of a change.") {
+            let loaded = HavenFeed.loadPlaces()
+            ForEach(loaded.places, id: \.id) { p in
+                HStack { Image(systemName: p.kind == "port" ? "building.2" : "shippingbox").foregroundStyle(.secondary).frame(width: 18); Text(p.name); Text(p.kind).font(.caption).foregroundStyle(.secondary) }
+            }
+            HStack {
+                Button { NSWorkspace.shared.activateFileViewerSelecting([HavenFeed.ensurePlacesFile()]) } label: { Label(loaded.fromFile ? "Show haven.json" : "Create haven.json", systemImage: "doc.text") }
+                Text(loaded.fromFile ? HavenFeed.placesURL.path : "No places file: Haven watches the port of Rotterdam.").font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+            }
+        }
     }
 }

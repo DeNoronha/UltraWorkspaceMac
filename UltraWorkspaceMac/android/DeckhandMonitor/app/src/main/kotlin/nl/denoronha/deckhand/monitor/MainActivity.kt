@@ -44,7 +44,7 @@ import kotlin.math.abs
  * - On-bar flavors (flights, crypto, weather, sky, news, verse; `BuildConfig.ON_BAR`) fetch their own data and
  *   work with the Mac off. Deckhand only gives them their settings: pushed over adb (see `onbar/ConfigReceiver`),
  *   or fetched here as `/config.json` when the beacon is heard.
- * - Mac flavors (monitor, claude, music, calendar, tasks) show what only the Mac knows; [LocalSite] passes their
+ * - Mac flavors (monitor, claude, music, calendar, tasks, haven) show what only the Mac knows; [LocalSite] passes their
  *   data requests to Deckhand's data API at the address the beacon names. Without a Mac the page says
  *   "Waiting for the Mac…" by itself and fills in as soon as a beacon arrives.
  *
