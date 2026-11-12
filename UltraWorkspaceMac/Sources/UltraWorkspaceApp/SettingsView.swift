@@ -186,6 +186,7 @@ struct SettingsView: View {
                          ? "The menu bar icon shows whether the bar is connected and opens Deckhand."
                          : "Deckhand is in the Dock like any other app.")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    LaunchAtLoginRow()
                 }
 
                 Section("Connecting") {
