@@ -52,6 +52,11 @@
             <div class="bar-screen" id="barScreen" role="tabpanel">
               <img src="assets/img/screens/bar-monitor.png" alt="Monitor app on the bar: CPU 25 %, network up and down, memory and disk bars, a clock" data-page="monitor">
               <img src="assets/img/screens/bar-haven.png" alt="Haven app: Rotterdam, Antwerpen, Hamburg and Duisburg, ships on their way in and alongside" data-page="haven" hidden>
+              <img src="assets/img/screens/bar-tide.png" alt="Tide app: water levels at Hoek van Holland, Rotterdam and Nijmegen against the predicted tide, with sun and moon" data-page="tide" hidden>
+              <img src="assets/img/screens/bar-schiphol.png" alt="Schiphol app: the runways in use for landing and take-off, aircraft around the field and the next arrivals and departures" data-page="schiphol" hidden>
+              <img src="assets/img/screens/bar-zeekr.png" alt="Zeekr app: 64 % charged, DC charging at 214 kW, locked, tyre pressures and odometer" data-page="zeekr" hidden>
+              <img src="assets/img/screens/bar-strava.png" alt="Training app: the latest run with its route, recent activities, this week against last week and the year so far" data-page="strava" hidden>
+              <img src="assets/img/screens/bar-cask.png" alt="Cask app: a whisky collection at auction prices, each bottle with its trend" data-page="cask" hidden>
               <img src="assets/img/screens/bar-claude.png" alt="Claude app: one terminal needs you, four session cards" data-page="claude" hidden>
               <img src="assets/img/screens/bar-crypto.png" alt="Crypto app: ETH and XRP in euro with a sparkline of the day" data-page="crypto" hidden>
               <img src="assets/img/screens/bar-weather.png" alt="Weather app: 10 °C partly cloudy and three days ahead" data-page="weather" hidden>
@@ -62,6 +67,11 @@
           <div class="bar-tabs" role="tablist" aria-label="Bar app">
             <button role="tab" aria-selected="true" aria-controls="barScreen" data-page="monitor">Monitor</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="haven">Haven</button>
+            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="tide">Tide</button>
+            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="schiphol">Schiphol</button>
+            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="zeekr">Zeekr</button>
+            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="strava">Training</button>
+            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="cask">Cask</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="claude">Claude</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="crypto">Crypto</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="weather">Weather</button>
@@ -110,7 +120,7 @@
         <article class="card card-ink">
           <p class="eyebrow">Privacy</p>
           <h3>Nothing leaves your network</h3>
-          <p>Deckhand talks to the bar on your LAN and to the Mac. No account, no telemetry. Weather comes from Open-Meteo and prices from CoinGecko, both without a key; six of the bar apps (Flights, Crypto, Weather, Sun & Moon, Headlines, Verse) fetch their public data on the bar itself, so they run with the Mac off; the six that show what is on your Mac or need a key it keeps (Monitor, Claude, Music, Calendar, Tasks, Haven) ask the Mac for it over your LAN; and the vendor's catalogue is read only when you open the Apps or Screensavers page. The complete list is on the Deckhand page; the code is on GitHub for anyone to read.</p>
+          <p>Deckhand talks to the bar on your LAN and to the Mac. No account, no telemetry. Weather comes from Open-Meteo and prices from CoinGecko, both without a key; the bar apps that use only public data (Flights, Crypto, Weather, Sun & Moon, Headlines, Verse, Tide) fetch it on the bar itself, so they run with the Mac off; the ones that show what is on your Mac or need a key or sign-in it keeps (Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Cask, Schiphol, Zeekr) ask the Mac for it over your LAN, and the keys never reach the bar; and the vendor's catalogue is read only when you open the Apps or Screensavers page. The complete list is on the Deckhand page; the code is on GitHub for anyone to read.</p>
         </article>
       </div>
     </div>
@@ -119,15 +129,15 @@
   <section class="section" id="apps">
     <div class="container">
       <div class="section-head">
-        <p class="eyebrow">Bar apps <span class="sep">·</span> version 2.1</p>
+        <p class="eyebrow">Bar apps <span class="sep">·</span> version 2.2</p>
         <h2>Movement on the whole bar.</h2>
-        <p class="lede">The bar's own cards are small and static. Deckhand ships twelve Android apps for the CoreBar that take the full 1424 × 280 screen and move in near real time. Seven of them are below; flights overhead, sun and moon, headlines, a verse of the day and your Linear tasks are on the bar apps page. Each one is a thin kiosk window that finds Deckhand on your Mac by itself, so the Mac does the thinking and the bar only draws.</p>
+        <p class="lede">The bar's own cards are small and static. Deckhand ships its own Android apps for the CoreBar that take the full 1424 × 280 screen and move in near real time. Twelve of them are below; flights overhead, sun and moon, headlines, a verse of the day and your Linear tasks are on the bar apps page. Each one is a thin kiosk window that finds Deckhand on your Mac by itself, so the Mac does the thinking and the bar only draws.</p>
       </div>
       <div class="apps">
         <article class="app">
           <div class="icon"><img src="assets/img/icons/monitor.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Monitor</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Monitor</h3><span class="badge">2.2</span></div>
             <p>Your Mac, live: CPU with a two-minute history, network up and down, memory and disk bars, the time. Refreshed every second.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-monitor.png" alt="Monitor app on the bar" loading="lazy"></div>
@@ -135,15 +145,55 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/haven.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Haven</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Haven</h3><span class="badge">2.2</span></div>
             <p>Ships at the ports and inland terminals you choose, live from AIS: how many are on their way in, how many lie alongside, the first few by name with an arrival time. Tap a place for its approach.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-haven.png" alt="Haven app on the bar" loading="lazy"></div>
         </article>
         <article class="app">
+          <div class="icon"><img src="assets/img/icons/tide.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Tide</h3><span class="badge">2.2</span></div>
+            <p>Dutch water levels from Rijkswaterstaat: up to four gauges with the level now in cm NAP, its trend, today's curve against the predicted tide and the next high and low water, plus sun and moon. Runs on the bar, no key.</p>
+          </div>
+          <div class="shot"><img src="assets/img/screens/bar-tide.png" alt="Tide app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app">
+          <div class="icon"><img src="assets/img/icons/schiphol.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Schiphol</h3><span class="badge">2.2</span></div>
+            <p>Amsterdam Schiphol as the tower sees it: which runways are in use for landing and take-off, worked out live from open ADS-B data, the aircraft around them and the last 15 minutes' movements. With a free Schiphol key, the next arrivals and departures too.</p>
+          </div>
+          <div class="shot"><img src="assets/img/screens/bar-schiphol.png" alt="Schiphol app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app">
+          <div class="icon"><img src="assets/img/icons/zeekr.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Zeekr</h3><span class="badge">2.2</span></div>
+            <p>Your Zeekr at a glance: charge and range, charging power and when it is done, locked or not, climate, tyres, odometer and where it is. Read-only; the sign-in stays on the Mac.</p>
+          </div>
+          <div class="shot"><img src="assets/img/screens/bar-zeekr.png" alt="Zeekr app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app">
+          <div class="icon"><img src="assets/img/icons/strava.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Training</h3><span class="badge">2.2</span></div>
+            <p>Your own activities: the latest with its route, the ones before it, this week against last week per sport and the year so far. Connect once with your own Strava API application. Powered by Strava.</p>
+          </div>
+          <div class="shot"><img src="assets/img/screens/bar-strava.png" alt="Training app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app">
+          <div class="icon"><img src="assets/img/icons/cask.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Cask</h3><span class="badge">2.2</span></div>
+            <p>Your whisky collection at auction prices: what it is worth together, against what you paid and a month ago, with a trend per bottle. Prices from the Whiskystats Data API with your own key, kept within its monthly credits.</p>
+          </div>
+          <div class="shot"><img src="assets/img/screens/bar-cask.png" alt="Cask app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app">
           <div class="icon"><img src="assets/img/icons/claude.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Claude</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Claude</h3><span class="badge">2.2</span></div>
             <p>Which terminal needs you. Every Claude Code session on the Mac becomes a card; the ones waiting for an answer pulse orange, with the project, the question and how long ago.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-claude.png" alt="Claude app on the bar" loading="lazy"></div>
@@ -151,7 +201,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/crypto.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Crypto</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Crypto</h3><span class="badge">2.2</span></div>
             <p>Up to five coins in your currency, each with a sparkline of the day and the change since midnight.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-crypto.png" alt="Crypto app on the bar" loading="lazy"></div>
@@ -159,7 +209,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/weather.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Weather</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Weather</h3><span class="badge">2.2</span></div>
             <p>Now plus three days for the Mac's location: condition, temperature, humidity, wind and chance of rain.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-weather.png" alt="Weather app on the bar" loading="lazy"></div>
@@ -167,7 +217,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/music.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Music</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Music</h3><span class="badge">2.2</span></div>
             <p>Apple Music with album art, title, artist and album. The transport buttons work from the bar's touch screen.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-music.png" alt="Music app on the bar" loading="lazy"></div>
@@ -175,13 +225,13 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/calendar.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Calendar</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Calendar</h3><span class="badge">2.2</span></div>
             <p>Today, tomorrow and the day after from the Mac's calendars, in the colours you already know. Past events fade.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-calendar.png" alt="Calendar app on the bar" loading="lazy"></div>
         </article>
       </div>
-      <p class="meta" style="margin-top:1.5rem">Installed from Deckhand's Apps page over Wi-Fi ADB. Each app carries its own page. Flights, Crypto, Weather, Sun &amp; Moon, Headlines and Verse fetch their data on the bar and keep working with the Mac off; Monitor, Claude, Music, Calendar, Tasks and Haven ask Deckhand on your LAN (port 7432) for what only the Mac knows. Deckhand pushes your settings to the bar: location, units, coins, news source, flight radius.</p>
+      <p class="meta" style="margin-top:1.5rem">Installed from Deckhand's Apps page over Wi-Fi ADB. Each app carries its own page. Flights, Crypto, Weather, Sun &amp; Moon, Headlines, Verse and Tide fetch their data on the bar and keep working with the Mac off; Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Cask, Schiphol and Zeekr ask Deckhand on your LAN (port 7432) for what only the Mac knows. Deckhand pushes your settings to the bar: location, units, coins, news source, flight radius, water gauges.</p>
       <div class="hero-actions" style="margin-top:1.5rem">
         <a class="btn" href="bar-apps/">How they work, install, build your own <span class="arrow">→</span></a>
       </div>
@@ -239,7 +289,7 @@
       <div class="section-head">
         <p class="eyebrow">OpenBarX marketplace</p>
         <h2>Apps and cards for the bar, from anyone.</h2>
-        <p class="lede">The marketplace starts small and public: an index on GitHub that Deckhand reads, curated through pull requests. Today it lists Deckhand's twelve bar apps and seven cube cards. Next: install straight from Deckhand, version checks, and community submissions.</p>
+        <p class="lede">The marketplace starts small and public: an index on GitHub that Deckhand reads, curated through pull requests. Today it lists seventeen of Deckhand's bar apps and seven cube cards. Next: install straight from Deckhand, version checks, and community submissions.</p>
       </div>
       <div class="hero-actions" style="margin-top:0">
         <a class="btn btn-primary" href="marketplace/">Browse the marketplace <span class="arrow">→</span></a>

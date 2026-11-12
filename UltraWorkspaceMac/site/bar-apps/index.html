@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bar apps — full-width live pages for the CoreBar · OpenBarX</title>
-<meta name="description" content="Twelve apps for the UltraBar X's 1424 × 280 screen, fed by your Mac: Monitor, Claude, Crypto, Weather, Music, Calendar, Flights, Sun & Moon, Headlines, Verse, Tasks, Haven. How they work, how to install them, how to build your own.">
+<meta name="description" content="Full-width apps for the UltraBar X's 1424 × 280 screen, fed by your Mac: Monitor, Claude, Crypto, Weather, Music, Calendar, Flights, Sun & Moon, Headlines, Verse, Tasks, Haven, Tide, Training, Cask, Schiphol, Zeekr. How they work, how to install them, how to build your own.">
 <meta property="og:title" content="Bar apps for the UltraBar X">
-<meta property="og:description" content="Full-width, near real time, running on the bar. Twelve ship with Deckhand; build your own from the template.">
+<meta property="og:description" content="Full-width, near real time, running on the bar. A whole set ships with Deckhand; build your own from the template.">
 <meta property="og:image" content="https://denoronha.github.io/UltraWorkspaceMac/assets/img/screens/bar-monitor.png">
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,9 +36,9 @@
 <main>
   <section class="hero hero-compact">
     <div class="container">
-      <p class="eyebrow">Bar apps <span class="sep">·</span> version 2.1 <span class="sep">·</span> ship with Deckhand</p>
+      <p class="eyebrow">Bar apps <span class="sep">·</span> version 2.2 <span class="sep">·</span> ship with Deckhand</p>
       <h1>The whole bar, moving.</h1>
-      <p class="lede">The CoreBar's own cards are small and static. A bar app takes the full 1424 × 280 screen and refreshes as often as once a second. Since 2.0 every app carries its own page; six fetch their own data and run with the Mac off, six ask the Mac for what only the Mac knows.</p>
+      <p class="lede">The CoreBar's own cards are small and static. A bar app takes the full 1424 × 280 screen and refreshes as often as once a second. Since 2.0 every app carries its own page; the ones that use only public data fetch it themselves and run with the Mac off, the others ask the Mac for what only the Mac knows.</p>
     </div>
   </section>
 
@@ -50,9 +50,9 @@
       </div>
       <ol class="steps">
         <li><b>Every app carries its page.</b><span>The page is part of the app, so it appears at once, with or without the Mac.</span></li>
-        <li><b>Six fetch their own data.</b><span>Flights (adsb.lol and adsbdb, with an OpenStreetMap road map cached on the bar), Crypto (CoinGecko), Weather (Open-Meteo), Headlines (the feed you pick), Verse (bible-api) and Sun &amp; Moon (computed on the bar) go to those services from the bar itself and keep running when the Mac sleeps.</span></li>
-        <li><b>Six ask the Mac.</b><span>Monitor, Claude, Music, Calendar, Tasks and Haven show what only your Mac knows or need a key it keeps, so they ask Deckhand for it on your LAN (port 7432): Mac stats every second, Claude sessions and Music every two seconds, the calendar every minute, Linear every twenty seconds and ships every ten seconds while the page is open. Every five seconds Deckhand sends a UDP beacon on port 5320, so the apps find it with nothing to configure. The three buttons that change something (Music transport, Tasks Done) go to the Mac as a POST with a marker header that no other site can send.</span></li>
-        <li><b>Deckhand keeps the settings.</b><span>Your location, units, flight radius, coins and currency and news source live in Deckhand, as one settings file with a section per app. Change one and Deckhand pushes it to the bar over the debug bridge within seconds; the apps keep their copy, so the Mac can be off.</span></li>
+        <li><b>Some fetch their own data.</b><span>Flights (adsb.lol and adsbdb, with an OpenStreetMap road map cached on the bar), Crypto (CoinGecko), Weather (Open-Meteo), Headlines (the feed you pick), Verse (bible-api), Tide (Rijkswaterstaat's open water data) and Sun &amp; Moon (computed on the bar) go to those services from the bar itself and keep running when the Mac sleeps.</span></li>
+        <li><b>The others ask the Mac.</b><span>Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Cask, Schiphol and Zeekr show what only your Mac knows or need a key or sign-in it keeps, so they ask Deckhand for it on your LAN (port 7432): Mac stats every second, Claude sessions and Music every two seconds, the calendar every minute, Linear every twenty seconds, ships and aircraft every ten seconds while the page is open; Deckhand fetches Strava, Whiskystats and the car itself, at a pace that keeps within their limits. Every five seconds Deckhand sends a UDP beacon on port 5320, so the apps find it with nothing to configure. The three buttons that change something (Music transport, Tasks Done) go to the Mac as a POST with a marker header that no other site can send.</span></li>
+        <li><b>Deckhand keeps the settings.</b><span>Your location, units, flight radius, coins and currency, news source and water gauges live in Deckhand, as one settings file with a section per app. Change one and Deckhand pushes it to the bar over the debug bridge within seconds; the apps keep their copy, so the Mac can be off.</span></li>
         <li><b>One card per app on the page.</b><span>Each app is an ordinary Android app on the bar with an icon, so the CoreBar page gets an Open card for it. Tap the card and the app opens full screen; ✕, the bar's Back key or a long press returns to the cards.</span></li>
       </ol>
     </div>
@@ -61,15 +61,15 @@
   <section class="section" id="apps">
     <div class="container">
       <div class="section-head">
-        <p class="eyebrow">The twelve</p>
+        <p class="eyebrow">The apps</p>
         <h2>What ships with Deckhand 0.3.</h2>
-        <p class="lede">Rendered at the bar's real size. The Claude, Calendar and Tasks pictures use demo data.</p>
+        <p class="lede">Rendered at the bar's real size. The Claude, Calendar, Tasks, Schiphol, Zeekr, Training and Cask pictures use demo data.</p>
       </div>
       <div class="apps apps-wide">
         <article class="app" id="monitor">
           <div class="icon"><img src="../assets/img/icons/monitor.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Monitor</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Monitor</h3><span class="badge">2.2</span></div>
             <p>Your Mac, live across the whole bar: CPU with a two-minute history as an area chart, network up and down as sparklines, memory and disk as bars, the host name and the time. Polled once a second.</p>
             <p class="meta">nl.denoronha.deckhand.monitor · the original bar app</p>
           </div>
@@ -78,7 +78,7 @@
         <article class="app" id="claude">
           <div class="icon"><img src="../assets/img/icons/claude.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Claude</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Claude</h3><span class="badge">2.2</span></div>
             <p>Which terminal needs you. Every Claude Code session on the Mac from the last hour becomes a card with the project, the first prompt and what it last said; the ones waiting for an answer pulse orange, with how long they have waited. Tokens used today in the corner.</p>
             <p class="meta">nl.denoronha.deckhand.claude · reads ~/.claude/projects, nothing leaves the Mac</p>
           </div>
@@ -87,7 +87,7 @@
         <article class="app" id="crypto">
           <div class="icon"><img src="../assets/img/icons/crypto.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Crypto</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Crypto</h3><span class="badge">2.2</span></div>
             <p>Up to five coins in your currency, each with a sparkline of the day and the change since midnight. Coins and currency are set on the Widgets page; prices come from CoinGecko through the Mac, no API key.</p>
             <p class="meta">nl.denoronha.deckhand.crypto</p>
           </div>
@@ -96,7 +96,7 @@
         <article class="app" id="weather">
           <div class="icon"><img src="../assets/img/icons/weather.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Weather</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Weather</h3><span class="badge">2.2</span></div>
             <p>Now plus three days for the Mac's location: condition, temperature, humidity, wind and the chance of rain, from Open-Meteo. Free, no account, no key, unlike the bar's own AccuWeather card.</p>
             <p class="meta">nl.denoronha.deckhand.weather</p>
           </div>
@@ -105,7 +105,7 @@
         <article class="app" id="music">
           <div class="icon"><img src="../assets/img/icons/music.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Music</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Music</h3><span class="badge">2.2</span></div>
             <p>Apple Music with album art, title, artist and album, and a level meter while it plays. Previous, play or pause and next work from the bar's touch screen, through the Mac.</p>
             <p class="meta">nl.denoronha.deckhand.music</p>
           </div>
@@ -114,7 +114,7 @@
         <article class="app" id="calendar">
           <div class="icon"><img src="../assets/img/icons/calendar.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Calendar</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Calendar</h3><span class="badge">2.2</span></div>
             <p>Today, tomorrow and the day after from the Mac's calendars, in the colours you already use. Past events fade; all-day events sit on top. Which calendars show is set on the Widgets page.</p>
             <p class="meta">nl.denoronha.deckhand.calendar · asks for Calendar access once</p>
           </div>
@@ -123,7 +123,7 @@
         <article class="app" id="flights">
           <div class="icon"><img src="../assets/img/icons/flights.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Flights</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Flights</h3><span class="badge">2.2</span></div>
             <p>What is flying over right now. On the left a radar on an OpenStreetMap road map, scaled so the circle is exactly the radius you choose (3 km by default, up to 25); beside it up to four flights, each panel in its own colour — green, amber, blue, pink — and the same colour marks that plane and its flight number on the radar: callsign and airline, the route with both airports, altitude and whether it is climbing, speed, type and registration, distance and direction. Other aircraft in the circle are small grey planes. When the circle is empty it says so and shows the nearest aircraft within 25 km. The map tiles are fetched, darkened and cached by the Mac, so the bar needs no internet for them.</p>
             <p class="meta">nl.denoronha.deckhand.flights · adsb.lol and adsbdb.com, no key · map © OpenStreetMap · scheduled times need a paid API and are not shown</p>
           </div>
@@ -132,7 +132,7 @@
         <article class="app" id="sky">
           <div class="icon"><img src="../assets/img/icons/sky.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Sun &amp; Moon</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Sun &amp; Moon</h3><span class="badge">2.2</span></div>
             <p>The sun on its arc for today, with sunrise, sunset, solar noon, golden hour, civil dawn and dusk and the day's length; the moon drawn in its real phase, with how much is lit, its age, rise and set, and the dates of the next full and new moon. All computed on the Mac for the weather location.</p>
             <p class="meta">nl.denoronha.deckhand.sky · no service, no key</p>
           </div>
@@ -141,7 +141,7 @@
         <article class="app" id="news">
           <div class="icon"><img src="../assets/img/icons/news.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Headlines</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Headlines</h3><span class="badge">2.2</span></div>
             <p>Four headlines at a time, rotating every fifteen seconds through the feed's top stories, with how long ago each was published. CNN by default; BBC World, the New York Times, The Guardian, NOS and NU.nl are a setting away.</p>
             <p class="meta">nl.denoronha.deckhand.news · CNN from its text-only front page, the others from RSS; refreshed every ten minutes</p>
           </div>
@@ -150,7 +150,7 @@
         <article class="app" id="verse">
           <div class="icon"><img src="../assets/img/icons/verse.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Verse</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Verse</h3><span class="badge">2.2</span></div>
             <p>One Bible verse for the day, large and centred, from a list of well-known passages that changes with the date. The World English Bible, which is public domain.</p>
             <p class="meta">nl.denoronha.deckhand.verse · bible-api.com, no key</p>
           </div>
@@ -159,7 +159,7 @@
         <article class="app" id="tasks">
           <div class="icon"><img src="../assets/img/icons/tasks.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Tasks</h3><span class="badge">2.1</span></div>
+            <div class="title"><h3>Tasks</h3><span class="badge">2.2</span></div>
             <p>Your open Linear issues: what you have started first, then by priority and due date, each with its state and due day; overdue and due-this-week counts at the top. Tap an issue on the bar and press Done to close it in Linear; the list is refreshed every twenty seconds while the page is open. Needs a personal Linear API key, which Deckhand keeps in a user-only file on the Mac.</p>
             <p class="meta">nl.denoronha.deckhand.tasks · Linear GraphQL API: reads your issues, writes only the Done you press</p>
           </div>
@@ -168,11 +168,56 @@
         <article class="app" id="haven">
           <div class="icon"><img src="../assets/img/icons/haven.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Haven</h3><span class="badge">2.1</span></div>
-            <p>Ships at the ports and inland terminals you choose, live from AIS: one card per place with how many are on their way in and how many lie alongside, and the first few by name with a rough arrival time. Tap a place for its approach, a line from the far end to the berth with every arriving ship as a dot at its distance. Which places you watch is a file on your Mac; without it Haven watches the port of Rotterdam. Needs a free aisstream.io key, which Deckhand keeps in a user-only file on the Mac and which never reaches the bar.</p>
+            <div class="title"><h3>Haven</h3><span class="badge">2.2</span></div>
+            <p>Ships at the ports and inland terminals you choose, live from AIS: one card per place with how many are on their way in and how many lie alongside, and the first few by name with a rough arrival time. Tap a place for its approach, a line from the far end to the berth with every arriving ship as a dot at its distance. You choose the places in Deckhand: find one with Apple Maps and set its area and approach on a map; without any, Haven watches the port of Rotterdam. Needs a free aisstream.io key, which Deckhand keeps in a user-only file on the Mac and which never reaches the bar.</p>
             <p class="meta">nl.denoronha.deckhand.haven · aisstream.io AIS stream, held by Deckhand on the Mac</p>
           </div>
           <div class="shot"><img src="../assets/img/screens/bar-haven.png" alt="Haven app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app" id="tide">
+          <div class="icon"><img src="../assets/img/icons/tide.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Tide</h3><span class="badge">2.2</span></div>
+            <p>Dutch water levels on your bar. Up to four Rijkswaterstaat gauges, each with the level now in cm NAP and which way it is going, today's curve against the predicted tide and the next high and low water, plus a small almanac with sunrise, sunset, day length and the moon. Hoek van Holland, Rotterdam and Nijmegen by default; pick your own gauges under Apps → Tide. Runs on the bar itself from Rijkswaterstaat's open water data; no account, no key.</p>
+            <p class="meta">nl.denoronha.deckhand.tide · Rijkswaterstaat water data, fetched by the bar every 10 minutes</p>
+          </div>
+          <div class="shot"><img src="../assets/img/screens/bar-tide.png" alt="Tide app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app" id="schiphol">
+          <div class="icon"><img src="../assets/img/icons/schiphol.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Schiphol</h3><span class="badge">2.2</span></div>
+            <p>Amsterdam Schiphol as the tower sees it: the six runways with the aircraft landing on them and taking off from them, which runways are in use right now and how many movements there were in the last 15 minutes, worked out live from open ADS-B data. Add a free Schiphol Public Flight API key and the next arrivals and departures appear beside it, with gate, delays and the runway of the flight that is on final.</p>
+            <p class="meta">nl.denoronha.deckhand.schiphol · adsb.lol and adsbdb, and with your key Schiphol's timetable, fetched by Deckhand on the Mac</p>
+          </div>
+          <div class="shot"><img src="../assets/img/screens/bar-schiphol.png" alt="Schiphol app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app" id="zeekr">
+          <div class="icon"><img src="../assets/img/icons/zeekr.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Zeekr</h3><span class="badge">2.2</span></div>
+            <p>Your Zeekr at a glance: charge and range, charging power and when it is done, locked or not, climate, tyre pressures, odometer and where it is (Home or a short address). Tap for the charge curve and a doors-and-tyres view. Read-only, asked politely by Deckhand on your Mac and never waking the car; the sign-in never reaches the bar. The picture shows the drawn car the app uses until you add a picture of your own.</p>
+            <p class="meta">nl.denoronha.deckhand.zeekr · Zeekr's EU app gateway, asked by Deckhand on the Mac</p>
+          </div>
+          <div class="shot"><img src="../assets/img/screens/bar-zeekr.png" alt="Zeekr app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app" id="strava">
+          <div class="icon"><img src="../assets/img/icons/strava.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Training</h3><span class="badge">2.2</span></div>
+            <p>Your own activities on the bar: the latest with its route, the ones before it, this week against last week per sport, and the year so far. Connect once with your own Strava API application; Deckhand keeps the tokens on your Mac and the bar only gets the numbers and the shape of each route. Powered by Strava.</p>
+            <p class="meta">nl.denoronha.deckhand.strava · Strava API with your own application, read by Deckhand on the Mac every 12 minutes</p>
+          </div>
+          <div class="shot"><img src="../assets/img/screens/bar-strava.png" alt="Training app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app" id="cask">
+          <div class="icon"><img src="../assets/img/icons/cask.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Cask</h3><span class="badge">2.2</span></div>
+            <p>Your whisky collection at auction prices. What your bottles are worth together, against what you paid and a month ago, with a two-year trend per bottle; tap one for its latest auction days and the lots on offer now. Prices from the Whiskystats Data API with your own key, cached on the Mac and refreshed within a strict monthly credit budget. The picture uses demo bottles.</p>
+            <p class="meta">nl.denoronha.deckhand.cask · Whiskystats Data API, only the Whisky IDs, asked by Deckhand on the Mac</p>
+          </div>
+          <div class="shot"><img src="../assets/img/screens/bar-cask.png" alt="Cask app on the bar" loading="lazy"></div>
         </article>
       </div>
     </div>
@@ -193,7 +238,7 @@
       </ol>
       <div class="callout" style="margin-top:2.5rem">
         <p class="eyebrow">Note</p>
-        <p>Monitor, Claude, Music, Calendar, Tasks and Haven need Deckhand running on the Mac. Close Deckhand and they show "Waiting for the Mac…" until it is back; the other six carry on.</p>
+        <p>Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Cask, Schiphol and Zeekr need Deckhand running on the Mac. Close Deckhand and they show "Waiting for the Mac…" until it is back; the others carry on.</p>
       </div>
     </div>
   </section>
@@ -203,7 +248,7 @@
       <div class="section-head">
         <p class="eyebrow">Build your own</p>
         <h2>A bar app is a page and a beacon listener.</h2>
-        <p class="lede">The twelve apps are one Android project with twelve flavors, in the repository under <a href="https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor">android/DeckhandMonitor</a>. Fork it, or write the same thing in anything that runs on Android.</p>
+        <p class="lede">Deckhand's apps are one Android project with a flavor per app, in the repository under <a href="https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor">android/DeckhandMonitor</a>. Fork it, or write the same thing in anything that runs on Android.</p>
       </div>
       <ol class="steps">
         <li><b>Draw for 1424 × 280 at 160 dpi.</b><span>One screenful, no scrolling, large type: the bar is read from arm's length. Plain HTML and canvas work well; the bar's WebView is a current Chromium.</span></li>
