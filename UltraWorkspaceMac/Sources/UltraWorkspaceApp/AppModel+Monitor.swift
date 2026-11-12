@@ -51,7 +51,8 @@ extension AppModel {
         ("weather", "Weather", "DeckhandWeather"), ("music", "Music", "DeckhandMusic"), ("calendar", "Calendar", "DeckhandCalendar"),
         ("flights", "Flights", "DeckhandFlights"), ("sky", "Sun & Moon", "DeckhandSky"), ("news", "Headlines", "DeckhandNews"),
         ("verse", "Verse", "DeckhandVerse"), ("tasks", "Tasks", "DeckhandTasks"), ("haven", "Haven", "DeckhandHaven"),
-        ("tide", "Tide", "DeckhandTide")]
+        ("tide", "Tide", "DeckhandTide"),
+        ("strava", "Training", "DeckhandTraining")]
 
     /// APKs shipped inside Deckhand.app (packaging/make-app.sh copies dist/bar-apps) or next to the dev build.
     static func bundledAPK(_ name: String) -> URL? {
