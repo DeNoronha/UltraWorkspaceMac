@@ -19,6 +19,7 @@ The launcher-icon glyphs of the Deckhand bar apps (every flavor except `claude`)
 | strava | Person running (default skin tone) | `person_running_3d_default.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Person%20running/Default/3D/person_running_3d_default.png |
 | cask | Tumbler glass | `tumbler_glass_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Tumbler%20glass/3D/tumbler_glass_3d.png |
 | schiphol | Airplane departure | `airplane_departure_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Airplane%20departure/3D/airplane_departure_3d.png |
+| teletekst | Television | `television_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Television/3D/television_3d.png |
 
 ## Licence
 

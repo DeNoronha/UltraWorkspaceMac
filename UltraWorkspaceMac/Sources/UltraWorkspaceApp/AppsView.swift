@@ -15,6 +15,7 @@ struct AppsView: View {
         case "cask": return "wineglass"
         case "schiphol": return "airplane.departure"
         case "zeekr": return "car.side"
+        case "teletekst": return "tv"
         default: return "waveform.path.ecg" }
     }
     static func blurb(_ page: String) -> String {
@@ -33,6 +34,7 @@ struct AppsView: View {
         case "tide": return "Water levels at the Rijkswaterstaat gauges you choose: the level now in cm NAP and which way it goes, today's curve against the predicted tide, the next high and low water, and a small almanac with sun and moon."
         case "strava": return "Your own Strava activities: the latest with its route, this week against last week per sport, and the year so far. Powered by Strava."
         case "schiphol": return "Amsterdam Schiphol: which runways are in use for landing and take-off, the aircraft on and around them, the last 15 minutes' movements, and with a Schiphol API key the next arrivals and departures."
+        case "teletekst": return "NOS Teletekst as it looks on television: the news index and its stories, sport and the weather map, in the teletext colours and blocks, two columns at a time, turning by itself."
         case "haven": return "Ships at the ports and terminals you choose, live from AIS: what lies alongside and what is on its way in, with a rough arrival time. Tap a place for its approach."
         case "cask": return "Your whisky collection at auction prices (Whiskystats): what it is worth, against what you paid and a month ago, with each bottle's trend. Tap a bottle for its auctions."
         case "zeekr": return "Your Zeekr at a glance: charge and range, charging power and when it is full, locked or not, climate, tyres, odometer and where it is. Tap for the charge curve and the doors and tyres. Read-only."
@@ -218,6 +220,8 @@ struct AppsView: View {
             SchipholSettings()
         case "zeekr":
             ZeekrSettings()
+        case "teletekst":
+            TeletekstSettings()
         case "sky":
             LocationPanel()
             Text("Sun and moon are computed on the bar for this location; nothing is fetched.").font(.caption).foregroundStyle(.secondary)

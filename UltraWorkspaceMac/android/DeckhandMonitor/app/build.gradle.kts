@@ -47,9 +47,10 @@ android {
             Triple("cask", "nl.denoronha.deckhand.cask", "Cask"),
             Triple("schiphol", "nl.denoronha.deckhand.schiphol", "Schiphol"),
             Triple("zeekr", "nl.denoronha.deckhand.zeekr", "Zeekr"),
+            Triple("teletekst", "nl.denoronha.deckhand.teletekst", "Teletekst"),
         )
         // These fetch their own data on the bar (1.9): page and feeds in the APK, only config.json from the Mac.
-        val onBar = setOf("flights", "crypto", "weather", "sky", "news", "verse", "tide")
+        val onBar = setOf("flights", "crypto", "weather", "sky", "news", "verse", "tide", "teletekst")
         for ((flavor, appId, label) in pages) {
             create(flavor) {
                 dimension = "page"
