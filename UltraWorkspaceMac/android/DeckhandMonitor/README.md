@@ -1,6 +1,6 @@
 # Deckhand bar apps (Android)
 
-A tiny full-screen kiosk app for the Sanytron UltraBar X CoreBar (Android 10, 1424×280 landscape). It is a single `WebView` that shows one of Deckhand's live pages, carried in the app since 2.0 (see below). The CoreBar launcher shows one card per installed package, so the project is built as twelve product flavors, one per page, each with its own package, label and icon:
+A tiny full-screen kiosk app for the Sanytron UltraBar X CoreBar (Android 10, 1424×280 landscape). It is a single `WebView` that shows one of Deckhand's live pages, carried in the app since 2.0 (see below). The CoreBar launcher shows one card per installed package, so the project is built as eighteen product flavors, one per page, each with its own package, label and icon:
 
 | flavor | applicationId | label | page |
 |---|---|---|---|
@@ -23,11 +23,11 @@ A tiny full-screen kiosk app for the Sanytron UltraBar X CoreBar (Android 10, 14
 | zeekr | nl.denoronha.deckhand.zeekr | Zeekr | /zeekr |
 | teletekst | nl.denoronha.deckhand.teletekst | Teletekst | /teletekst (on the bar: NOS Teletekst pages, `onbar/TeletekstFeed.kt`) |
 
-The flavors are declared in `app/build.gradle.kts` (one dimension, `page`); each sets `applicationId`, the `app_name` string and `BuildConfig.PAGE`. All twelve share one version: `versionCode 12` / `versionName 2.1` in `app/build.gradle.kts`, which must move together with `AppModel.barAppsVersion` in the Mac app (the Apps page compares the bar's copy against it) and the `version` fields in `site/marketplace/registry.json`. The shared code lives in `src/main`; everything icon-related per flavor lives in `src/<flavor>/res/` and is generated (see below).
+The flavors are declared in `app/build.gradle.kts` (one dimension, `page`); each sets `applicationId`, the `app_name` string and `BuildConfig.PAGE`. All eighteen share one version: `versionCode 12` / `versionName 2.1` in `app/build.gradle.kts`, which must move together with `AppModel.barAppsVersion` in the Mac app (the Apps page compares the bar's copy against it) and the `version` fields in `site/marketplace/registry.json`. The shared code lives in `src/main`; everything icon-related per flavor lives in `src/<flavor>/res/` and is generated (see below).
 
 ## Deckhand Home (`home/`)
 
-A second module, `nl.denoronha.deckhand.home`, versioned on its own (`versionCode 3` / `versionName 1.2` in `home/build.gradle.kts`, mirrored by `AppModel.homeVersion` in the Mac app). It is a HOME + DEFAULT (and LAUNCHER) activity for the 1424×280 strip: clock and date, a status line that turns green while Deckhand's beacon (UDP 5320) is heard, one tile per installed LAUNCHER activity (Deckhand's twelve first in their known order, then the rest by label; tap opens, long press opens App info), and, pinned on the right, Settings and the bar's own launcher (labelled UltraBar) as the same tiles as every other app, left out of the scrolling row. Back does nothing on the home screen. Nothing is loaded from the network. The Mac app installs it and switches the bar's home screen from Settings → Bar home screen (`cmd package set-home-activity nl.denoronha.deckhand.home/.HomeActivity`, and `com.ultrabar.launch/.ui.activity.MainActivity` to go back); the bar's own launcher keeps running underneath either way.
+A second module, `nl.denoronha.deckhand.home`, versioned on its own (`versionCode 4` / `versionName 1.3` in `home/build.gradle.kts`, mirrored by `AppModel.homeVersion` in the Mac app). It is a HOME + DEFAULT (and LAUNCHER) activity for the 1424×280 strip: clock and date, a status line that turns green while Deckhand's beacon (UDP 5320) is heard, one tile per installed LAUNCHER activity (Deckhand's twelve first in their known order, then the rest by label; tap opens, long press opens App info), and, pinned on the right, Settings and the bar's own launcher (labelled UltraBar) as the same tiles as every other app, left out of the scrolling row. Back does nothing on the home screen. Nothing is loaded from the network. The Mac app installs it and switches the bar's home screen from Settings → Bar home screen (`cmd package set-home-activity nl.denoronha.deckhand.home/.HomeActivity`, and `com.ultrabar.launch/.ui.activity.MainActivity` to go back); the bar's own launcher keeps running underneath either way.
 
 ## Launcher icons
 
@@ -35,7 +35,7 @@ A second module, `nl.denoronha.deckhand.home`, versioned on its own (`versionCod
 
 ## Pages in the app, data on the bar or from the Mac (2.0)
 
-Every flavor carries its page and loads it from `https://deckhand.invalid/<page>` at once. Six fetch their own data and work with the Mac off: `flights`, `crypto`, `weather`, `sky`, `news`, `verse` (`BuildConfig.ON_BAR`). The others (`monitor`, `claude`, `music`, `calendar`, `tasks`, `haven`, `strava`, `zeekr`) show what only the Mac knows: `LocalSite.forward` passes exactly their data requests to Deckhand at the beacon's address — `GET /monitor/stats.json`, `GET /<page>/data.json`, `GET /music/art.jpg`, `GET /zeekr/car/{normal,charging,trunk}.png` (the owner's own car picture from Deckhand's private folder), `POST /music/cmd/{play,next,previous}` and `POST /tasks/done/<uuid>` with `X-Deckhand: action` — and answers 503 while no Mac is known, so the page shows "Waiting for the Mac…". The last Mac address is remembered across restarts; the `url` intent extra sets it by hand.
+Every flavor carries its page and loads it from `https://deckhand.invalid/<page>` at once. Eight fetch their own data and work with the Mac off: `flights`, `crypto`, `weather`, `sky`, `news`, `verse`, `tide`, `teletekst` (`BuildConfig.ON_BAR`). The others (`monitor`, `claude`, `music`, `calendar`, `tasks`, `haven`, `strava`, `cask`, `schiphol`, `zeekr`) show what only the Mac knows: `LocalSite.forward` passes exactly their data requests to Deckhand at the beacon's address — `GET /monitor/stats.json`, `GET /<page>/data.json`, `GET /music/art.jpg`, `GET /zeekr/car/{normal,charging,trunk}.png` (the owner's own car picture from Deckhand's private folder), `POST /music/cmd/{play,next,previous}` and `POST /tasks/done/<uuid>` with `X-Deckhand: action` — and answers 503 while no Mac is known, so the page shows "Waiting for the Mac…". The last Mac address is remembered across restarts; the `url` intent extra sets it by hand.
 
 - **The page** is the Mac app's own: `app/build.gradle.kts` adds `Sources/UltraWorkspaceApp/Resources/pages` as the assets folder, and `onbar/LocalSite.kt` assembles `shell.html` + `<page>.js` exactly as `BarPages.wrap` does (with "Loading…" instead of "Waiting for the Mac…"). Change a page there and both the Mac and the APK get it.
 - **The origin** is `https://deckhand.invalid/<page>`. `.invalid` never resolves; `MainActivity.Client.shouldInterceptRequest` answers every request to it from `LocalSite`, so nothing for that host reaches the network.
@@ -61,11 +61,11 @@ Requires JDK 21, the Android command-line tools with `platforms;android-34`, and
 ```sh
 cd android/DeckhandMonitor
 JAVA_HOME=/opt/homebrew/opt/openjdk@21 ANDROID_HOME=/opt/homebrew/share/android-commandlinetools ./gradlew assembleDebug
-for f in monitor:Monitor claude:Claude crypto:Crypto weather:Weather music:Music calendar:Calendar flights:Flights sky:Sky news:News verse:Verse tasks:Tasks haven:Haven strava:Training zeekr:Zeekr; do cp app/build/outputs/apk/${f%%:*}/debug/app-${f%%:*}-debug.apk ../../dist/bar-apps/Deckhand${f##*:}.apk; done
+for f in monitor:Monitor claude:Claude crypto:Crypto weather:Weather music:Music calendar:Calendar flights:Flights sky:Sky news:News verse:Verse tasks:Tasks haven:Haven tide:Tide strava:Training cask:Cask schiphol:Schiphol zeekr:Zeekr teletekst:Teletekst; do cp app/build/outputs/apk/${f%%:*}/debug/app-${f%%:*}-debug.apk ../../dist/bar-apps/Deckhand${f##*:}.apk; done
 cp ../../dist/bar-apps/DeckhandMonitor.apk ../../dist/DeckhandMonitor.apk
 ```
 
-`assembleDebug` builds all twelve flavors and Deckhand Home; `assembleClaudeDebug` etc. builds one, `:home:assembleDebug` only the home screen (`cp home/build/outputs/apk/debug/home-debug.apk ../../dist/bar-apps/DeckhandHome.apk`).
+`assembleDebug` builds all eighteen flavors and Deckhand Home; `assembleClaudeDebug` etc. builds one, `:home:assembleDebug` only the home screen (`cp home/build/outputs/apk/debug/home-debug.apk ../../dist/bar-apps/DeckhandHome.apk`).
 
 The debug-signed APK is fine for the bar (it is an eng build). Kotlin, no Compose, no AndroidX. The Mac app installs these APKs from the Apps page (switch **Installed on the bar**, over Wi-Fi ADB; Settings → Debug bridge turns Wi-Fi ADB on over USB and keeps it on after reboots); `packaging/make-app.sh` bundles whatever is in `dist/bar-apps/` into Deckhand.app, so rebuild here before a release.
 
