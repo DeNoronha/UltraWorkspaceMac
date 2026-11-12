@@ -12,6 +12,7 @@ struct AppsView: View {
         case "haven": return "ferry"
         case "tide": return "water.waves"
         case "strava": return "figure.run"
+        case "cask": return "wineglass"
         default: return "waveform.path.ecg" }
     }
     static func blurb(_ page: String) -> String {
@@ -30,6 +31,7 @@ struct AppsView: View {
         case "tide": return "Water levels at the Rijkswaterstaat gauges you choose: the level now in cm NAP and which way it goes, today's curve against the predicted tide, the next high and low water, and a small almanac with sun and moon."
         case "strava": return "Your own Strava activities: the latest with its route, this week against last week per sport, and the year so far. Powered by Strava."
         case "haven": return "Ships at the ports and terminals you choose, live from AIS: what lies alongside and what is on its way in, with a rough arrival time. Tap a place for its approach."
+        case "cask": return "Your whisky collection at auction prices (Whiskystats): what it is worth, against what you paid and a month ago, with each bottle's trend. Tap a bottle for its auctions."
         default: return ""
         }
     }
@@ -206,6 +208,8 @@ struct AppsView: View {
             TideSettings()
         case "strava":
             StravaSettings(feed: model.barPages.strava)
+        case "cask":
+            CaskSettings(feed: model.barPages.cask)
         case "sky":
             LocationPanel()
             Text("Sun and moon are computed on the bar for this location; nothing is fetched.").font(.caption).foregroundStyle(.secondary)
