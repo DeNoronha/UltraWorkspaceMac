@@ -15,6 +15,7 @@ The launcher-icon glyphs of the Deckhand bar apps (every flavor except `claude`)
 | verse | Open book | `open_book_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Open%20book/3D/open_book_3d.png |
 | tasks | Check mark button | `check_mark_button_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Check%20mark%20button/3D/check_mark_button_3d.png |
 | haven | Ship | `ship_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Ship/3D/ship_3d.png |
+| cask | Tumbler glass | `tumbler_glass_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Tumbler%20glass/3D/tumbler_glass_3d.png |
 
 ## Licence
 
