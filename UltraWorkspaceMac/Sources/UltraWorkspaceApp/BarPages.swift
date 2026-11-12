@@ -15,7 +15,7 @@ import UltraBarKit
 @MainActor
 final class BarPages {
     /// Pages whose data comes from this Mac through `route` (Monitor's samples are served by `AppModel.startBarDataServer`).
-    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven"]
+    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "zeekr"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
@@ -43,6 +43,8 @@ final class BarPages {
     private var barConfig: [String: Any] = [:]
     /// Ships near the Haven places (aisstream.io), held open while the Haven app is on the bar.
     let haven = HavenFeed()
+    /// The owner's Zeekr (Zeekr's EU gateway), polled while the Zeekr app is on the bar.
+    let zeekr = ZeekrFeed()
     private weak var model: AppModel?
     private var settings: AppSettings?
 
@@ -52,6 +54,9 @@ final class BarPages {
         haven.start(key: { model.aisstreamKey }, wanted: { [weak self] in
             model.barAppVersion("haven") != nil || (self?.lastHit["haven"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
+        zeekr.start(wanted: { [weak self] in
+            model.barAppVersion("zeekr") != nil || (self?.lastHit["zeekr"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+        }, pageOpen: { [weak self] in self?.lastHit["zeekr"].map { Date().timeIntervalSince($0) < 30 } ?? false })
         startLinearFeed(model: model)
         startConfigFeed(model: model, settings: settings)
         tasks.append(Task { [weak self] in   // Claude sessions + Music: 2 s
@@ -129,7 +134,7 @@ final class BarPages {
         })
     }
 
-    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); haven.stop() }
+    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); haven.stop(); zeekr.stop() }
 
     /// Linear for the Tasks app.
     private func startLinearFeed(model: AppModel) {
@@ -267,6 +272,12 @@ final class BarPages {
     nonisolated func route(_ path: String, model: AppModel) -> MonitorServer.Response? {
         let parts = path.split(separator: "/").map(String.init)
         if parts == ["config.json"] { return .json(DispatchQueue.main.sync { self.barConfig }) }
+        // The owner's own car picture for the Zeekr page (kept in Deckhand's private folder, never in the APK).
+        if parts.count == 3, parts[0] == "zeekr", parts[1] == "car", parts[2].hasSuffix(".png") {
+            let variant = String(parts[2].dropLast(4))
+            guard ZeekrFeed.pictures.contains(where: { $0.variant == variant }) else { return nil }
+            return DispatchQueue.main.sync { self.zeekr.picture(variant) }.map { MonitorServer.Response(type: "image/png", body: $0) }
+        }
         guard parts.count == 2, let page = parts.first, Self.macPages.contains(page) else { return nil }
         if parts[1] == "data.json" {
             // A request that wakes an idle feed gets 503: the page retries in 2 s and then gets fresh data, instead
@@ -293,6 +304,7 @@ final class BarPages {
         case "calendar": return calendar
         case "tasks": return linear
         case "haven": return haven.snapshot(hasKey: !(model?.aisstreamKey.isEmpty ?? true), clock24h: settings?.clock24h ?? true)
+        case "zeekr": return zeekr.snapshot(clock24h: settings?.clock24h ?? true)
         default: return [:]
         }
     }
