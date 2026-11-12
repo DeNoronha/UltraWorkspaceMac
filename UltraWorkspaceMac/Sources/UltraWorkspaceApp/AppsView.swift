@@ -10,6 +10,7 @@ struct AppsView: View {
         case "claude": return "sparkles"; case "crypto": return "bitcoinsign.circle"; case "weather": return "cloud.sun"; case "music": return "music.note"; case "calendar": return "calendar"
         case "flights": return "airplane"; case "sky": return "moon.stars"; case "news": return "newspaper"; case "verse": return "book.closed"; case "tasks": return "checklist"
         case "haven": return "ferry"
+        case "tide": return "water.waves"
         default: return "waveform.path.ecg" }
     }
     static func blurb(_ page: String) -> String {
@@ -25,6 +26,7 @@ struct AppsView: View {
         case "news": return "Headlines from the source you pick, four at a time, rotating."
         case "verse": return "A Bible verse for the day (World English Bible), one per day of the year."
         case "tasks": return "Your open Linear issues: started work first, then by priority and due date."
+        case "tide": return "Water levels at the Rijkswaterstaat gauges you choose: the level now in cm NAP and which way it goes, today's curve against the predicted tide, the next high and low water, and a small almanac with sun and moon."
         case "haven": return "Ships at the ports and terminals you choose, live from AIS: what lies alongside and what is on its way in, with a rough arrival time. Tap a place for its approach."
         default: return ""
         }
@@ -198,6 +200,8 @@ struct AppsView: View {
             }
         case "haven":
             HavenSettings()
+        case "tide":
+            TideSettings()
         case "sky":
             LocationPanel()
             Text("Sun and moon are computed on the bar for this location; nothing is fetched.").font(.caption).foregroundStyle(.secondary)

@@ -41,7 +41,7 @@ import kotlin.math.abs
  * Since 1.9 every flavor carries its page (the Mac app's own page files, packaged as assets) and shows it at once
  * from `https://deckhand.invalid/<page>`, answered by [LocalSite]; nothing is ever loaded from anywhere else.
  *
- * - On-bar flavors (flights, crypto, weather, sky, news, verse; `BuildConfig.ON_BAR`) fetch their own data and
+ * - On-bar flavors (flights, crypto, weather, sky, news, verse, tide; `BuildConfig.ON_BAR`) fetch their own data and
  *   work with the Mac off. Deckhand only gives them their settings: pushed over adb (see `onbar/ConfigReceiver`),
  *   or fetched here as `/config.json` when the beacon is heard.
  * - Mac flavors (monitor, claude, music, calendar, tasks, haven) show what only the Mac knows; [LocalSite] passes their
