@@ -16,6 +16,7 @@ The launcher-icon glyphs of the Deckhand bar apps (every flavor except `claude`)
 | tasks | Check mark button | `check_mark_button_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Check%20mark%20button/3D/check_mark_button_3d.png |
 | haven | Ship | `ship_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Ship/3D/ship_3d.png |
 | tide | Water wave | `water_wave_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Water%20wave/3D/water_wave_3d.png |
+| teletekst | Television | `television_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Television/3D/television_3d.png |
 
 ## Licence
 

@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
  *
  *  - `/<page>`                    the Mac's `shell.html` + `<page>.js`, or `monitor.html` (APK assets, the same files Deckhand serves)
  *
- * On-bar pages (flights, crypto, weather, sky, news, verse, tide) also get their data here:
+ * On-bar pages (flights, crypto, weather, sky, news, verse, tide, teletekst) also get their data here:
  *  - `/<page>/data.json`          [Feeds], fetched by the bar itself and cached ([Feed])
  *  - `/flights/tile/z/x/y.png`    OpenStreetMap tiles, toned down like the Mac's `MapTiles`, cached 30 days
  *
@@ -50,6 +50,7 @@ internal class LocalSite(private val ctx: Context, private val page: String, pri
         "news" -> Feed(600_000, Feeds::news)
         "verse" -> Feed(3_600_000, Feeds::verse)
         "tide" -> Feed(600_000, TideFeed::tide)
+        "teletekst" -> Feed(60_000, TeletekstFeed::teletekst)   // each NOS page has its own, longer cache
         else -> null
     }
 

@@ -20,7 +20,7 @@ final class BarPages {
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
     /// its settings from this Mac (pushed over ADB, or read as `/config.json`).
-    nonisolated static let onBar: Set<String> = ["flights", "crypto", "weather", "sky", "news", "verse", "tide"]
+    nonisolated static let onBar: Set<String> = ["flights", "crypto", "weather", "sky", "news", "verse", "tide", "teletekst"]
 
     private var claude: [String: Any] = ["sessions": [], "tokens": "", "active": 0, "waiting": 0]
     private var calendar: [String: Any] = ["days": []]
@@ -165,7 +165,7 @@ final class BarPages {
     ///
     ///     {"v":2, "location":{"lat","lon","place"}, "units":{"metric","clock24h"},
     ///      "apps":{"flights":{"radiusKm"}, "crypto":{"coins":[…],"currency"}, "news":{"source"}, "weather":{}, "sky":{}, "verse":{},
-///              "tide":{"stations":[{"code","name","tide"}…]}}}
+    ///              "tide":{"stations":[{"code","name","tide"}…]}, "teletekst":{"pages":[{"page","stories"}…],"interval"}}}
     ///
     /// An app section may carry its own `location` to override the shared one. Deckhand pushes the document to the
     /// on-bar apps over the debug bridge whenever it changes (`am broadcast … --es config64`, accepted only from the
@@ -181,6 +181,7 @@ final class BarPages {
                 "news": ["source": settings.newsSource],
                 "weather": [String: Any](), "sky": [String: Any](), "verse": [String: Any](),
                 "tide": TideStations.configSection(),   // the gauges from tide.json (Apps → Tide)
+                "teletekst": TeletekstPages.configSection(),   // the pages from teletekst.json (Apps → Teletekst)
             ] as [String: Any],
         ]
         if let l = location { doc["location"] = ["lat": (l.lat * 1000).rounded() / 1000, "lon": (l.lon * 1000).rounded() / 1000, "place": l.name] }
