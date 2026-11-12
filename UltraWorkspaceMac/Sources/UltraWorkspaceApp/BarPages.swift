@@ -15,7 +15,7 @@ import UltraBarKit
 @MainActor
 final class BarPages {
     /// Pages whose data comes from this Mac through `route` (Monitor's samples are served by `AppModel.startBarDataServer`).
-    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven"]
+    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "schiphol"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
@@ -43,6 +43,8 @@ final class BarPages {
     private var barConfig: [String: Any] = [:]
     /// Ships near the Haven places (aisstream.io), held open while the Haven app is on the bar.
     let haven = HavenFeed()
+    /// Schiphol's runways and traffic (adsb.lol) and, with the user's key, its timetable; polled while the app is on the bar.
+    let schiphol = SchipholFeed()
     private weak var model: AppModel?
     private var settings: AppSettings?
 
@@ -52,6 +54,8 @@ final class BarPages {
         haven.start(key: { model.aisstreamKey }, wanted: { [weak self] in
             model.barAppVersion("haven") != nil || (self?.lastHit["haven"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
+        schiphol.start(open: { [weak self] in self?.lastHit["schiphol"].map { Date().timeIntervalSince($0) < 120 } ?? false },
+                       installed: { [weak self] in model.barAppVersion("schiphol") != nil || (self?.lastHit["schiphol"].map { Date().timeIntervalSince($0) < 600 } ?? false) })
         startLinearFeed(model: model)
         startConfigFeed(model: model, settings: settings)
         tasks.append(Task { [weak self] in   // Claude sessions + Music: 2 s
@@ -129,7 +133,7 @@ final class BarPages {
         })
     }
 
-    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); haven.stop() }
+    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); haven.stop(); schiphol.stop() }
 
     /// Linear for the Tasks app.
     private func startLinearFeed(model: AppModel) {
@@ -292,6 +296,7 @@ final class BarPages {
         case "music": return music
         case "calendar": return calendar
         case "tasks": return linear
+        case "schiphol": return schiphol.snapshot(clock24h: settings?.clock24h ?? true)
         case "haven": return haven.snapshot(hasKey: !(model?.aisstreamKey.isEmpty ?? true), clock24h: settings?.clock24h ?? true)
         default: return [:]
         }

@@ -10,6 +10,7 @@ struct AppsView: View {
         case "claude": return "sparkles"; case "crypto": return "bitcoinsign.circle"; case "weather": return "cloud.sun"; case "music": return "music.note"; case "calendar": return "calendar"
         case "flights": return "airplane"; case "sky": return "moon.stars"; case "news": return "newspaper"; case "verse": return "book.closed"; case "tasks": return "checklist"
         case "haven": return "ferry"
+        case "schiphol": return "airplane.departure"
         default: return "waveform.path.ecg" }
     }
     static func blurb(_ page: String) -> String {
@@ -25,6 +26,7 @@ struct AppsView: View {
         case "news": return "Headlines from the source you pick, four at a time, rotating."
         case "verse": return "A Bible verse for the day (World English Bible), one per day of the year."
         case "tasks": return "Your open Linear issues: started work first, then by priority and due date."
+        case "schiphol": return "Amsterdam Schiphol: which runways are in use for landing and take-off, the aircraft on and around them, the last 15 minutes' movements, and with a Schiphol API key the next arrivals and departures."
         case "haven": return "Ships at the ports and terminals you choose, live from AIS: what lies alongside and what is on its way in, with a rough arrival time. Tap a place for its approach."
         default: return ""
         }
@@ -198,6 +200,8 @@ struct AppsView: View {
             }
         case "haven":
             HavenSettings()
+        case "schiphol":
+            SchipholSettings()
         case "sky":
             LocationPanel()
             Text("Sun and moon are computed on the bar for this location; nothing is fetched.").font(.caption).foregroundStyle(.secondary)
