@@ -55,7 +55,7 @@ class HomeActivity : Activity() {
         private const val SETTINGS_PACKAGE = "com.android.settings"
         /** Pinned on the right, so they are left out of the scrolling row. */
         private val PINNED = setOf(SETTINGS_PACKAGE, VENDOR_LAUNCHER)
-        private val OUR_ORDER = listOf("monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks", "haven")
+        private val OUR_ORDER = listOf("monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks", "haven", "tide")
 
         private const val BG = 0xFF000000.toInt()
         private const val TILE = 0xFF15171C.toInt()

@@ -16,6 +16,7 @@ A tiny full-screen kiosk app for the Sanytron UltraBar X CoreBar (Android 10, 14
 | verse | nl.denoronha.deckhand.verse | Verse | /verse |
 | tasks | nl.denoronha.deckhand.tasks | Tasks | /tasks |
 | haven | nl.denoronha.deckhand.haven | Haven | /haven |
+| tide | nl.denoronha.deckhand.tide | Tide | /tide (on the bar: Rijkswaterstaat water levels, `onbar/TideFeed.kt`) |
 
 The flavors are declared in `app/build.gradle.kts` (one dimension, `page`); each sets `applicationId`, the `app_name` string and `BuildConfig.PAGE`. All twelve share one version: `versionCode 12` / `versionName 2.1` in `app/build.gradle.kts`, which must move together with `AppModel.barAppsVersion` in the Mac app (the Apps page compares the bar's copy against it) and the `version` fields in `site/marketplace/registry.json`. The shared code lives in `src/main`; everything icon-related per flavor lives in `src/<flavor>/res/` and is generated (see below).
 
