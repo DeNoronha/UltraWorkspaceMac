@@ -15,7 +15,7 @@ import UltraBarKit
 @MainActor
 final class BarPages {
     /// Pages whose data comes from this Mac through `route` (Monitor's samples are served by `AppModel.startBarDataServer`).
-    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven"]
+    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
@@ -43,6 +43,8 @@ final class BarPages {
     private var barConfig: [String: Any] = [:]
     /// Ships near the Haven places (aisstream.io), held open while the Haven app is on the bar.
     let haven = HavenFeed()
+    /// The athlete's own Strava activities for the Training app, polled every 12 min while it is on the bar.
+    let strava = StravaFeed()
     private weak var model: AppModel?
     private var settings: AppSettings?
 
@@ -51,6 +53,9 @@ final class BarPages {
         self.model = model; self.settings = settings
         haven.start(key: { model.aisstreamKey }, wanted: { [weak self] in
             model.barAppVersion("haven") != nil || (self?.lastHit["haven"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+        })
+        strava.start(wanted: { [weak self] in
+            model.barAppVersion("strava") != nil || (self?.lastHit["strava"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
         startLinearFeed(model: model)
         startConfigFeed(model: model, settings: settings)
@@ -129,7 +134,7 @@ final class BarPages {
         })
     }
 
-    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); haven.stop() }
+    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); haven.stop(); strava.stop() }
 
     /// Linear for the Tasks app.
     private func startLinearFeed(model: AppModel) {
@@ -293,6 +298,7 @@ final class BarPages {
         case "calendar": return calendar
         case "tasks": return linear
         case "haven": return haven.snapshot(hasKey: !(model?.aisstreamKey.isEmpty ?? true), clock24h: settings?.clock24h ?? true)
+        case "strava": return strava.snapshot(metric: settings?.units != .imperial, clock24h: settings?.clock24h ?? true)
         default: return [:]
         }
     }
