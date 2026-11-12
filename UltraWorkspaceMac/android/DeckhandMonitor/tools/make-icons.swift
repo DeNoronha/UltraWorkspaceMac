@@ -32,6 +32,7 @@ struct Flavor {
 enum Glyph {
     case claude                 // hand-drawn starburst
     case house                  // hand-drawn house (Deckhand Home)
+    case car                    // hand-drawn car with a charge bolt (Zeekr; no maker's picture or logo)
     case fluent(String)         // file name in tools/fluent/
 }
 
@@ -52,6 +53,7 @@ let flavors: [Flavor] = [
     Flavor(name: "strava",   top: "4c9a2a", bottom: "1f4d10", glyphColor: "ffffff", glyph: .fluent("person_running_3d_default.png")),
     Flavor(name: "cask",     top: "2f6b55", bottom: "123326", glyphColor: "ffffff", glyph: .fluent("tumbler_glass_3d.png")),
     Flavor(name: "schiphol", top: "64798f", bottom: "26323f", glyphColor: "ffffff", glyph: .fluent("airplane_departure_3d.png")),
+    Flavor(name: "zeekr",    top: "46505f", bottom: "161a21", glyphColor: "ffffff", glyph: .car),
     // Deckhand Home is its own Gradle module (home/), not a flavor of the kiosk app.
     Flavor(name: "home", resDir: "home/src/main/res", top: "4b5a78", bottom: "1c2436", glyphColor: "ffffff", glyph: .house),
 ]
@@ -210,6 +212,36 @@ func drawHouse(_ cg: CGContext, color tint: CGColor) {
     cg.restoreGState()
 }
 
+/// A car seen from the side (estate/SUV shape) with a green charge bolt above it. Unit space 0...1, (0,0) top-left.
+func drawCar(_ cg: CGContext, color tint: CGColor) {
+    cg.saveGState()
+    cg.setFillColor(tint)
+    // body: one path from the rear bumper over the roof to the bonnet
+    cg.move(to: P(0.03, 0.74)); cg.addLine(to: P(0.035, 0.60))
+    cg.addQuadCurve(to: P(0.12, 0.53), control: P(0.04, 0.54))
+    cg.addLine(to: P(0.30, 0.50))
+    cg.addQuadCurve(to: P(0.56, 0.37), control: P(0.40, 0.38))
+    cg.addLine(to: P(0.72, 0.37))
+    cg.addQuadCurve(to: P(0.93, 0.50), control: P(0.86, 0.39))
+    cg.addQuadCurve(to: P(0.97, 0.74), control: P(0.985, 0.56))
+    cg.closePath(); cg.fillPath()
+    // windows and wheel arches cut out, wheels drawn back in
+    cg.setBlendMode(.clear)
+    cg.move(to: P(0.35, 0.51)); cg.addQuadCurve(to: P(0.56, 0.41), control: P(0.43, 0.42)); cg.addLine(to: P(0.62, 0.41)); cg.addLine(to: P(0.62, 0.51)); cg.closePath(); cg.fillPath()
+    cg.move(to: P(0.655, 0.41)); cg.addLine(to: P(0.72, 0.41)); cg.addQuadCurve(to: P(0.85, 0.51), control: P(0.81, 0.43)); cg.addLine(to: P(0.655, 0.51)); cg.closePath(); cg.fillPath()
+    for x in [0.25, 0.76] as [CGFloat] { cg.addPath(circle(P(x, 0.75), 0.125)); cg.fillPath() }
+    cg.setBlendMode(.normal)
+    for x in [0.25, 0.76] as [CGFloat] {
+        cg.addPath(circle(P(x, 0.75), 0.095)); cg.fillPath()
+        cg.setBlendMode(.clear); cg.addPath(circle(P(x, 0.75), 0.04)); cg.fillPath(); cg.setBlendMode(.normal)
+    }
+    // charge bolt
+    cg.setFillColor(color("4ade80"))
+    cg.move(to: P(0.54, 0.02)); cg.addLine(to: P(0.40, 0.21)); cg.addLine(to: P(0.49, 0.21)); cg.addLine(to: P(0.45, 0.33))
+    cg.addLine(to: P(0.60, 0.13)); cg.addLine(to: P(0.51, 0.13)); cg.closePath(); cg.fillPath()
+    cg.restoreGState()
+}
+
 /// Draws the Fluent artwork centred in `box` with high-quality scaling. It is sized by area (a square emoji fills the
 /// box; a wide one such as the airplane grows a little so it carries the same visual weight), with its long side
 /// capped at 112 % of the box so nothing leaves the adaptive-icon safe zone.
@@ -239,6 +271,10 @@ func drawGlyph(_ flavor: Flavor, in box: CGRect, _ cg: CGContext) {
         cg.translateBy(x: box.minX, y: box.maxY)
         cg.scaleBy(x: box.width, y: -box.height)
         drawHouse(cg, color: color(flavor.glyphColor))
+    case .car:
+        cg.translateBy(x: box.minX, y: box.maxY)
+        cg.scaleBy(x: box.width, y: -box.height)
+        drawCar(cg, color: color(flavor.glyphColor))
     }
     cg.endTransparencyLayer()
     cg.restoreGState()

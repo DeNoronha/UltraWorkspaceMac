@@ -29,9 +29,9 @@ import java.util.concurrent.TimeUnit
  *  - `/<page>/data.json`          [Feeds], fetched by the bar itself and cached ([Feed])
  *  - `/flights/tile/z/x/y.png`    OpenStreetMap tiles, toned down like the Mac's `MapTiles`, cached 30 days
  *
- * Mac pages (monitor, claude, music, calendar, tasks, haven) show what only the Mac knows, so their data requests are
+ * Mac pages (monitor, claude, music, calendar, tasks, haven, zeekr) show what only the Mac knows, so their data requests are
  * passed on to Deckhand's data API at the address its beacon names ([macBase]): `/monitor/stats.json`,
- * `/<page>/data.json`, `/music/art.jpg`, and the two actions (POST `/music/cmd/…`, `/tasks/done/…`, with the
+ * `/<page>/data.json`, `/music/art.jpg`, `/zeekr/car/<normal|charging|trunk>.png` (the owner's own car picture), and the two actions (POST `/music/cmd/…`, `/tasks/done/…`, with the
  * `X-Deckhand: action` header the Mac requires). Nothing else is forwarded. While no Mac is known the answer is
  * 503 and the page shows "Waiting for the Mac…".
  */
@@ -88,12 +88,13 @@ internal class LocalSite(private val ctx: Context, private val page: String, pri
         }
     }
 
-    /** The six Mac pages' data requests, passed to Deckhand unchanged. Only these shapes are forwarded. */
+    /** The Mac pages' data requests, passed to Deckhand unchanged. Only these shapes are forwarded. */
     private fun forward(parts: List<String>, query: String?, method: String): WebResourceResponse {
         val allowed = when {
             method == "GET" && parts == listOf(page, "data.json") && page != "monitor" -> true
             method == "GET" && page == "monitor" && parts == listOf("monitor", "stats.json") -> true
             method == "GET" && page == "music" && parts == listOf("music", "art.jpg") -> true
+            method == "GET" && page == "zeekr" && parts.size == 3 && parts[1] == "car" && parts[2] in setOf("normal.png", "charging.png", "trunk.png") -> true
             method == "POST" && page == "music" && parts.size == 3 && parts[1] == "cmd" && parts[2] in setOf("play", "next", "previous") -> true
             method == "POST" && page == "tasks" && parts.size == 3 && parts[1] == "done" && parts[2].matches(Regex("^[0-9a-fA-F-]{36}$")) -> true
             else -> false
