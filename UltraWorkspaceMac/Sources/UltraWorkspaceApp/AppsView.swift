@@ -274,15 +274,6 @@ private struct HavenSettings: View {
                 }
             }
         }
-        Panel("Places", footer: "Each place has an area (alongside when a ship lies still in it), an approach (moving ships in it that close in, or whose AIS destination contains one of the match words, are on their way) and a kind: port (only ships of minLength m and up) or terminal (barges). Boxes are [latMin, latMax, lonMin, lonMax]. The file stays on this Mac; Deckhand reads it again within 30 s of a change.") {
-            let loaded = HavenFeed.loadPlaces()
-            ForEach(loaded.places, id: \.id) { p in
-                HStack { Image(systemName: p.kind == "port" ? "building.2" : "shippingbox").foregroundStyle(.secondary).frame(width: 18); Text(p.name); Text(p.kind).font(.caption).foregroundStyle(.secondary) }
-            }
-            HStack {
-                Button { NSWorkspace.shared.activateFileViewerSelecting([HavenFeed.ensurePlacesFile()]) } label: { Label(loaded.fromFile ? "Show haven.json" : "Create haven.json", systemImage: "doc.text") }
-                Text(loaded.fromFile ? HavenFeed.placesURL.path : "No places file: Haven watches the port of Rotterdam.").font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-            }
-        }
+        HavenPlacesPanel()
     }
 }

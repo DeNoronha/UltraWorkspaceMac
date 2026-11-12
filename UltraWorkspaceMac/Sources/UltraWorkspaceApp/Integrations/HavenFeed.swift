@@ -61,6 +61,13 @@ final class HavenFeed {
             return p.isEmpty ? (defaultPlaces, true, "haven.json lists no valid places") : (Array(p.prefix(6)), true, nil)
         } catch { return (defaultPlaces, true, "haven.json: \(error.localizedDescription)") }
     }
+    /// Writes the places from the editor in Apps → Haven. The running stream picks them up within 5 s.
+    nonisolated static func savePlaces(_ places: [HavenPlace]) throws {
+        let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        struct File: Codable { var places: [HavenPlace] }
+        try FileManager.default.createDirectory(at: placesURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try enc.encode(File(places: Array(places.prefix(6)))).write(to: placesURL, options: .atomic)
+    }
     /// Writes the current places to haven.json when there is no file yet, so there is something to edit.
     nonisolated static func ensurePlacesFile() -> URL {
         let url = placesURL
@@ -118,9 +125,12 @@ final class HavenFeed {
     func stop() { loop?.cancel(); loop = nil; socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false }
 
     /// One connection: subscribe within aisstream's 3 s, then read until it closes, the key or the places change,
-    /// nobody wants Haven any more, or the stream has been silent for `idleLimit` (checked every 30 s). The watchdog
-    /// aborts the task outright: a polite close waits for the server's close frame, which a stalled connection
-    /// never sends, and `receive()` would hang with it.
+    /// nobody wants Haven any more, or the stream has been silent for `idleLimit` (checked every 5 s, so an edited place shows on the bar almost at once).
+    ///
+    /// The reader and the watchdog are separate tasks and `run` returns as soon as either finishes, so nothing here
+    /// depends on a URLSession await coming back: after the Mac sleeps, `send` or `receive` on a dead connection can
+    /// wait indefinitely, and the loop in `start` must still get to reload the places and reconnect. The watchdog
+    /// aborts the socket outright; a polite close waits for a close frame that a stalled server never sends.
     private func run(key: String, places: [HavenPlace], stillWanted: @escaping @MainActor () -> Bool) async {
         let boxes = places.flatMap { p in [p.area] + (p.approach.map { [$0] } ?? []) }.map { b in [[b[0], b[2]], [b[1], b[3]]] }
         let sub: [String: Any] = ["APIKey": key, "BoundingBoxes": boxes,
@@ -130,37 +140,59 @@ final class HavenFeed {
         let ws = URLSession.shared.webSocketTask(with: url)
         socket = ws
         ws.resume()
-        lastMessage = Date()  // the first message gets the same grace as any gap
+        lastMessage = Date()  // the subscription and the first message get the same grace as any gap
         aborted = false
-        do { try await ws.send(.string(text)) } catch { lastError = error.localizedDescription; return }
-        let watchdog = Task { [weak self, weak ws] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
-                guard let self else { return }
-                if !stillWanted() { self.aborted = true; ws?.cancel(); return }
-                if Date().timeIntervalSince(self.lastMessage) > Self.idleLimit {
-                    self.lastError = "no data from aisstream.io for \(Int(Self.idleLimit / 60)) minutes, reconnecting"
-                    WireLog.shared.event("haven: aisstream silent for \(Int(Self.idleLimit)) s, reconnecting")
-                    self.aborted = true; ws?.cancel(); return
+        let once = Once()
+        var reader: Task<Void, Never>?
+        var watchdog: Task<Void, Never>?
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            once.resume = { done.resume() }
+            reader = Task { [weak self] in
+                defer { once.fire() }
+                do { try await ws.send(.string(text)) } catch { self?.report(error, ws); return }
+                while !Task.isCancelled {
+                    let msg: URLSessionWebSocketTask.Message
+                    do { msg = try await ws.receive() } catch { self?.report(error, ws); return }
+                    guard let self, !once.fired else { return }
+                    let data: Data
+                    switch msg { case .data(let d): data = d; case .string(let s): data = Data(s.utf8); @unknown default: continue }
+                    guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { continue }
+                    if let e = obj["error"] as? String { self.lastError = "aisstream.io: \(e)"; return }
+                    if !self.connected { self.connected = true; self.lastError = nil; WireLog.shared.event("haven: aisstream connected, \(boxes.count) boxes") }
+                    self.messages += 1
+                    self.lastMessage = Date()
+                    self.ingest(obj)
+                }
+            }
+            watchdog = Task { [weak self] in
+                defer { once.fire() }
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    guard let self, !Task.isCancelled else { return }
+                    if !stillWanted() { self.aborted = true; return }
+                    if Date().timeIntervalSince(self.lastMessage) > Self.idleLimit {
+                        self.lastError = "no data from aisstream.io for \(Int(Self.idleLimit / 60)) minutes, reconnecting"
+                        WireLog.shared.event("haven: aisstream silent for \(Int(Self.idleLimit)) s, reconnecting")
+                        self.aborted = true; return
+                    }
                 }
             }
         }
-        defer { watchdog.cancel(); ws.cancel(with: .goingAway, reason: nil); if socket === ws { socket = nil } }
-        while !Task.isCancelled {
-            let msg: URLSessionWebSocketTask.Message
-            do { msg = try await ws.receive() } catch {
-                if !aborted, ws.closeCode != .goingAway { lastError = Self.closeReason(ws) ?? error.localizedDescription }
-                return
-            }
-            let data: Data
-            switch msg { case .data(let d): data = d; case .string(let s): data = Data(s.utf8); @unknown default: continue }
-            guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { continue }
-            if let e = obj["error"] as? String { lastError = "aisstream.io: \(e)"; return }
-            if !connected { connected = true; lastError = nil; WireLog.shared.event("haven: aisstream connected, \(boxes.count) boxes") }
-            messages += 1
-            lastMessage = Date()
-            ingest(obj)
-        }
+        reader?.cancel(); watchdog?.cancel()
+        ws.cancel()
+        if socket === ws { socket = nil }
+    }
+
+    /// A failed send or receive, unless the watchdog aborted the socket on purpose or the server said goodbye.
+    private func report(_ error: Error, _ ws: URLSessionWebSocketTask) {
+        if !aborted, ws.closeCode != .goingAway { lastError = Self.closeReason(ws) ?? error.localizedDescription }
+    }
+
+    /// Resumes `run` once, whichever of the reader and the watchdog finishes first.
+    @MainActor private final class Once {
+        var resume: (() -> Void)?
+        private(set) var fired = false
+        func fire() { guard !fired else { return }; fired = true; resume?(); resume = nil }
     }
 
     private static func closeReason(_ ws: URLSessionWebSocketTask) -> String? {
