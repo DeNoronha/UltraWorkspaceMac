@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.denoronha.ultraworkspacemac</string>
     <key>CFBundleVersion</key>
-    <string>0.3.2</string>
+    <string>0.4.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.3.2</string>
+    <string>0.4.0</string>
     <key>CFBundleExecutable</key>
     <string>UltraWorkspaceApp</string>
     <key>CFBundleIconFile</key>
