@@ -49,8 +49,6 @@ struct MenuBarMenu: View {
         Divider()
         Button("Open Deckhand") { openMain() }
             .keyboardShortcut("o")
-        Button("Settings…") { model.nav = .settings; openMain() }
-            .keyboardShortcut(",")
         Divider()
         Button("Quit Deckhand") { NSApp.terminate(nil) }
             .keyboardShortcut("q")

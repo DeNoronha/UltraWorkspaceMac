@@ -160,5 +160,10 @@ private struct ZeekrConnectSheet: View {
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction) }
         }
         .padding(20).frame(width: 520)
+        .onAppear {
+            // The encrypted VIN and device ID belong to the phone's device binding and outlive the tokens, so when
+            // only the sign-in has expired a new Authorization (and refresh token) is all that needs pasting.
+            if let c = ZeekrFeed.loadCredentials() { vin = c.encryptedVin; device = c.deviceId }
+        }
     }
 }
