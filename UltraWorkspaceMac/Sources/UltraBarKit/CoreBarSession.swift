@@ -432,6 +432,12 @@ public struct CoreBarSession: Sendable {
         /// the launcher process is restarted (`am force-stop com.ultrabar.launch` + start, or a reboot).
         /// `/upload/zip` does not go through that code and keeps working.
         case launcherExhausted
+        /// `{"msg":"module offline","state":-1}`: the launcher thinks the module is gone. Either it really is (cube
+        /// detached, battery flat) or the launcher holds a stale module object while the cube still answers on the
+        /// bus — seen on hardware 2026-11-04 after a reboot and 2026-11-13 after six days of uptime (the cube's
+        /// 0x056 ping replies kept coming; a launcher restart made the next upload `state:200`). The app tells the
+        /// two apart over ADB (`AppModel.cubeAnswersOnBus`) and restarts the launcher only in the second case.
+        case moduleOffline
         /// Anything else (module busy, module timeout, HTTP 5xx, empty body…).
         case other(String)
 
@@ -440,6 +446,7 @@ public struct CoreBarSession: Sendable {
             if text.contains("\"state\":-1"), !text.contains("\"msg\"") { self = .launcherExhausted; return }
             if text.contains("hotspotIp") { self = .hotspotNoIp; return }
             if text.contains("module not found") { self = .moduleNotFound; return }
+            if text.contains("module offline") { self = .moduleOffline; return }
             if let r = text.range(of: "reply error:"),
                let n = Int(text[r.upperBound...].prefix(while: { $0.isNumber })), n == 4 || n == 2 {
                 self = .cubeOffline(code: n); return
@@ -450,6 +457,8 @@ public struct CoreBarSession: Sendable {
 
     /// Error text for `UploadReply.launcherExhausted`; the app matches on it to restart the launcher.
     public static let launcherExhaustedText = "the bar's launcher is out of upload slots"
+    /// Error text for `UploadReply.moduleOffline`; the app matches on it to check the bus and maybe restart the launcher.
+    public static let moduleOfflineText = "the bar's launcher reports the module offline"
 
     /// Upload a layer package (tgz) to a module over HTTP. Retries only what can clear on
     /// its own: a module link without an IP (3 × 6 s) and an unregistered module (provision
@@ -486,6 +495,9 @@ public struct CoreBarSession: Sendable {
         case .launcherExhausted:
             WireLog.shared.event("upload: bare state:-1 — the launcher is out of upload slots (network-callback leak); it needs a restart")
             throw UltraBarError.uploadRejected(Self.launcherExhaustedText)
+        case .moduleOffline:
+            WireLog.shared.event("upload: the launcher reports the module offline")
+            throw UltraBarError.uploadRejected(Self.moduleOfflineText)
         case .moduleNotFound, .other:
             throw UltraBarError.uploadRejected(text)
         }

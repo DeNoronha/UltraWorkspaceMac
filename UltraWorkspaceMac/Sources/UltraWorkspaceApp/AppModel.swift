@@ -122,6 +122,8 @@ final class AppModel: ObservableObject {
     @Published var linearError: String?
     /// SHA-256 over the layer images of the last accepted cube package — an unchanged package is not sent again.
     var lastCubeDigest: Data?
+    /// When Deckhand last restarted the launcher for a stale "module offline" (`recoverStaleCubeModule`).
+    var lastStaleModuleRestart: Date?
     var claudeWatchTask: Task<Void, Never>?
     // The bar apps' data server (AppModel+Monitor) and presence-aware screen (AppModel+Presence).
     var barDataTask: Task<Void, Never>?

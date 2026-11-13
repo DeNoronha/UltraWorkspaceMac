@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Apps → Cask: the Whiskystats key, the credit budget and the bottles. The bottles are kept in `cask.json` in
 /// Deckhand's Application Support folder (user-only), never anywhere else; Whiskystats only sees Whisky IDs.
@@ -7,6 +8,9 @@ struct CaskSettings: View {
     @ObservedObject var feed: CaskFeed
     @State private var editing: EditTarget?
     @State private var saveError: String?
+    @State private var importing = false
+    @State private var pendingImport: CaskImport.Result?
+    @State private var importNote: String?
 
     struct EditTarget: Identifiable { let id = UUID(); let bottle: CaskBottle?; }
 
@@ -81,11 +85,36 @@ struct CaskSettings: View {
             }
             HStack {
                 Button { editing = EditTarget(bottle: nil) } label: { Label("Add bottle", systemImage: "plus") }.disabled(model.whiskystatsKey.isEmpty)
+                Button { importing = true } label: { Label("Import Whiskystats export…", systemImage: "square.and.arrow.down") }
                 Button { NSWorkspace.shared.activateFileViewerSelecting([CaskFeed.bottlesURL]) } label: { Label("Show cask.json", systemImage: "doc.text") }
                     .buttonStyle(.borderless).disabled(!FileManager.default.fileExists(atPath: CaskFeed.bottlesURL.path))
                 if let saveError { Text(saveError).font(.caption).foregroundStyle(.orange) }
             }
+            if let importNote { Text(importNote).font(.caption).foregroundStyle(.secondary) }
         }
+        .fileImporter(isPresented: $importing, allowedContentTypes: [UTType(filenameExtension: "xlsx") ?? .data, .commaSeparatedText]) { r in
+            guard case .success(let url) = r else { return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do { pendingImport = try CaskImport.read(url); importNote = nil } catch { importNote = error.localizedDescription }
+        }
+        .confirmationDialog(importTitle, isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } }), titleVisibility: .visible) {
+            Button("Replace the list") {
+                guard let r = pendingImport else { return }
+                save(CaskImport.merge(r.bottles, into: feed.bottles))
+                let n = Set(r.bottles.map(\.whiskyId)).subtracting(feed.cache.entries.compactMap { $0.value.pricing == nil ? nil : $0.key }).count
+                importNote = "Imported \(r.bottles.count) bottles (\(r.total) in total)" + (r.skipped > 0 ? ", \(r.skipped) rows without a Whiskybase ID skipped" : "") + (n > 0 ? ". \(n) still need prices: fetched one by one while Cask is on the bar, \(WhiskyStats.Cost.pricing) credits each." : ".")
+                pendingImport = nil
+            }
+            Button("Cancel", role: .cancel) { pendingImport = nil }
+        } message: {
+            Text("The export is your whole collection, so it replaces the \(feed.bottles.count) bottle\(feed.bottles.count == 1 ? "" : "s") in Cask now. Prices already fetched are kept for bottles that stay. Nothing is sent to Whiskystats until prices are fetched.")
+        }
+    }
+
+    private var importTitle: String {
+        guard let r = pendingImport else { return "" }
+        return "Import \(r.bottles.count) different bottles, \(r.total) in total?"
     }
 
     static func summary(_ b: CaskBottle, _ e: CaskFeed.Entry?) -> String {

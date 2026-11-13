@@ -202,6 +202,13 @@ extension AppModel {
                 if Task.isCancelled { return false }
                 if (try? await session.upload(serial: serial, tgz: tgz)) == true { accepted(); return true }
             }
+            if case UltraBarError.uploadRejected(let why) = error, why == CoreBarSession.moduleOfflineText,
+               await recoverStaleCubeModule() {
+                cubeProgress.run("upload", note: "launcher restarted — sending again")
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+                if Task.isCancelled { return false }
+                if (try? await session.upload(serial: serial, tgz: tgz)) == true { accepted(); return true }
+            }
             let msg = FriendlyError.text(error)
             cubeProgress.fail("upload", msg)
             say("Sending to the cube did not complete: \(msg)")

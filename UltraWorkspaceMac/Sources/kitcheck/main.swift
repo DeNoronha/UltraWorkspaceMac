@@ -249,6 +249,7 @@ do {
     check(R(accepted: false, text: #"{"state":-1,"msg":"reply error:2"}"#) == .cubeOffline(code: 2), "upload reply: reply error:2 → cubeOffline (no retry)")
     check(R(accepted: false, text: #"{"state":-1,"msg":"reply error:7"}"#) == .other(#"{"state":-1,"msg":"reply error:7"}"#), "upload reply: other reply error → other")
     check(R(accepted: false, text: "HTTP 503") == .other("HTTP 503"), "upload reply: HTTP failure → other")
+    check(R(accepted: false, text: #"{"msg":"module offline","state":-1}"#) == .moduleOffline, "upload reply: module offline → check the bus, maybe restart the launcher")
     check(R(accepted: false, text: #"{"state":-1}"#) == .launcherExhausted, "upload reply: bare state -1 → launcher out of upload slots (restart it)")
     check(R(accepted: false, text: #"{"state":-1,"msg":"write update command success,update timeout"}"#) == .other(#"{"state":-1,"msg":"write update command success,update timeout"}"#), "upload reply: module timeout → other")
 }
@@ -623,7 +624,7 @@ do {
     let apk = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("dist/bar-apps/DeckhandMonitor.apk")
     if FileManager.default.fileExists(atPath: apk.path) {
         let info = try ApkInfo.read(apk: apk)
-        check(info.package == "nl.denoronha.deckhand.monitor" && info.versionCode == 11 && info.versionName == "2.0", "apk: DeckhandMonitor.apk manifest = nl.denoronha.deckhand.monitor 2.0 (11)", "\(info)")
+        check(info.package == "nl.denoronha.deckhand.monitor" && info.versionCode == 13 && info.versionName == "2.2", "apk: DeckhandMonitor.apk manifest = nl.denoronha.deckhand.monitor 2.2 (13)", "\(info)")
     } else { print("skip  apk: no dist/bar-apps/DeckhandMonitor.apk here") }
     do { _ = try ApkInfo.parseManifest(Data("<xml/>".utf8)); check(false, "apk: text XML rejected", "") }
     catch { check(true, "apk: text XML rejected", "") }

@@ -127,6 +127,31 @@ extension AppModel {
         return ok
     }
 
+    /// The launcher said "module offline". When the cube still answers the bar's bus pings (its 0x056 replies in
+    /// the bar's log within the last 30 s), the launcher's module object is stale and a launcher restart fixes it;
+    /// when it does not, the cube really is gone and a restart would not help. At most one restart per 30 minutes,
+    /// so a cube that keeps dropping does not make the bar's screen reload every minute.
+    func recoverStaleCubeModule() async -> Bool {
+        if let last = lastStaleModuleRestart, Date().timeIntervalSince(last) < 30 * 60 { return false }
+        guard await cubeAnswersOnBus() == true else { return false }
+        lastStaleModuleRestart = Date()
+        return await restartBarLauncher(reason: "it reports the cube offline while the cube still answers on the bus")
+    }
+
+    /// nil when ADB is not available; otherwise whether the VivoCube (CAN node 0x056) replied within the last 30 s.
+    func cubeAnswersOnBus() async -> Bool? {
+        guard let adb = AdbBridge.find(), let ip = ipForSelected() else { return nil }
+        let bridge = AdbBridge(path: adb, ip: ip)
+        guard await bridge.connect() else { return nil }
+        let out = await bridge.shell("date +%s; logcat -d -v epoch -t 3000 | grep 'canId:0x056->0xFFF' | tail -1")
+        let lines = out.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+        guard let now = lines.first.flatMap({ Double($0) }) else { return nil }
+        guard let last = lines.dropFirst().last, let t = last.split(separator: " ").first.flatMap({ Double($0) }) else { return false }
+        let answers = now - t < 30
+        WireLog.shared.event("cube on the bus: last reply \(Int(now - t)) s ago → \(answers ? "answering" : "silent")")
+        return answers
+    }
+
     // MARK: Full check (Status page)
 
     func runDoctor(settings: AppSettings) {
