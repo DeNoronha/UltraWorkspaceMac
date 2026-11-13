@@ -38,8 +38,8 @@ import java.util.Locale
 
 /**
  * Deckhand Home: a home screen for the CoreBar's 1424×280 strip. Left, the clock and whether Deckhand's
- * beacon is heard; middle, one tile per installed app (Deckhand's own first); right, Settings and the bar's
- * own launcher. Nothing here talks to the Mac: the tiles are the apps the bar has, the beacon is only listened
+ * beacon is heard; then one tile per installed app (Deckhand's own first), scrolling sideways, with Settings and
+ * the bar's own launcher as the last two. Nothing here talks to the Mac: the tiles are the apps the bar has, the beacon is only listened
  * to for the status line. The bar's launcher keeps running underneath (it still serves the cube uploads and the
  * module bus), so switching between the two homes is a one-line `cmd package set-home-activity` either way.
  */
@@ -53,8 +53,8 @@ class HomeActivity : Activity() {
         private const val VENDOR_LAUNCHER = "com.ultrabar.launch"
         private const val VENDOR_HOME = "com.ultrabar.launch.ui.activity.MainActivity"
         private const val SETTINGS_PACKAGE = "com.android.settings"
-        /** Pinned on the right, so they are left out of the scrolling row. */
-        private val PINNED = setOf(SETTINGS_PACKAGE, VENDOR_LAUNCHER)
+        /** Always the last two tiles of the row, so they are left out of the sorted part. */
+        private val LAST = setOf(SETTINGS_PACKAGE, VENDOR_LAUNCHER)
         private val OUR_ORDER = listOf("monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks", "haven", "tide", "teletekst", "schiphol", "zeekr", "strava", "cask")
 
         private const val BG = 0xFF000000.toInt()
@@ -71,7 +71,6 @@ class HomeActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var dot: View
     private lateinit var tiles: LinearLayout
-    private lateinit var pinned: LinearLayout
 
     private var beacon: BeaconListener? = null
     private var multicastLock: WifiManager.MulticastLock? = null
@@ -190,14 +189,6 @@ class HomeActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
         }
         root.addView(scroller)
-
-        // Right: Settings and the bar's own launcher, always reachable, as the same tiles as every other app
-        pinned = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT).apply { leftMargin = dp(12) }
-        }
-        val right = pinned
-        root.addView(right)
         return root
     }
 
@@ -243,35 +234,32 @@ class HomeActivity : Activity() {
         try { startActivity(intent) } catch (e: Exception) { Log.w(TAG, "Cannot start $intent", e) }
     }
 
-    /** Every LAUNCHER activity except this one: Deckhand's pages first in their known order, then the rest by label. */
+    /** Every LAUNCHER activity except this one: Deckhand's pages first in their known order, then the rest by label,
+     *  and Settings and the bar's own launcher at the end of the row. */
     private fun populate() {
         val pm = packageManager
         val all = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
             .filter { it.activityInfo.packageName != packageName }
-        populatePinned(all)
         fun rank(r: ResolveInfo): Int {
             val p = r.activityInfo.packageName
             if (!p.startsWith(OUR_PREFIX)) return 1000
             val i = OUR_ORDER.indexOf(p.removePrefix(OUR_PREFIX))
             return if (i >= 0) i else 100
         }
-        val sorted = all.filter { it.activityInfo.packageName !in PINNED }.sortedWith(compareBy<ResolveInfo> { rank(it) }.thenBy { it.loadLabel(pm).toString().lowercase() })
+        val sorted = all.filter { it.activityInfo.packageName !in LAST }.sortedWith(compareBy<ResolveInfo> { rank(it) }.thenBy { it.loadLabel(pm).toString().lowercase() })
         tiles.removeAllViews()
-        if (sorted.isEmpty()) {
-            tiles.addView(TextView(this).apply { text = getString(R.string.no_apps); setTextColor(INK_DIM); textSize = 18f })
-            return
-        }
+        if (sorted.isEmpty()) tiles.addView(TextView(this).apply { text = getString(R.string.no_apps); setTextColor(INK_DIM); textSize = 18f })
         for (r in sorted) tiles.addView(appTile(r))
+        addLastTiles(all)
     }
 
     /** Settings, then the bar's own launcher (labelled UltraBar), each left out when the bar does not have it. */
-    private fun populatePinned(all: List<ResolveInfo>) {
-        pinned.removeAllViews()
+    private fun addLastTiles(all: List<ResolveInfo>) {
         val settings = all.firstOrNull { it.activityInfo.packageName == SETTINGS_PACKAGE }
         val vendor = all.firstOrNull { it.activityInfo.packageName == VENDOR_LAUNCHER && it.activityInfo.name == VENDOR_HOME }
             ?: all.firstOrNull { it.activityInfo.packageName == VENDOR_LAUNCHER }
-        settings?.let { pinned.addView(appTile(it, getString(R.string.settings), gap = vendor != null)) }
-        vendor?.let { pinned.addView(appTile(it, getString(R.string.ultrabar), gap = false)) }
+        settings?.let { tiles.addView(appTile(it, getString(R.string.settings), gap = vendor != null)) }
+        vendor?.let { tiles.addView(appTile(it, getString(R.string.ultrabar), gap = false)) }
     }
 
     // ---- Deckhand status (beacon) --------------------------------------------------------------

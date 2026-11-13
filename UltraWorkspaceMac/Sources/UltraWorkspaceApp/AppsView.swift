@@ -53,8 +53,10 @@ struct AppsView: View {
         let installed: CoreBarSession.AppInfo?, store: BarAppStore.StoreApp?
         /// Turned off by Android (firmware apps only); the bar does not list it while it is off.
         var off = false
+        /// On the bar but left out of the launcher's list (see `AppModel.unlistedBarApps`): firmware, can be turned off.
+        var unlisted = false
         var id: String { package }
-        var system: Bool { off || (installed?.systemApp ?? false) }
+        var system: Bool { off || unlisted || (installed?.systemApp ?? false) }
     }
     private var entries: [Entry] {
         var out: [String: Entry] = [:]
@@ -63,6 +65,9 @@ struct AppsView: View {
             let s = out[a.packageName]?.store
             out[a.packageName] = Entry(package: a.packageName, name: s?.name ?? a.appName, version: a.versionName, icon: s?.iconURL ?? a.iconUrl.flatMap(URL.init), installed: a, store: s,
                                        off: model.turnedOffApps.contains(a.packageName))
+        }
+        for (p, name) in model.unlistedBarApps where out[p] == nil {
+            out[p] = Entry(package: p, name: name, version: "", icon: nil, installed: nil, store: nil, unlisted: true)
         }
         for p in model.turnedOffApps where out[p]?.installed == nil {
             out[p] = Entry(package: p, name: model.turnedOffName(p) ?? out[p]?.name ?? p, version: "", icon: out[p]?.icon, installed: nil, store: out[p]?.store, off: true)

@@ -132,14 +132,31 @@ extension AppModel {
 
     static func canTurnOff(_ package: String) -> Bool {
         let keep: Set<String> = ["com.ultrabar.launch", "com.ultrabar.hub", "com.ultrabar.inputmethod"]
+        // Android's own packages stay off limits (Settings is the way to Developer options), except a few plain apps
+        // that the bar ships with an icon and nothing depends on.
+        let plainAndroidApps: Set<String> = ["com.android.soundrecorder", "com.android.wallpaper", "com.android.music", "com.android.gallery3d", "com.android.deskclock", "com.android.calendar", "com.android.email", "com.android.browser", "com.android.camera2"]
+        if plainAndroidApps.contains(package) { return true }
         return !keep.contains(package) && !package.hasPrefix(BarPages.packagePrefix)
             && !package.hasPrefix("android") && !package.hasPrefix("com.android.") && !package.hasPrefix("com.google.")
             && package.range(of: #"^[A-Za-z0-9_.]+$"#, options: .regularExpression) != nil
     }
 
+    /// Names for apps the launcher does not list (Android 10 has no shell command for an app's label). Read from the
+    /// APKs on a CB01 bar, 2026-11-13; anything else gets a name made from its package.
+    static let firmwareAppNames: [String: String] = [
+        "com.android.soundrecorder": "Sound Recorder", "com.android.wallpaper": "Wallpapers",
+        "com.softwinner.fireplayer": "Videos", "com.softwinner.update": "Local Update",
+        "com.tcw.tcwaging": "TCWAging (factory burn-in test)", "ultrabar.tester": "UBX质检软件 (factory quality check)",
+    ]
+    static func firmwareAppName(_ package: String) -> String {
+        if let n = firmwareAppNames[package] { return n }
+        let last = package.split(separator: ".").last.map(String.init) ?? package
+        return last.prefix(1).uppercased() + last.dropFirst()
+    }
+
     /// The name an app had when it was turned off (the bar no longer lists it while it is off).
     func turnedOffName(_ package: String) -> String? {
-        (UserDefaults.standard.dictionary(forKey: Self.turnedOffNamesKey) as? [String: String])?[package]
+        (UserDefaults.standard.dictionary(forKey: Self.turnedOffNamesKey) as? [String: String])?[package] ?? Self.firmwareAppNames[package]
     }
 
     /// Read which packages Android has turned off (`pm list packages -d`).
@@ -152,6 +169,17 @@ extension AppModel {
             turnedOffApps = Set(out.split(separator: "\n").compactMap { l in
                 l.hasPrefix("package:") ? String(l.dropFirst(8)).trimmingCharacters(in: .whitespaces) : nil
             }.filter(Self.canTurnOff))
+            // Every app with an icon in the bar's app list; the ones the launcher does not report are added by name.
+            let launchable = await bridge.shell("cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER")
+            let listed = Set(barApps.map(\.packageName))
+            var unlisted: [String: String] = [:]
+            for l in launchable.split(whereSeparator: \.isNewline) {
+                let t = l.trimmingCharacters(in: .whitespaces)
+                guard let slash = t.firstIndex(of: "/") else { continue }
+                let p = String(t[..<slash])
+                if !listed.contains(p), Self.canTurnOff(p) { unlisted[p] = Self.firmwareAppName(p) }
+            }
+            unlistedBarApps = unlisted
         }
     }
 
@@ -173,6 +201,7 @@ extension AppModel {
                 say("The bar did not \(on ? "turn on" : "turn off") \(name): \(out.trimmingCharacters(in: .whitespacesAndNewlines))")
             }
             if let session = selectedCoreBar.flatMap(session(for:)), let list = try? await session.listApps() { barApps = list }
+            refreshTurnedOffApps()
         }
     }
 }

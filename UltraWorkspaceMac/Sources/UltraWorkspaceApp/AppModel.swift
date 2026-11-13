@@ -43,6 +43,9 @@ final class AppModel: ObservableObject {
     @Published var barApps: [CoreBarSession.AppInfo] = []
     /// Firmware apps Android has turned off on the bar (`pm list packages -d`), see AppModel+Apps.
     @Published var turnedOffApps: Set<String> = []
+    /// Apps with an icon in the bar's app list that the launcher's own list (`listApps`) leaves out, such as the
+    /// factory's test tools; read over ADB, package → name. Shown under Built into the firmware so they can be turned off.
+    @Published var unlistedBarApps: [String: String] = [:]
     /// Apps page: the vendor marketplace catalogue, per-package install status, the package being worked on.
     @Published var storeApps: [BarAppStore.StoreApp] = []
     @Published var storeScreensavers: [BarAppStore.StoreApp] = []
