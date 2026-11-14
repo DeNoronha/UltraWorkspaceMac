@@ -142,12 +142,14 @@ enum WhiskyStats {
 /// credit budget. Whiskystats sells data by the credit (a membership has a fixed number a month, e.g. 500) and
 /// auction prices are the expensive call, so everything is cached on disk (`cask-cache.json`) and spent by rule:
 ///
-/// - The credit balance (free) is read before every paid call. Nothing is spent that would leave fewer than
-///   `reserve` credits in the cycle, whoever asks.
-/// - Scheduled refreshes also keep to a pace through the cycle (spent ≤ the cycle's share so far plus a quarter),
+/// - The credit balance (free) is read before every paid call; the whole monthly allowance may be used (the
+///   owner's choice, 2026-11-13: nothing else uses the key), but never more than is left.
+/// - **Fetch prices for bottles without them** (`fetchUnpriced`) prices every bottle that has none, one after the
+///   other, straight away: the user asked, so no pacing.
+/// - Scheduled refreshes keep to a pace through the cycle (spent ≤ the cycle's share so far plus a quarter),
 ///   one bottle at a time, at most one refresh every 15 minutes, only while Cask is on the bar.
 /// - Each Whisky ID is refreshed every `refreshDays` (at least 7; longer when the collection is large, so the
-///   refreshes of a month fit in 85 % of the budget). Market values are 90-day averages and auctions monthly,
+///   refreshes of a month fit in the monthly allowance). Market values are 90-day averages and auctions monthly,
 ///   so a week old is current.
 /// - A failure waits 6 hours (an unknown Whisky ID a week) before it is tried again; that survives a restart.
 @MainActor
@@ -162,8 +164,6 @@ final class CaskFeed: ObservableObject {
     }
     struct Cache: Codable { var entries: [String: Entry] = [:]; var credits: WhiskyStats.Credits?; var lastSpend: Date?; var lots: Bool? }
 
-    /// Credits never spent, for the website and anything else on the same key.
-    nonisolated static let reserve = 100
     nonisolated static var folder: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("UltraWorkspaceMac", isDirectory: true)
     }
@@ -191,6 +191,8 @@ final class CaskFeed: ObservableObject {
     @Published private(set) var note: String?
     /// The Whisky ID being fetched right now.
     @Published private(set) var busy: String?
+    /// While `fetchUnpriced` runs: how many of how many are done.
+    @Published private(set) var batch: (done: Int, total: Int)?
     private var fileStamp: Date?
     private var loop: Task<Void, Never>?
     private var key: () -> String = { "" }
@@ -233,29 +235,30 @@ final class CaskFeed: ObservableObject {
     // MARK: budget
 
     /// Days between two refreshes of one Whisky ID: weekly, or longer when a month of weekly refreshes for the whole
-    /// collection would not fit in 85 % of what may be spent.
+    /// collection would not fit in the monthly allowance.
     func refreshDays() -> Int {
         let n = Set(bottles.map(\.whiskyId)).count
         let limit = cache.credits?.limit ?? 500
-        let usable = Double(max(1, limit - Self.reserve)) * 0.85
+        let usable = Double(max(1, limit))
         let perRefresh = Double(WhiskyStats.Cost.pricing + (lotsOn ? WhiskyStats.Cost.lots : 0))
         return max(7, Int((30 * Double(n) * perRefresh / usable).rounded(.up)))
     }
 
     /// The cycle's share of the usable credits so far, plus a quarter: scheduled refreshes stay under it.
     func pacedAllowance(_ c: WhiskyStats.Credits) -> Int {
-        let usable = Double(max(0, c.limit - Self.reserve))
+        let usable = Double(max(0, c.limit))
         guard let s = c.cycle, let end = Self.day.date(from: s), let start = Calendar.current.date(byAdding: .month, value: -1, to: end) else { return Int(usable) }
         let f = min(1, max(0, Date().timeIntervalSince(start) / end.timeIntervalSince(start)))
         return Int(usable * min(1, f + 0.25))
     }
 
-    /// Reads the balance (free) and refuses a call that would break the reserve or, for a scheduled one, the pace.
+    /// Reads the balance (free) and refuses a call that needs more credits than are left or, for a scheduled one,
+    /// would run ahead of the pace.
     private func checkBudget(_ cost: Int, scheduled: Bool, key: String) async throws {
         let c = try await WhiskyStats.credits(key: key)
         cache.credits = c
-        if c.usage + cost > c.limit - Self.reserve {
-            throw WhiskyStats.Failure.budget("Stopped: \(c.limit - c.usage) of \(c.limit) credits left, \(Self.reserve) are kept free. Prices refresh again after \(c.cycle.map(Self.shortDate) ?? "the cycle ends").")
+        if c.usage + cost > c.limit {
+            throw WhiskyStats.Failure.budget("Stopped: \(max(0, c.limit - c.usage)) of \(c.limit) credits left. Prices refresh again after \(c.cycle.map(Self.shortDate) ?? "the cycle ends").")
         }
         if scheduled, c.usage + cost > pacedAllowance(c) {
             throw WhiskyStats.Failure.paced("\(c.usage) credits used so far this cycle: the next refresh waits a little, to spread them over the month.")
@@ -275,7 +278,7 @@ final class CaskFeed: ObservableObject {
                 let stamp = (try? FileManager.default.attributesOfItem(atPath: Self.bottlesURL.path))?[.modificationDate] as? Date
                 if stamp != self.fileStamp { self.reloadBottles() }
                 let k = key().trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !k.isEmpty, wanted(), self.busy == nil else { continue }
+                guard !k.isEmpty, wanted(), self.busy == nil, self.batch == nil else { continue }
                 if let last = self.cache.lastSpend, Date().timeIntervalSince(last) < 15 * 60 { continue }
                 guard let id = self.nextDue() else { continue }
                 await self.refresh(id, key: k, scheduled: true)
@@ -298,14 +301,39 @@ final class CaskFeed: ObservableObject {
         return best?.0
     }
 
-    /// Prices for a bottle that was just added, or "Refresh now": the user asked, so no pacing, but the reserve holds.
+    /// Prices for a bottle that was just added, or "Refresh now": the user asked, so no pacing.
     func refreshNow(_ id: String) {
         let k = key().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !k.isEmpty, busy == nil else { return }
         Task { await refresh(id, key: k, scheduled: false) }
     }
 
+    /// The Whisky IDs without prices yet (a failed one included: the user asks again).
+    var unpriced: [String] {
+        var seen = Set<String>()
+        return bottles.map(\.whiskyId).filter { seen.insert($0).inserted && cache.entries[$0]?.pricing == nil }
+    }
+
+    /// Prices every bottle that has none, one after the other, now. Stops when the credits run out.
+    func fetchUnpriced() {
+        let k = key().trimmingCharacters(in: .whitespacesAndNewlines)
+        let ids = unpriced
+        guard !k.isEmpty, busy == nil, batch == nil, !ids.isEmpty else { return }
+        batch = (0, ids.count)
+        Task {
+            defer { batch = nil }
+            for (i, id) in ids.enumerated() {
+                await refresh(id, key: k, scheduled: false)
+                batch = (i + 1, ids.count)
+                if case .budget? = lastBudgetStop { break }
+            }
+        }
+    }
+    /// Set when the last refresh stopped because the credits ran out, so a batch does not keep asking.
+    private var lastBudgetStop: WhiskyStats.Failure?
+
     private func refresh(_ id: String, key: String, scheduled: Bool) async {
+        lastBudgetStop = nil
         busy = id
         defer { busy = nil; saveCache() }
         var e = cache.entries[id] ?? Entry()
@@ -324,7 +352,7 @@ final class CaskFeed: ObservableObject {
             cache.credits = try? await WhiskyStats.credits(key: key)
             lastError = nil; note = nil
         } catch WhiskyStats.Failure.budget(let s) {
-            lastError = s   // not the bottle's fault: no retry mark, the scheduler simply finds it due again later
+            lastError = s; lastBudgetStop = .budget(s)   // not the bottle's fault: no retry mark, the scheduler simply finds it due again later
         } catch WhiskyStats.Failure.paced(let s) {
             note = s
         } catch {
@@ -337,7 +365,7 @@ final class CaskFeed: ObservableObject {
         }
     }
 
-    /// A search from the editor (1 credit), under the same reserve.
+    /// A search from the editor (1 credit), within what is left.
     func search(_ q: String) async throws -> [WhiskyStats.Hit] {
         let k = key().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !k.isEmpty else { throw WhiskyStats.Failure.key }

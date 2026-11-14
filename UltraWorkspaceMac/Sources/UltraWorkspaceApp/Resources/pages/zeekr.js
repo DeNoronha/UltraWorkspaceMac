@@ -93,11 +93,11 @@ function overview(d){
   g.strokeStyle=car.climate?CYAN:DIM; g.lineWidth=2.5; for(let k=0;k<3;k++){ const a=k*2.094; g.beginPath(); g.ellipse(C+9+Math.cos(a)*5,236+Math.sin(a)*5,6,3,a,0,7); g.stroke(); }
   txt((car.climate?'Climate on':'Climate off')+(car.temp!=null?' · '+car.temp+'° inside':''),C+30,242,19,car.climate?CYAN:TEXT,'left','600');
   // tyres and odometer
-  const T=1170;
+  const T=1250;
   txt('TYRES · BAR',T,30,12,FAINT,'center','700');
   carTop(T,124,150,car,17);
   if(car.odo) txt(car.odo+' km',T,240,19,TEXT,'center','600');
-  txt('tap for charge curve and doors',1316,272,12,FAINT,'right');
+  txt('tap for charge curve and doors',1400,272,12,FAINT,'right');
 }
 
 function detail(d){

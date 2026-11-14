@@ -21,6 +21,11 @@ cp "$ROOT/packaging/Info.plist" "$APP/Contents/Info.plist"
 [ -f "$ROOT/packaging/AppIcon.icns" ] && cp "$ROOT/packaging/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns" || true
 # The bar's Deckhand apps (android/DeckhandMonitor flavors), installed from Settings over ADB.
 if ls "$ROOT"/dist/bar-apps/*.apk >/dev/null 2>&1; then mkdir -p "$APP/Contents/Resources/bar-apps"; cp "$ROOT"/dist/bar-apps/*.apk "$APP/Contents/Resources/bar-apps/"; fi
+# The bar apps' launcher icons (made by android/DeckhandMonitor/tools/make-icons.swift), for the Apps page's list.
+mkdir -p "$APP/Contents/Resources/bar-app-icons"
+for d in "$ROOT"/android/DeckhandMonitor/app/src/*/res/mipmap-xxxhdpi/ic_launcher.png; do
+  f=$(basename "$(dirname "$(dirname "$(dirname "$d")")")"); cp "$d" "$APP/Contents/Resources/bar-app-icons/$f.png"
+done
 
 # Signing: use a Developer ID Application identity when one is in the keychain
 # (override with DECKHAND_SIGN_IDENTITY="Developer ID Application: …" or

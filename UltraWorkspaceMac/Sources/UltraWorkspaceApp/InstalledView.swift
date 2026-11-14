@@ -68,7 +68,7 @@ struct InstalledView: View {
     private func deckhandRow(_ app: (page: String, label: String, apk: String)) -> some View {
         let v = model.barAppVersion(app.page), stale = model.barAppNeedsUpdate(app.page), busy = model.barAppBusy == app.page
         return HStack(spacing: 12) {
-            AppIcon(url: model.barAppIconURL(app.page), fallback: AppsView.barAppIcon(app.page))
+            AppIcon(url: AppsView.bundledIcon(app.page) ?? model.barAppIconURL(app.page), fallback: AppsView.barAppIcon(app.page))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(app.label).fontWeight(.medium)

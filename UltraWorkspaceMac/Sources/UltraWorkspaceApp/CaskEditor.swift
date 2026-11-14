@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Apps → Cask: the Whiskystats key, the credit budget and the bottles. The bottles are kept in `cask.json` in
+/// Apps → Whisky Portfolio: the Whiskystats key, the credit budget and the bottles. The bottles are kept in `cask.json` in
 /// Deckhand's Application Support folder (user-only), never anywhere else; Whiskystats only sees Whisky IDs.
 struct CaskSettings: View {
     @EnvironmentObject var model: AppModel
@@ -15,7 +15,7 @@ struct CaskSettings: View {
     struct EditTarget: Identifiable { let id = UUID(); let bottle: CaskBottle?; }
 
     var body: some View {
-        Panel("Cask settings", footer: "A Whiskystats membership with Data API credits; the key is under your account settings on whiskystats.com. It is kept in a user-only file on this Mac and only sent to data.api.whiskystats.com; the bar asks Deckhand for the prices.") {
+        Panel("Whisky Portfolio settings", footer: "A Whiskystats membership with Data API credits; the key is under your account settings on whiskystats.com. It is kept in a user-only file on this Mac and only sent to data.api.whiskystats.com; the bar asks Deckhand for the prices.") {
             HStack {
                 SecureField("Whiskystats API key", text: $model.whiskystatsKey).frame(width: 320)
                     .onSubmit { Task { await feed.checkCredits() } }
@@ -45,7 +45,7 @@ struct CaskSettings: View {
         let n = Set(feed.bottles.map(\.whiskyId)).count, days = feed.refreshDays()
         let per = WhiskyStats.Cost.pricing + (feed.lotsOn ? WhiskyStats.Cost.lots : 0)
         let month = Int((Double(n * per) * 30 / Double(days)).rounded())
-        return Panel("Credits", footer: "Whiskystats charges per call: auction prices 10 credits, the lots coming up at auction 7, a search 1, the balance nothing. Deckhand caches everything on this Mac, refreshes one bottle at a time while Cask is on the bar, spreads the refreshes over the month and never spends the last \(CaskFeed.reserve) credits of a cycle.") {
+        return Panel("Credits", footer: "Whiskystats charges per call: auction prices 10 credits, the lots coming up at auction 7, a search 1, the balance nothing. Deckhand caches everything on this Mac, refreshes one bottle at a time while Whisky Portfolio is on the bar, and spreads the refreshes over the month, so the monthly credits last until the next cycle; all of them may be used.") {
             if let c = feed.cache.credits {
                 let left = max(0, c.limit - c.usage)
                 HStack(spacing: 10) {
@@ -85,6 +85,14 @@ struct CaskSettings: View {
             }
             HStack {
                 Button { editing = EditTarget(bottle: nil) } label: { Label("Add bottle", systemImage: "plus") }.disabled(model.whiskystatsKey.isEmpty)
+                let todo = feed.unpriced.count
+                if let b = feed.batch {
+                    ProgressView(value: Double(b.done), total: Double(max(1, b.total))).frame(width: 100)
+                    Text("\(b.done) of \(b.total)").font(.caption).monospacedDigit()
+                } else if todo > 0 {
+                    Button { feed.fetchUnpriced() } label: { Label("Fetch prices for \(todo) without (\(todo * (WhiskyStats.Cost.pricing + (feed.lotsOn ? WhiskyStats.Cost.lots : 0))) credits)", systemImage: "arrow.down.circle") }
+                        .disabled(model.whiskystatsKey.isEmpty || feed.busy != nil)
+                }
                 Button { importing = true } label: { Label("Import Whiskystats export…", systemImage: "square.and.arrow.down") }
                 Button { NSWorkspace.shared.activateFileViewerSelecting([CaskFeed.bottlesURL]) } label: { Label("Show cask.json", systemImage: "doc.text") }
                     .buttonStyle(.borderless).disabled(!FileManager.default.fileExists(atPath: CaskFeed.bottlesURL.path))
@@ -103,12 +111,12 @@ struct CaskSettings: View {
                 guard let r = pendingImport else { return }
                 save(CaskImport.merge(r.bottles, into: feed.bottles))
                 let n = Set(r.bottles.map(\.whiskyId)).subtracting(feed.cache.entries.compactMap { $0.value.pricing == nil ? nil : $0.key }).count
-                importNote = "Imported \(r.bottles.count) bottles (\(r.total) in total)" + (r.skipped > 0 ? ", \(r.skipped) rows without a Whiskybase ID skipped" : "") + (n > 0 ? ". \(n) still need prices: fetched one by one while Cask is on the bar, \(WhiskyStats.Cost.pricing) credits each." : ".")
+                importNote = "Imported \(r.bottles.count) bottles (\(r.total) in total)" + (r.skipped > 0 ? ", \(r.skipped) rows without a Whiskybase ID skipped" : "") + (n > 0 ? ". \(n) still need prices: press Fetch prices, or they come one by one while Whisky Portfolio is on the bar, \(WhiskyStats.Cost.pricing) credits each." : ".")
                 pendingImport = nil
             }
             Button("Cancel", role: .cancel) { pendingImport = nil }
         } message: {
-            Text("The export is your whole collection, so it replaces the \(feed.bottles.count) bottle\(feed.bottles.count == 1 ? "" : "s") in Cask now. Prices already fetched are kept for bottles that stay. Nothing is sent to Whiskystats until prices are fetched.")
+            Text("The export is your whole collection, so it replaces the \(feed.bottles.count) bottle\(feed.bottles.count == 1 ? "" : "s") in Whisky Portfolio now. Prices already fetched are kept for bottles that stay. Nothing is sent to Whiskystats until prices are fetched.")
         }
     }
 

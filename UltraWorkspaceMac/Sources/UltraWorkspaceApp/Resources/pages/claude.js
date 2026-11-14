@@ -14,8 +14,7 @@ function two(s,maxW,size){ s=(s||'').trim(); g.font=fontOf(size); if(g.measureTe
   let cut=s.length; while(cut>1 && g.measureText(s.slice(0,cut)).width>maxW) cut--;
   const sp=s.lastIndexOf(' ',cut); if(sp>cut*0.6) cut=sp; return [s.slice(0,cut), fit(s.slice(cut).trim(),maxW,size)]; }
 function render(d){
-  // The tiles keep clear of the close button in the top-right corner (about 80 px).
-  const sessions=d.sessions||[], M=16, GAP=12, H=248, Y=16, AREA=1424-M-84;
+  const sessions=d.sessions||[], M=16, GAP=12, H=248, Y=16, AREA=1424-M;
   const maxTiles=Math.floor((AREA-M+GAP)/(150+GAP)), shown=sessions.slice(0,maxTiles-1);
   const n=1+Math.max(shown.length,1), W=Math.min(222,Math.floor((AREA-M-GAP*(n-1))/n)), P=Math.max(12,Math.round(W*0.07)), IW=W-2*P;
   const pulse=0.5+0.5*Math.sin(Date.now()/350);

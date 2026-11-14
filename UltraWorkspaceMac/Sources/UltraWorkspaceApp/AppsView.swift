@@ -12,11 +12,16 @@ struct AppsView: View {
         case "haven": return "ferry"
         case "tide": return "water.waves"
         case "strava": return "figure.run"
-        case "cask": return "wineglass"
+        case "cask": return "chart.line.uptrend.xyaxis"
         case "schiphol": return "airplane.departure"
         case "zeekr": return "car.side"
         case "teletekst": return "tv"
         default: return "waveform.path.ecg" }
+    }
+    /// The app's own launcher icon (bundled by make-app.sh), so the list shows the same picture as the bar; the
+    /// SF Symbol above is only the fallback for a build without it (`swift run`).
+    static func bundledIcon(_ page: String) -> URL? {
+        Bundle.main.url(forResource: page, withExtension: "png", subdirectory: "bar-app-icons")
     }
     static func blurb(_ page: String) -> String {
         switch page {
@@ -92,7 +97,7 @@ struct AppsView: View {
                         ForEach(AppModel.barAppPages, id: \.page) { app in
                             let v = model.barAppVersion(app.page)
                             LibraryRow(title: app.label, caption: v, inUse: v != nil, busy: model.barAppBusy == app.page, updateAvailable: model.barAppNeedsUpdate(app.page)) {
-                                Image(systemName: Self.barAppIcon(app.page))
+                                AppIcon(url: Self.bundledIcon(app.page), fallback: Self.barAppIcon(app.page), size: 18)
                             }.tag(BarPages.package(for: app.page))
                         }
                     } header: { Text("Deckhand apps") }
@@ -167,7 +172,7 @@ struct AppsView: View {
         let installed = model.barAppVersion(app.page), stale = model.barAppNeedsUpdate(app.page), busy = model.barAppBusy == app.page
         let pkg = BarPages.package(for: app.page), hasAPK = AppModel.bundledAPK(app.apk) != nil
         DetailTitle(title: app.label, version: installed, tag: stale ? ("update \(AppModel.barAppsVersion)", .orange) : (installed != nil ? ("up to date", .green) : ("not installed", .secondary)), subtitle: pkg) {
-            AppIcon(url: model.barAppIconURL(app.page), fallback: Self.barAppIcon(app.page), size: 48)
+            AppIcon(url: Self.bundledIcon(app.page) ?? model.barAppIconURL(app.page), fallback: Self.barAppIcon(app.page), size: 48)
         }
         Text(Self.blurb(app.page)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         let cardID = AppModel.appCardPrefix + pkg

@@ -16,7 +16,7 @@ function render(d){
   const today=ymd(new Date()), week=ymd(new Date(Date.now()+7*86400000));
   const due=items.filter(i=>i.due&&i.due<=week).length, over=items.filter(i=>i.due&&i.due<today).length;
   txt((d.me?d.me+' · ':'')+items.length+' open',40,34,15,'#8b94a6','left','600');
-  txt((over? over+' overdue':'')+(over&&due?' · ':'')+(due? due+' due this week':''),1340,34,15,over?'#f87171':'#8b94a6','right','600');
+  txt((over? over+' overdue':'')+(over&&due?' · ':'')+(due? due+' due this week':''),1384,34,15,over?'#f87171':'#8b94a6','right','600');
   if(d.error) txt(clip(d.error,80),712,34,13,'#f87171','center');
   if(!items.length){ txt('Nothing assigned to you. Enjoy it.',40,150,30,'#9aa3b2','left','700'); return; }
   const pc={1:'#f87171',2:'#fbbf24',3:'#60a5fa',4:'#8b94a6'};

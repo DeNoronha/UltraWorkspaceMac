@@ -17,10 +17,10 @@ function render(d){
   const p=sel&&places.find(q=>q.id===sel); if(sel&&!p) sel=null;
   if(p) detail(p,d); else overview(places,d);
   const status=d.connected?'live':(d.error?clip(d.error,70):'connecting to aisstream.io…');
-  txt(status,1316,272,12,d.connected?FAINT:(d.error?'#f87171':DIM),'right');
+  txt(status,1400,272,12,d.connected?FAINT:(d.error?'#f87171':DIM),'right');
 }
 function overview(places,d){
-  const n=places.length, gap=14, W=(1292-gap*(n-1))/n;
+  const n=places.length, gap=14, W=(1376-gap*(n-1))/n;
   places.forEach((p,i)=>{ const x=24+i*(W+gap), y=18, H=238, port=p.kind==='port';
     rr(x,y,W,H,14,'rgba(255,255,255,.06)'); hit.push({x,y,w:W,h:H,id:p.id});
     txt(clip(p.name,Math.floor(W/11)),x+18,y+34,20,'#fff','left','700');

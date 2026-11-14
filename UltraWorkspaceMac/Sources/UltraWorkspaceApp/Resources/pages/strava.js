@@ -43,7 +43,7 @@ function render(d){
 function footer(d,shown){
   txt('Powered by Strava',24,272,12,DIM,'left','600');
   const err=d.error&&!shown, t=err?clip(d.error,90):[d.updated?'updated '+ago(Math.max(0,(d.at||0)-d.updated))+' ago':'',d.athlete||''].filter(x=>x).join(' · ');
-  txt(t,1316,272,12,err?'#f87171':FAINT,'right');
+  txt(t,1400,272,12,err?'#f87171':FAINT,'right');
 }
 function overview(d){
   const y=14, H=240;
@@ -83,7 +83,7 @@ function overview(d){
     txt(t.n+(t.n===1?' activity':' activities')+(useDist&&t.n?' · '+t.timeText:''),WX+16,wy+60,12,DIM); });
   if(!weeks.length) txt('nothing in the last two weeks',WX+16,y+70,14,FAINT);
   // The year so far.
-  const YX=1126, YW=190; rr(YX,y,YW,H,14,CARD); txt((d.year||'Year')+' so far',YX+16,y+26,13,DIM,'left','700');
+  const YX=1126, YW=274; rr(YX,y,YW,H,14,CARD); txt((d.year||'Year')+' so far',YX+16,y+26,13,DIM,'left','700');
   const ytd=(d.ytd||[]).slice(0,3);
   ytd.forEach((t,i)=>{ const yy=y+42+i*66;
     txt(t.label,YX+16,yy+18,12,col(t.sport),'left','700');
@@ -94,11 +94,11 @@ function overview(d){
 function detail(a){
   route(a.route,24,14,246,246,a.sport,4);
   const X=292; const bw=badge(a.label.toUpperCase(),X,44,a.sport); txt(a.when+(a.indoor?' · indoor':''),X+bw+12,44,14,DIM,'left','600');
-  txt(fit(a.name,1316-X-60,28,'700'),X,86,28,'#fff','left','700');
+  txt(fit(a.name,1400-X-60,28,'700'),X,86,28,'#fff','left','700');
   const speedy=a.sport==='run'||a.sport==='walk'||a.sport==='swim';
   const tiles=[[a.dist,'distance'],[a.moving,'moving time'],[a.pace,speedy?'pace':'average speed'],[a.elev||'0 m','elevation gain'],
     [a.elapsed,'elapsed time'],[a.hr?a.hr+' bpm':'','average heart rate'],[a.maxSpeed,'max speed'],[a.kj?a.kj+' kJ':(a.kudos!=null?String(a.kudos):''),a.kj?'energy':'kudos']].filter(t=>t[0]);
-  const TW=(1316-X-3*14)/4;
+  const TW=(1400-X-3*14)/4;
   tiles.slice(0,8).forEach((t,i)=>{ const tx=X+(i%4)*(TW+14), ty=106+Math.floor(i/4)*76;
     rr(tx,ty,TW,64,12,CARD); txt(t[0],tx+16,ty+32,24,'#fff','left','700'); txt(t[1],tx+16,ty+52,12,DIM,'left','600'); });
   txt('tap to go back',X,272-0,12,FAINT,'left');

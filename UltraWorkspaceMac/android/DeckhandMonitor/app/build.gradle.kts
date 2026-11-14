@@ -9,8 +9,8 @@ android {
     defaultConfig {
         minSdk = 29
         targetSdk = 34
-        versionCode = 13
-        versionName = "2.2"
+        versionCode = 14
+        versionName = "2.3"
     }
 
     buildFeatures {
@@ -44,7 +44,7 @@ android {
             Triple("haven", "nl.denoronha.deckhand.haven", "Haven"),
             Triple("tide", "nl.denoronha.deckhand.tide", "Tide"),
             Triple("strava", "nl.denoronha.deckhand.strava", "Training"),
-            Triple("cask", "nl.denoronha.deckhand.cask", "Cask"),
+            Triple("cask", "nl.denoronha.deckhand.cask", "Whisky Portfolio"),
             Triple("schiphol", "nl.denoronha.deckhand.schiphol", "Schiphol"),
             Triple("zeekr", "nl.denoronha.deckhand.zeekr", "Zeekr"),
             Triple("teletekst", "nl.denoronha.deckhand.teletekst", "Teletekst"),

@@ -203,3 +203,10 @@ a:hover .arrow, .btn:hover .arrow, .card:hover .arrow { transform:translateX(4px
   .manual-grid { grid-template-columns:15rem minmax(0,1fr) }
   .toc { position:sticky; top:1.5rem }
 }
+
+/* FAQ */
+.faq { display:grid; gap:.75rem; max-width:65ch }
+.faq details { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem 1.25rem }
+.faq summary { cursor:pointer; font-weight:700; list-style-position:outside; min-height:24px }
+.faq details[open] summary { margin-bottom:.5rem }
+.faq p { margin:0; color:var(--text) }

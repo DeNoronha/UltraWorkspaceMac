@@ -18,7 +18,7 @@ A tiny full-screen kiosk app for the Sanytron UltraBar X CoreBar (Android 10, 14
 | haven | nl.denoronha.deckhand.haven | Haven | /haven |
 | tide | nl.denoronha.deckhand.tide | Tide | /tide (on the bar: Rijkswaterstaat water levels, `onbar/TideFeed.kt`) |
 | strava | nl.denoronha.deckhand.strava | Training | /strava |
-| cask | nl.denoronha.deckhand.cask | Cask | /cask |
+| cask | nl.denoronha.deckhand.cask | Whisky Portfolio | /cask |
 | schiphol | nl.denoronha.deckhand.schiphol | Schiphol | /schiphol |
 | zeekr | nl.denoronha.deckhand.zeekr | Zeekr | /zeekr |
 | teletekst | nl.denoronha.deckhand.teletekst | Teletekst | /teletekst (on the bar: NOS Teletekst pages, `onbar/TeletekstFeed.kt`) |

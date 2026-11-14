@@ -34,17 +34,17 @@ function trend(b){ const s=b.spark||[]; return s.length>1? (s[s.length-1]-s[0])/
 
 function render(d){
   hit=[]; if(sel&&Date.now()-selAt>90000) sel=null;
-  if(!d.hasKey){ txt('Add your Whiskystats key in Deckhand',40,130,32,'#9aa3b2','left','700'); txt('Apps → Cask. The key stays on the Mac.',40,172,19,'#6b7280'); return; }
+  if(!d.hasKey){ txt('Add your Whiskystats key in Deckhand',40,130,32,'#9aa3b2','left','700'); txt('Apps → Whisky Portfolio. The key stays on the Mac.',40,172,19,'#6b7280'); return; }
   const bs=d.bottles||[];
   if(!bs.length){ txt('Add your bottles in Deckhand',40,124,32,'#9aa3b2','left','700');
-    txt('Apps → Cask: search Whiskystats or paste a Whiskybase ID, with how many you have and what you paid.',40,166,19,'#6b7280');
+    txt('Apps → Whisky Portfolio: search Whiskystats or paste a Whiskybase ID, with how many you have and what you paid.',40,166,19,'#6b7280');
     if(d.error) txt(clip(d.error,110),40,200,15,DOWN); return; }
   const b=sel&&bs.find(q=>q.id===sel); if(sel&&!b) sel=null;
   if(b) detail(b,d); else overview(bs,d);
 }
 
-// On the right, so the page's ✕ (top-right corner) only covers empty panel.
-function summary(d){ const x=1000, y=18, W=316, H=238;
+// On the right, up to the edge (the bar's own back button closes the app).
+function summary(d){ const x=1084, y=18, W=316, H=238;
   rr(x,y,W,H,14,'rgba(255,255,255,.06)');
   txt(d.n+(d.n===1?' bottle':' bottles'),x+18,y+32,16,DIM,'left','600');
   txt(d.priced?eur(d.total):'—',x+18,y+86,44,'#fff','left','700');
@@ -63,7 +63,7 @@ function overview(bs,d){
   const per=bs.length<=3?bs.length:bs.length===4?4:6, pages=Math.ceil(bs.length/per);
   if(Date.now()-pageAt>12000){ page=(page+1)%pages; pageAt=Date.now(); } if(page>=pages) page=0;
   const show=bs.slice(page*per,page*per+per), rows=per<=3?1:2, cols=Math.ceil(per/rows);
-  const X0=24, X1=984, Y0=18, gap=12, H=pages>1?226:238, W=(X1-X0-gap*(cols-1))/cols, TH=(H-gap*(rows-1))/rows;
+  const X0=24, X1=1068, Y0=18, gap=12, H=pages>1?226:238, W=(X1-X0-gap*(cols-1))/cols, TH=(H-gap*(rows-1))/rows;
   show.forEach((b,i)=>{ const x=X0+(i%cols)*(W+gap), y=Y0+Math.floor(i/cols)*(TH+gap); tile(b,x,y,W,TH); hit.push({x,y,w:W,h:TH,id:b.id}); });
   if(pages>1) for(let p=0;p<pages;p++){ g.fillStyle=p===page?'#cbd2dc':FAINT; g.beginPath(); g.arc((X0+X1)/2+(p-(pages-1)/2)*16,Y0+H+12,4,0,7); g.fill(); }
   txt('tap a bottle for its auctions',X0,272,12,FAINT,'left');
