@@ -36,7 +36,15 @@ final class BarPages {
     private var updated: [String: Date] = [:]
     /// The Claude/Music and Calendar feeds run only while their bar app asked for data in the last ten minutes,
     /// so a Mac without those apps on a bar spends nothing on them.
-    private func wanted(_ page: String) -> Bool { lastHit[page].map { Date().timeIntervalSince($0) < 600 } ?? false }
+    private func wanted(_ page: String) -> Bool {
+        if lastHit[page].map({ Date().timeIntervalSince($0) < 600 }) ?? false { return true }
+        // Deckhand Home's tiles show the next event and the waiting Claude sessions, so they keep those feeds going.
+        return (page == "calendar" || page == "claude") && homeWanted
+    }
+    /// Deckhand Home asked for its tiles in the last ten minutes (it asks every minute while it is on screen).
+    private var homeWanted: Bool { lastHit["home"].map { Date().timeIntervalSince($0) < 600 } ?? false }
+    /// The weather at the configured location for Home's Weather tile, asked every 10 minutes while Home is shown.
+    private var homeWeather: OpenMeteo.Now?
     /// The feed behind each gated page.
     private nonisolated static let feedOf: [String: String] = ["claude": "claude", "music": "claude", "calendar": "calendar"]
     /// What the on-bar apps need from this Mac, at most every few minutes: where, which units, which coins.
@@ -119,7 +127,22 @@ final class BarPages {
                 }
                 self.music = ["playing": np.isPlaying, "hasTrack": np.hasTrack, "title": np.title, "artist": np.artist, "album": np.album, "artKey": key.hashValue]
                 self.updated["claude"] = Date()
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                // Every 2 s for the Claude and Music pages; every 30 s when only Home's tile is looking.
+                let pageOpen = (self.lastHit["claude"].map { Date().timeIntervalSince($0) < 600 } ?? false) || self.wanted("music")
+                for _ in 0..<(pageOpen ? 1 : 15) {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    if !pageOpen, self.lastHit["claude"].map({ Date().timeIntervalSince($0) < 5 }) ?? false { break }
+                }
+            }
+        })
+        tasks.append(Task { [weak self] in   // Home's Weather tile: 10 min while Home is on screen
+            var last = Date.distantPast
+            while !Task.isCancelled {
+                if let s = self, s.homeWanted, Date().timeIntervalSince(last) > 600 {
+                    last = Date()
+                    if let w = try? await model.resolveWeather(settings: settings, metric: settings.units != .imperial) { self?.homeWeather = w }
+                }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         })
         tasks.append(Task { [weak self] in   // calendar: 1 min
@@ -289,6 +312,7 @@ final class BarPages {
     nonisolated func route(_ path: String, model: AppModel) -> MonitorServer.Response? {
         let parts = path.split(separator: "/").map(String.init)
         if parts == ["config.json"] { return .json(DispatchQueue.main.sync { self.barConfig }) }
+        if parts == ["home", "glance.json"] { return .json(DispatchQueue.main.sync { () -> [String: Any] in self.lastHit["home"] = Date(); return self.glance() }) }
         // The owner's own car picture for the Zeekr page (kept in Deckhand's private folder, never in the APK).
         if parts.count == 3, parts[0] == "zeekr", parts[1] == "car", parts[2].hasSuffix(".png") {
             let variant = String(parts[2].dropLast(4))
@@ -327,6 +351,91 @@ final class BarPages {
         case "cask": return cask.snapshot(hasKey: !(model?.whiskystatsKey.isEmpty ?? true))
         default: return [:]
         }
+    }
+
+    // MARK: Deckhand Home's tiles
+
+    /// One short live line per app for Deckhand Home's tiles, from what the feeds already hold (no request of its
+    /// own, except the weather): `{"apps": {"<page>": {"line", "tone"?, "badge"?, "temp"?}}}`. `tone` colours the
+    /// line (up, down, warn, live); `badge` is a count drawn on the icon; `temp` is drawn on the Weather icon.
+    /// An app with nothing to say is left out and its tile shows only its name. Monitor's line is added by the route.
+    func glance() -> [String: Any] {
+        var apps: [String: [String: Any]] = [:]
+        let clock24h = settings?.clock24h ?? true
+        let time = DateFormatter(); time.dateFormat = clock24h ? "HH:mm" : "h:mm a"
+
+        // Claude: sessions waiting for an answer first, else how many are working, else today's tokens.
+        let waiting = claude["waiting"] as? Int ?? 0, active = claude["active"] as? Int ?? 0
+        if waiting > 0 { apps["claude"] = ["line": "\(waiting) waiting", "tone": "warn", "badge": waiting] }
+        else if active > 0 { apps["claude"] = ["line": "\(active) working", "tone": "live"] }
+        else if let t = claude["tokens"] as? String, !t.isEmpty, (claude["tokensRaw"] as? Int ?? 0) > 0 { apps["claude"] = ["line": "\(t) today"] }
+
+        // Music: the track while it plays.
+        if let np = model?.nowPlaying, np.hasTrack, np.isPlaying, !np.title.isEmpty { apps["music"] = ["line": np.title, "tone": "live"] }
+
+        // Calendar: the next event today that has not ended (all-day events only when nothing else is left).
+        if let days = calendar["days"] as? [[String: Any]], let today = days.first, let evs = today["events"] as? [[String: Any]] {
+            let open = evs.filter { !($0["past"] as? Bool ?? false) }
+            if let e = open.first(where: { !($0["allDay"] as? Bool ?? false) }) ?? open.first, let title = e["title"] as? String {
+                let start = (e["allDay"] as? Bool ?? false) ? "" : ((e["time"] as? String)?.components(separatedBy: "–").first ?? "") + " "
+                apps["calendar"] = ["line": start + title]
+            } else if calendar["authorized"] as? Bool ?? false { apps["calendar"] = ["line": "Nothing left today"] }
+        }
+
+        // Tasks: open issues assigned to the owner.
+        if linear["hasKey"] as? Bool ?? false, let issues = linear["issues"] as? [[String: Any]] {
+            // The badge counts only what needs doing now (urgent, or due today or earlier); the line says how many are open.
+            let today = { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f.string(from: Date()) }()
+            let urgent = issues.filter { ($0["priority"] as? Int) == 1 || (($0["due"] as? String).map { $0 <= today } ?? false) }.count
+            var t: [String: Any] = ["line": issues.isEmpty ? "All done" : "\(issues.count) open"]
+            if urgent > 0 { t["badge"] = urgent }
+            apps["tasks"] = t
+        }
+
+        // Weather: temperature on the icon, the sky in words.
+        if let w = homeWeather { apps["weather"] = ["line": w.sky.label, "temp": "\(Int(w.temperature.rounded()))°"] }
+
+        // Zeekr: battery and range, or charging and when it is full.
+        let z = zeekr.snapshot(clock24h: clock24h)
+        if z["signIn"] as? Bool ?? false { apps["zeekr"] = ["line": "Sign in again", "tone": "warn"] }
+        else if let car = z["car"] as? [String: Any], let soc = car["soc"] as? Int {
+            if car["charge"] as? String == "charging" {
+                apps["zeekr"] = ["line": "⚡ \(soc)%" + ((car["fullAt"] as? String).map { " · \($0)" } ?? ""), "tone": "live"]
+            } else {
+                let range = (car["range"] as? Double).map { " · \(Int($0.rounded())) km" } ?? (car["range"] as? Int).map { " · \($0) km" } ?? ""
+                apps["zeekr"] = ["line": "\(soc)%" + range, "tone": soc <= 20 ? "warn" : ""]
+            }
+        }
+
+        // Training: this week's distance in the sport done most.
+        let st = strava.snapshot(metric: settings?.units != .imperial, clock24h: clock24h)
+        if let weeks = st["weeks"] as? [[String: Any]] {
+            if let w = weeks.first, let this = w["this"] as? [String: Any], let d = this["dist"] as? String, !d.isEmpty { apps["strava"] = ["line": "\(d) this week"] }
+            else if st["connected"] as? Bool ?? false { apps["strava"] = ["line": "Nothing this week"] }
+        }
+
+        // Whisky Portfolio: what the bottles are worth, and the change over a month.
+        let c = cask.snapshot(hasKey: !(model?.whiskystatsKey.isEmpty ?? true))
+        if let total = c["total"] as? Double, (c["priced"] as? Int ?? 0) > 0 {
+            let nf = NumberFormatter(); nf.numberStyle = .currency; nf.currencyCode = "EUR"; nf.maximumFractionDigits = 0
+            let d30 = c["d30"] as? Double ?? 0
+            let pct = abs(d30) >= 0.001 ? String(format: " %@%.1f%%", d30 > 0 ? "▲" : "▼", abs(d30) * 100) : ""
+            apps["cask"] = ["line": (nf.string(from: total as NSNumber) ?? "") + pct, "tone": d30 >= 0.001 ? "up" : d30 <= -0.001 ? "down" : ""]
+        }
+
+        // Schiphol: the runways in use for landing and take-off.
+        let sp = schiphol.snapshot(clock24h: clock24h)
+        let land = (sp["landing"] as? [[String: Any]])?.first?["rwy"] as? String, off = (sp["takeoff"] as? [[String: Any]])?.first?["rwy"] as? String
+        if land != nil || off != nil { apps["schiphol"] = ["line": [land.map { "↓ \($0)" }, off.map { "↑ \($0)" }].compactMap { $0 }.joined(separator: "  ")] }
+
+        // Haven: ships on their way in, else ships alongside, over all places.
+        let hv = haven.snapshot(hasKey: !(model?.aisstreamKey.isEmpty ?? true), clock24h: clock24h)
+        if let places = hv["places"] as? [[String: Any]], hv["connected"] as? Bool ?? false {
+            let arriving = places.reduce(0) { $0 + ($1["nArriving"] as? Int ?? 0) }, alongside = places.reduce(0) { $0 + ($1["nAlongside"] as? Int ?? 0) }
+            if arriving > 0 { apps["haven"] = ["line": "\(arriving) arriving", "tone": "live"] }
+            else if alongside > 0 { apps["haven"] = ["line": "\(alongside) alongside"] }
+        }
+        return ["apps": apps, "at": Int(Date().timeIntervalSince1970)]
     }
 
     // MARK: helpers

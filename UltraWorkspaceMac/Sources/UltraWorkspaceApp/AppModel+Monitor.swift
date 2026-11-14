@@ -26,6 +26,14 @@ extension AppModel {
                               "disk": Self.diskUsedPercent(), "host": host, "t": Int(Date().timeIntervalSince1970)])
             }
             guard let self else { return nil }
+            if path == "/home/glance.json", case let r? = pages.route(path, model: self),
+               var obj = (try? JSONSerialization.jsonObject(with: r.body)) as? [String: Any] {
+                // Monitor's tile: this Mac's processor load, from the same sampler as the Monitor page.
+                var apps = obj["apps"] as? [String: Any] ?? [:]
+                apps["monitor"] = ["line": "CPU \(Int(sys.sample().cpuPercent.rounded()))%"]
+                obj["apps"] = apps
+                return .json(obj)
+            }
             return pages.route(path, model: self)
         }
         MonitorServer.shared.setAllowedPeers(Set([ipForSelected()].compactMap { $0 }))

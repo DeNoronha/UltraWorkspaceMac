@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- The tiles' live lines come from Deckhand on the Mac over plain HTTP on the LAN (only from the beacon's sender). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Android 11+ would need this to list other apps; the bar is Android 10, where it is a no-op. -->
@@ -12,6 +13,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.Home">
 
         <!-- HOME + DEFAULT makes it a home-screen candidate (`cmd package set-home-activity` picks it);
