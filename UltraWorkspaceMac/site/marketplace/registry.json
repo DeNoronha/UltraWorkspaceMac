@@ -307,6 +307,63 @@
       "distribution": "bundled",
       "publisher": "De Noronha Consulting",
       "license": "MIT"
+    },
+    {
+      "id": "teletekst",
+      "name": "Teletekst",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.teletekst",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "NOS Teletekst as it looks on television, split into two columns for the wide screen; the pages you choose turn by themselves. Runs on the bar, no key.",
+      "icon": "../assets/img/icons/teletekst.png",
+      "screenshot": "../assets/img/screens/bar-teletekst.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
+    },
+    {
+      "id": "earth",
+      "name": "Earth",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.earth",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "The whole planet, live: a turning globe and a world map with the aircraft in the air, the satellites overhead with the ISS's track, the earthquakes of the last day and where it is night. Runs on the bar from open data; no key.",
+      "icon": "../assets/img/icons/earth.png",
+      "screenshot": "../assets/img/screens/bar-earth.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
+    },
+    {
+      "id": "seo",
+      "name": "SEO",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.seo",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "Your website at a glance: Lighthouse scores and Core Web Vitals, a check of the page itself, and from Google Search Console the clicks, impressions, position and top search terms. Needs your own Google sign-in and a free PageSpeed key.",
+      "icon": "../assets/img/icons/seo.png",
+      "screenshot": "../assets/img/screens/bar-seo.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
     }
   ],
   "cards": [

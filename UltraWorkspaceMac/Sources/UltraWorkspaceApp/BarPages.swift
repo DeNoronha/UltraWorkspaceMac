@@ -16,12 +16,12 @@ import UltraBarKit
 @MainActor
 final class BarPages {
     /// Pages whose data comes from this Mac through `route` (Monitor's samples are served by `AppModel.startBarDataServer`).
-    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol"]
+    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "seo"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
     /// its settings from this Mac (pushed over ADB, or read as `/config.json`).
-    nonisolated static let onBar: Set<String> = ["flights", "crypto", "weather", "sky", "news", "verse", "tide", "teletekst"]
+    nonisolated static let onBar: Set<String> = ["flights", "crypto", "weather", "sky", "news", "verse", "tide", "teletekst", "earth"]
 
     private var claude: [String: Any] = ["sessions": [], "tokens": "", "active": 0, "waiting": 0]
     private var calendar: [String: Any] = ["days": []]
@@ -37,7 +37,7 @@ final class BarPages {
     private let configWake = WakeSignal()
     private var subscriptions: [AnyCancellable] = []
     /// Wakes the loops that wait for a bar request: this class's own, the feeds', the Music poll.
-    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); model?.musicWake.signal() }
+    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); seo.poke(); model?.musicWake.signal() }
     /// Nobody can be looking at the bar apps: the bar's screen is off (presence over ADB) or this Mac is asleep,
     /// has its screens off or is locked, and no bar app asked for anything in the last two minutes (Deckhand Home
     /// asks every minute while it is on screen). The feeds pause then; the next request wakes them.
@@ -75,6 +75,8 @@ final class BarPages {
     let cask = CaskFeed()
     /// Schiphol's runways and traffic (adsb.lol) and, with the user's key, its timetable; polled while the app is on the bar.
     let schiphol = SchipholFeed()
+    /// One website's health and its Search Console numbers for the SEO app, refreshed while it is on the bar.
+    let seo = SiteFeed()
     private weak var model: AppModel?
     private var settings: AppSettings?
 
@@ -84,6 +86,10 @@ final class BarPages {
         haven.start(key: { model.aisstreamKey }, wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
             return model.barAppVersion("haven") != nil || (self.lastHit["haven"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+        })
+        seo.start(url: { [weak self] in self?.settings?.seoURL ?? "" }, wanted: { [weak self] in
+            guard let self, !self.dormant else { return false }
+            return model.barAppVersion("seo") != nil || (self.lastHit["seo"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
         strava.start(wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
@@ -208,7 +214,7 @@ final class BarPages {
         })
     }
 
-    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop() }
+    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); seo.stop() }
 
     /// Linear for the Tasks app.
     private func startLinearFeed(model: AppModel) {
@@ -248,7 +254,7 @@ final class BarPages {
     ///
     ///     {"v":2, "location":{"lat","lon","place"}, "units":{"metric","clock24h"},
     ///      "apps":{"flights":{"radiusKm"}, "crypto":{"coins":[…],"currency"}, "news":{"source"}, "weather":{}, "sky":{}, "verse":{},
-    ///              "tide":{"stations":[{"code","name","tide"}…]}, "teletekst":{"pages":[{"page","stories"}…],"interval"}}}
+    ///              "tide":{"stations":[{"code","name","tide"}…]}, "teletekst":{"pages":[{"page","stories"}…],"interval"}, "earth":{"minMag","center"}}}
     ///
     /// An app section may carry its own `location` to override the shared one. Deckhand pushes the document to the
     /// on-bar apps over the debug bridge whenever it changes (`am broadcast … --es config64`, accepted only from the
@@ -265,6 +271,7 @@ final class BarPages {
                 "weather": [String: Any](), "sky": [String: Any](), "verse": [String: Any](),
                 "tide": TideStations.configSection(),   // the gauges from tide.json (Apps → Tide)
                 "teletekst": TeletekstPages.configSection(),   // the pages from teletekst.json (Apps → Teletekst)
+                "earth": ["minMag": settings.earthMinMag, "center": settings.earthCenter],
             ] as [String: Any],
         ]
         if let l = location { doc["location"] = ["lat": (l.lat * 1000).rounded() / 1000, "lon": (l.lon * 1000).rounded() / 1000, "place": l.name] }
@@ -417,6 +424,7 @@ final class BarPages {
         case "haven": return haven.snapshot(hasKey: !(model?.aisstreamKey.isEmpty ?? true), clock24h: settings?.clock24h ?? true)
         case "strava": return strava.snapshot(metric: settings?.units != .imperial, clock24h: settings?.clock24h ?? true)
         case "cask": return cask.snapshot(hasKey: !(model?.whiskystatsKey.isEmpty ?? true))
+        case "seo": return seo.snapshot()
         default: return [:]
         }
     }
@@ -491,6 +499,8 @@ final class BarPages {
             if arriving > 0 { apps["haven"] = ["line": "\(arriving) arriving", "tone": "live"] }
             else if alongside > 0 { apps["haven"] = ["line": "\(alongside) alongside"] }
         }
+        // SEO: the mobile SEO score and the clicks of the last 28 days.
+        if let line = seo.homeLine() { apps["seo"] = ["line": line] }
         return ["apps": apps, "order": homeOrder(), "at": Int(Date().timeIntervalSince1970)]
     }
 

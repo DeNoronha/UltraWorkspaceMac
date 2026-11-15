@@ -16,6 +16,8 @@ struct AppsView: View {
         case "cask": return "chart.line.uptrend.xyaxis"
         case "schiphol": return "airplane.departure"
         case "teletekst": return "tv"
+        case "earth": return "globe.europe.africa"
+        case "seo": return "chart.line.uptrend.xyaxis"
         default: return "waveform.path.ecg" }
     }
     /// The app's own launcher icon (bundled by make-app.sh), so the list shows the same picture as the bar; the
@@ -39,6 +41,8 @@ struct AppsView: View {
         case "tide": return "Water levels at the Rijkswaterstaat gauges you choose: the level now in cm NAP and which way it goes, today's curve against the predicted tide, the next high and low water, and a small almanac with sun and moon."
         case "strava": return "Your own Strava activities: the latest with its route, this week against last week per sport, and the year so far. Powered by Strava."
         case "schiphol": return "Amsterdam Schiphol: which runways are in use for landing and take-off, the aircraft on and around them, the last 15 minutes' movements, and with a Schiphol API key the next arrivals and departures."
+        case "seo": return "Your website's health and search traffic: Google's Lighthouse scores and Core Web Vitals, a check of the page itself, and from Search Console the clicks, impressions, position and top search terms."
+        case "earth": return "The whole planet, live: a turning globe and a world map with the aircraft in the air, the satellites overhead, the earthquakes of the last day and where it is night."
         case "teletekst": return "NOS Teletekst as it looks on television: the news index and its stories, sport and the weather map, in the teletext colours and blocks, two columns at a time, turning by itself."
         case "haven": return "Ships at the ports and terminals you choose, live from AIS: what lies alongside and what is on its way in, with a rough arrival time. Tap a place for its approach."
         case "cask": return "Your whisky collection at auction prices (Whiskystats): what it is worth, against what you paid and a month ago, with each bottle's trend. Tap a bottle for its auctions."
@@ -243,6 +247,20 @@ struct AppsView: View {
             SchipholSettings()
         case "teletekst":
             TeletekstSettings()
+        case "seo":
+            SeoSettings(feed: model.barPages.seo)
+        case "earth":
+            Section {
+                Picker("Globe", selection: $settings.earthCenter) {
+                    Text("Centred on my location").tag("home")
+                    Text("Turning").tag("turn")
+                }
+                LocationSummaryRow()
+                Picker("Earthquakes", selection: $settings.earthMinMag) {
+                    Text("Magnitude 2.5 and up").tag(2.5)
+                    Text("Magnitude 4.5 and up").tag(4.5)
+                }
+            } header: { Text("Earth") } footer: { Footnote("The bar fetches everything itself, without a key: aircraft from OpenSky every 15 minutes, earthquakes from USGS every 10, satellites from CelesTrak twice a day, only while Earth is open. Tap the globe on the bar to switch between the two; tap an earthquake to turn the globe to it.") }
         case "sky":
             Section { LocationSummaryRow() } header: { Text("Sun & Moon") } footer: { Footnote("Computed on the bar for this location; nothing is fetched.") }
         case "weather": CardSettingsSections(t: .weather)

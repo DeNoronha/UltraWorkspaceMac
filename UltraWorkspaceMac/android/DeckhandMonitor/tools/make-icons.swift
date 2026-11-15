@@ -54,6 +54,8 @@ let flavors: [Flavor] = [
     Flavor(name: "cask",     top: "2f6b55", bottom: "123326", glyphColor: "ffffff", glyph: .fluent("tumbler_glass_3d.png")),
     Flavor(name: "schiphol", top: "64798f", bottom: "26323f", glyphColor: "ffffff", glyph: .fluent("airplane_departure_3d.png")),
     Flavor(name: "teletekst", top: "1d4ed8", bottom: "0b1020", glyphColor: "ffffff", glyph: .fluent("television_3d.png")),
+    Flavor(name: "earth", top: "1e3a8a", bottom: "020617", glyphColor: "ffffff", glyph: .fluent("globe_showing_europe-africa_3d.png")),
+    Flavor(name: "seo", top: "4f46e5", bottom: "1e1b4b", glyphColor: "ffffff", glyph: .fluent("magnifying_glass_tilted_right_3d.png")),
     // Deckhand Home is its own Gradle module (home/), not a flavor of the kiosk app.
     Flavor(name: "home", resDir: "home/src/main/res", top: "4b5a78", bottom: "1c2436", glyphColor: "ffffff", glyph: .house),
 ]

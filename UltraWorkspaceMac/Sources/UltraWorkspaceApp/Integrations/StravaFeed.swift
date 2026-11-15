@@ -9,7 +9,7 @@ import UltraBarKit
 /// The athlete creates their own API application at strava.com/settings/api (Authorization Callback Domain
 /// `localhost`) and pastes its Client ID and Client Secret under Apps → Training. **Connect** opens Strava's authorize
 /// page in the browser (scope `read,activity:read`); Strava sends the browser back to
-/// `http://localhost:<port>/strava/callback`, which `StravaCallback` answers — a one-shot listener on the loopback
+/// `http://localhost:<port>/strava/callback`, which `OAuthCallback` answers — a one-shot listener on the loopback
 /// interface only, for this one connection, that takes the code only with the `state` this Mac made. Deckhand trades
 /// the code for tokens and keeps them, with the client id and secret, in the secret store (Keychain `oauth:strava`,
 /// `api:strava-client-id`, `api:strava-client-secret`; `Store.saveSecret`).
@@ -48,7 +48,7 @@ final class StravaFeed: ObservableObject {
     private var pausedUntil = Date.distantPast
     private var loop: Task<Void, Never>?
     private var connectTask: Task<Void, Never>?
-    private var callback: StravaCallback?
+    private var callback: OAuthCallback?
     private var kick = false
 
     nonisolated static let api = "https://www.strava.com/api/v3"
@@ -227,8 +227,8 @@ final class StravaFeed: ObservableObject {
         connectTask = Task { [weak self] in
             guard let self else { return }
             defer { self.connecting = false; self.callback?.stop(); self.callback = nil }
-            let state = StravaCallback.randomState()
-            let cb = StravaCallback(state: state)
+            let state = OAuthCallback.randomState()
+            let cb = OAuthCallback(state: state)
             self.callback = cb
             guard let port = await cb.start() else { self.lastError = "Could not open the callback on this Mac."; return }
             let redirect = "http://localhost:\(port)/strava/callback"
@@ -300,22 +300,38 @@ final class StravaFeed: ObservableObject {
     }
 }
 
-/// The OAuth redirect target: `GET /strava/callback?state=…&code=…&scope=…` on the loopback interface only, on a
+/// The OAuth redirect target: `GET <spec.path>?state=…&code=…&scope=…` (Strava: `/strava/callback`, Google:
+/// `/google/callback`) on the loopback interface only, on a
 /// port the system picks, open only while one connection is under way. It answers any other request with 404, a
 /// request from anywhere but loopback is dropped, a Host that is not localhost/127.0.0.1/[::1] gets 421 (DNS
 /// rebinding), and a callback whose `state` is not the one this Mac sent gets 400 — the wait goes on. The code is
 /// never logged; the browser gets a short "you can close this tab" page.
-final class StravaCallback: @unchecked Sendable {
+final class OAuthCallback: @unchecked Sendable {
     enum Result: Sendable { case success(code: String, scope: String), failure(String) }
 
+    /// What differs per service: the path, its name in the messages, and which granted scope is enough.
+    struct Spec: Sendable {
+        let path: String, provider: String, denied: String, missingScope: String
+        let scopeOK: @Sendable (String) -> Bool
+        static let strava = Spec(path: "/strava/callback", provider: "Strava",
+                                 denied: "You did not allow Deckhand to read your Strava activities.",
+                                 missingScope: "Strava gave no access to your activities. Connect again and leave “View data about your activities” ticked.",
+                                 scopeOK: { $0.split(separator: ",").contains(where: { $0 == "activity:read" || $0 == "activity:read_all" }) })
+        static let google = Spec(path: "/google/callback", provider: "Google",
+                                 denied: "You did not allow Deckhand to read your Search Console data.",
+                                 missingScope: "Google gave no access to Search Console. Connect again and tick “View Search Console data for your verified sites”.",
+                                 scopeOK: { $0.split(separator: " ").contains { $0.hasSuffix("/auth/webmasters.readonly") || $0.hasSuffix("/auth/webmasters") } })
+    }
+
     private let state: String
+    private let spec: Spec
     private let lock = NSLock()
     private var listener: NWListener?
     private var continuation: CheckedContinuation<Result?, Never>?
     private var result: Result?
-    private let queue = DispatchQueue(label: "deckhand.strava.callback")
+    private let queue = DispatchQueue(label: "deckhand.oauth.callback")
 
-    init(state: String) { self.state = state }
+    init(state: String, spec: Spec = .strava) { self.state = state; self.spec = spec }
 
     static func randomState() -> String {
         var b = [UInt8](repeating: 0, count: 24)
@@ -400,10 +416,10 @@ final class StravaCallback: @unchecked Sendable {
     }
 
     /// The decision for one request head: status, page text, and the result it produces (if any). Pure, for the check.
-    static func handle(head: String, state: String) -> (status: String, text: String, result: Result?) {
+    static func handle(head: String, state: String, spec: Spec = .strava) -> (status: String, text: String, result: Result?) {
         let line = head.split(whereSeparator: { $0 == "\r\n" || $0 == "\n" }).first.map(String.init) ?? ""
         let parts = line.split(separator: " ")
-        guard parts.count >= 2, parts[0] == "GET", let c = URLComponents(string: String(parts[1])), c.path == "/strava/callback" else {
+        guard parts.count >= 2, parts[0] == "GET", let c = URLComponents(string: String(parts[1])), c.path == spec.path else {
             return ("404 Not Found", "Not found.", nil)
         }
         let host = (MonitorServer.header("host", in: head) ?? "").lowercased()
@@ -416,20 +432,17 @@ final class StravaCallback: @unchecked Sendable {
             return ("400 Bad Request", "This link does not belong to the connection Deckhand started. Press Connect in Deckhand again.", nil)
         }
         if let e = q["error"] {
-            let msg = e == "access_denied" ? "You did not allow Deckhand to read your Strava activities." : "Strava said: \(e)"
+            let msg = e == "access_denied" ? spec.denied : "\(spec.provider) said: \(e)"
             return ("200 OK", msg + " You can close this tab.", .failure(msg))
         }
-        guard let code = q["code"], !code.isEmpty else { return ("400 Bad Request", "No code from Strava.", nil) }
+        guard let code = q["code"], !code.isEmpty else { return ("400 Bad Request", "No code from \(spec.provider).", nil) }
         let scope = q["scope"] ?? ""
-        guard scope.split(separator: ",").contains(where: { $0 == "activity:read" || $0 == "activity:read_all" }) else {
-            let msg = "Strava gave no access to your activities. Connect again and leave “View data about your activities” ticked."
-            return ("200 OK", msg, .failure(msg))
-        }
-        return ("200 OK", "Deckhand is connected to Strava. You can close this tab.", .success(code: code, scope: scope))
+        guard spec.scopeOK(scope) else { return ("200 OK", spec.missingScope, .failure(spec.missingScope)) }
+        return ("200 OK", "Deckhand is connected to \(spec.provider). You can close this tab.", .success(code: code, scope: scope))
     }
 
     private func respond(_ conn: NWConnection, _ head: String) {
-        let (status, text, result) = Self.handle(head: head, state: state)
+        let (status, text, result) = Self.handle(head: head, state: state, spec: spec)
         let esc = text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
         let html = "<!doctype html><meta charset=utf-8><title>Deckhand</title><body style=\"font:16px -apple-system,sans-serif;margin:3em;color:#222\"><p>\(esc)</p>"
         let body = Data(html.utf8)

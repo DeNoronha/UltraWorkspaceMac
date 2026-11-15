@@ -20,6 +20,8 @@ The launcher-icon glyphs of the Deckhand bar apps (every flavor except `claude`)
 | cask | Tumbler glass | `tumbler_glass_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Tumbler%20glass/3D/tumbler_glass_3d.png |
 | schiphol | Airplane departure | `airplane_departure_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Airplane%20departure/3D/airplane_departure_3d.png |
 | teletekst | Television | `television_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Television/3D/television_3d.png |
+| seo | Magnifying glass tilted right | `magnifying_glass_tilted_right_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Magnifying%20glass%20tilted%20right/3D/magnifying_glass_tilted_right_3d.png |
+| earth | Globe showing Europe-Africa | `globe_showing_europe-africa_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Globe%20showing%20europe-africa/3D/globe_showing_europe-africa_3d.png |
 
 ## Licence
 

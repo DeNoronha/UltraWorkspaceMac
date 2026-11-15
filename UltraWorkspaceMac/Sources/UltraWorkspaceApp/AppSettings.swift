@@ -70,6 +70,12 @@ final class AppSettings: ObservableObject {
     // Bar apps (2026-11-04): Flights radius, Headlines source. The Linear key lives in the secret store (Keychain).
     @Published var flightsRadiusKm: Int = 3 { didSet { save() } }
     @Published var newsSource: String = "cnn" { didSet { save() } }
+    /// Earth bar app: the smallest earthquake it shows, 2.5 or 4.5 (the two USGS day feeds).
+    @Published var earthMinMag: Double = 2.5 { didSet { save() } }
+    /// Earth bar app: "home" keeps your location in the middle of the globe, "turn" lets it turn.
+    @Published var earthCenter: String = "home" { didSet { save() } }
+    /// SEO bar app: the site it watches (Apps → SEO).
+    @Published var seoURL: String = "" { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows this many single cards without scrolling (the clock card takes two slots) — counted on the bar 2026-11-04.
     static let coreCardsThatFit = 5
@@ -138,6 +144,9 @@ final class AppSettings: ObservableObject {
         var barFirewall: Bool? = nil
         var flightsRadiusKm: Int? = nil
         var newsSource: String? = nil
+        var earthMinMag: Double? = nil
+        var earthCenter: String? = nil
+        var seoURL: String? = nil
     }
 
     // MARK: VivoCube cards (ordered, max 6)
@@ -223,6 +232,9 @@ final class AppSettings: ObservableObject {
             barFirewall = p.barFirewall ?? false
             flightsRadiusKm = p.flightsRadiusKm ?? 3
             newsSource = p.newsSource ?? "cnn"
+            earthMinMag = p.earthMinMag == 4.5 ? 4.5 : 2.5
+            earthCenter = p.earthCenter == "turn" ? "turn" : "home"
+            seoURL = p.seoURL ?? ""
         }
         if let storedKey { accuWeatherKey = storedKey }
     }
@@ -238,7 +250,7 @@ final class AppSettings: ObservableObject {
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
                           claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes, barFirewall: barFirewall,
-                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource)
+                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL)
         // Holds the manual location: user-only from the moment it exists (Store.writePrivate).
         guard let data = try? JSONEncoder().encode(p), Store.writePrivate(data, to: url) else {
             NSLog("Deckhand: settings.json could not be saved"); return
