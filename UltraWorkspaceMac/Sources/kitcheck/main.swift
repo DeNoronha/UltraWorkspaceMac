@@ -811,6 +811,16 @@ do {
     check(!VendorRelease.matches(tmp, r.bridge!) && !VendorRelease.matches(tmp, r.launcher!), "vendor release: another file, or an asset without a digest, never matches")
 } catch { check(false, "vendor release: parse", "\(error)") }
 
+// Cloud Status: the services list sent to the bar as apps.status.services.
+check(CloudStatus.sanitize(nil) == CloudStatus.defaults && CloudStatus.sanitize([]) == CloudStatus.defaults, "status: no list gives the defaults")
+check(CloudStatus.sanitize(["GitHub ", "nope", "github", "aws"]) == ["github", "aws"], "status: unknown ids dropped, case and spaces ignored, no doubles, order kept")
+check(CloudStatus.sanitize(["nope"]) == CloudStatus.defaults, "status: nothing valid left gives the defaults")
+check(CloudStatus.sanitize(CloudStatus.known.map(\.id)).count == CloudStatus.maxServices, "status: at most twelve")
+check(CloudStatus.defaults.count == 12 && CloudStatus.defaults.allSatisfy { d in CloudStatus.known.contains { $0.id == d } }, "status: twelve known defaults")
+check(CloudStatus.toggled(["aws", "m365"], "github", on: true) == ["m365", "aws", "github"], "status: switching on keeps the known order")
+check(CloudStatus.toggled(["aws"], "aws", on: false) == ["aws"], "status: the last service stays on")
+check(CloudStatus.toggled(CloudStatus.defaults, "npm", on: true) == CloudStatus.defaults, "status: no thirteenth service")
+
 // APK manifests: package and version read from the binary XML of a Deckhand bar app when a build is present.
 do {
     let apk = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("dist/bar-apps/DeckhandMonitor.apk")

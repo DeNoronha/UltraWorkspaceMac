@@ -19,6 +19,7 @@ struct AppsView: View {
         case "earth": return "globe.europe.africa"
         case "seo": return "chart.line.uptrend.xyaxis"
         case "portfolio": return "chart.pie"
+        case "status": return "exclamationmark.icloud"
         default: return "waveform.path.ecg" }
     }
     /// The app's own launcher icon (bundled by make-app.sh), so the list shows the same picture as the bar; the
@@ -42,6 +43,7 @@ struct AppsView: View {
         case "tide": return "Water levels at the Rijkswaterstaat gauges you choose: the level now in cm NAP and which way it goes, today's curve against the predicted tide, the next high and low water, and a small almanac with sun and moon."
         case "strava": return "Your own Strava activities: the latest with its route, this week against last week per sport, and the year so far. Powered by Strava."
         case "schiphol": return "Amsterdam Schiphol: which runways are in use for landing and take-off, the aircraft on and around them, the last 15 minutes' movements, and with a Schiphol API key the next arrivals and departures."
+        case "status": return "Whether Microsoft 365, Azure, AWS, Google Cloud and Workspace, GitHub, Cloudflare, Slack and other services are up, from their official status pages. Tap a service for what is going on."
         case "portfolio": return "Your Kraken account at a glance: what it is worth, how it moved over a day, week, month or year, and per coin its price, value and change, with the market's 24-hour high and low, VWAP, volume and spread."
         case "seo": return "Your website's health and search traffic: Google's Lighthouse scores and Core Web Vitals, a check of the page itself, and from Search Console the clicks, impressions, position and top search terms."
         case "earth": return "The whole planet, live: a turning globe and a world map with the aircraft in the air, the satellites overhead, the earthquakes of the last day and where it is night."
@@ -253,6 +255,8 @@ struct AppsView: View {
             SeoSettings(feed: model.barPages.seo)
         case "portfolio":
             PortfolioSettings(feed: model.barPages.portfolio)
+        case "status":
+            StatusSettings()
         case "earth":
             Section {
                 Picker("Globe", selection: $settings.earthCenter) {

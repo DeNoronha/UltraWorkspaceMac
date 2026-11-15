@@ -71,7 +71,8 @@ extension AppModel {
         ("teletekst", "Teletekst", "DeckhandTeletekst"),
         ("earth", "Earth", "DeckhandEarth"),
         ("seo", "SEO", "DeckhandSEO"),
-        ("portfolio", "Portfolio", "DeckhandPortfolio")]
+        ("portfolio", "Portfolio", "DeckhandPortfolio"),
+        ("status", "Cloud Status", "DeckhandStatus")]
 
     /// APKs shipped inside Deckhand.app (packaging/make-app.sh copies dist/bar-apps) or next to the dev build.
     static func bundledAPK(_ name: String) -> URL? {

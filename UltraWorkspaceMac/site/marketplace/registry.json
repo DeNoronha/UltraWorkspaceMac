@@ -383,6 +383,25 @@
       "distribution": "bundled",
       "publisher": "De Noronha Consulting",
       "license": "MIT"
+    },
+    {
+      "id": "status",
+      "name": "Cloud Status",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.status",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "Is it them or me? Whether Microsoft 365, Azure, AWS, Google Cloud and Workspace, GitHub, Cloudflare, Slack and other services are up, from their official status pages; tap a service for what is going on. Runs on the bar; no account or key.",
+      "icon": "../assets/img/icons/status.png",
+      "screenshot": "../assets/img/screens/bar-status.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
     }
   ],
   "cards": [
