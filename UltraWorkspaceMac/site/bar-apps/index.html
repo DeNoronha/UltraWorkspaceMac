@@ -52,8 +52,8 @@
       </div>
       <ol class="steps">
         <li><b>Every app carries its page.</b><span>The page is part of the app, so it appears at once, with or without the Mac.</span></li>
-        <li><b>Some fetch their own data.</b><span>Flights (adsb.lol and adsbdb, with an OpenStreetMap road map cached on the bar), Crypto (CoinGecko), Weather (Open-Meteo), Headlines (the feed you pick), Verse (bible-api), Tide (Rijkswaterstaat's open water data) and Sun &amp; Moon (computed on the bar) go to those services from the bar itself and keep running when the Mac sleeps.</span></li>
-        <li><b>The others ask the Mac.</b><span>Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Whisky Portfolio and Schiphol show what only your Mac knows or need a key or sign-in it keeps, so they ask Deckhand for it on your LAN (port 7432): Mac stats every second, Claude sessions and Music every two seconds, the calendar every minute, Linear every twenty seconds, ships and aircraft every ten seconds while the page is open; Deckhand fetches Strava, Whiskystats and the car itself, at a pace that keeps within their limits. Every five seconds Deckhand sends a UDP beacon on port 5320, so the apps find it with nothing to configure. The three buttons that change something (Music transport, Tasks Done) go to the Mac as a POST with a marker header that no other site can send.</span></li>
+        <li><b>Some fetch their own data.</b><span>Flights (adsb.lol and adsbdb, with an OpenStreetMap road map cached on the bar), Crypto (CoinGecko), Weather (Open-Meteo), Headlines (the feed you pick), Verse (bible-api), Tide (Rijkswaterstaat's open water data), Teletekst (NOS) and Sun &amp; Moon (computed on the bar) go to those services from the bar itself and keep running when the Mac sleeps.</span></li>
+        <li><b>The others ask the Mac.</b><span>Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Whisky Portfolio and Schiphol show what only your Mac knows or need a key or sign-in it keeps, so they ask Deckhand for it on your LAN (port 7432): Mac stats every second, Claude sessions and Music every two seconds, the calendar every minute, Linear every twenty seconds, ships and aircraft every ten seconds while the page is open; Deckhand fetches Strava and Whiskystats itself, at a pace that keeps within their limits. Every five seconds Deckhand sends a UDP beacon on port 5320, so the apps find it with nothing to configure. The buttons that change something (Music's transport buttons, Tasks' Done) go to the Mac as a POST with a marker header that no other site can send.</span></li>
         <li><b>Deckhand keeps the settings.</b><span>Your location, units, flight radius, coins and currency, news source and water gauges live in Deckhand, as one settings file with a section per app. Change one and Deckhand pushes it to the bar over the debug bridge within seconds; the apps keep their copy, so the Mac can be off.</span></li>
         <li><b>One card per app on the page.</b><span>Each app is an ordinary Android app on the bar with an icon, so the CoreBar page gets an Open card for it. Tap the card and the app opens full screen; the bar's Back button (the small round button in the bezel to the right of the screen) or a long press returns to the cards.</span></li>
       </ol>
@@ -90,7 +90,7 @@
           <div class="icon"><img src="../assets/img/icons/crypto.png" alt=""></div>
           <div class="body">
             <div class="title"><h3>Crypto</h3></div>
-            <p>Up to five coins in your currency, each with a sparkline of the day and the change since midnight. Coins and currency are set in Deckhand under Apps → Crypto; prices come from CoinGecko through the Mac, no API key.</p>
+            <p>Up to five coins in your currency, each with a sparkline of the day and the change since midnight. Coins and currency are set in Deckhand under Apps → Crypto; the bar fetches the prices from CoinGecko itself, no API key.</p>
             <p class="meta">nl.denoronha.deckhand.crypto</p>
           </div>
           <div class="shot"><img src="../assets/img/screens/bar-crypto.png" alt="Crypto app on the bar" loading="lazy"></div>
@@ -126,7 +126,7 @@
           <div class="icon"><img src="../assets/img/icons/flights.png" alt=""></div>
           <div class="body">
             <div class="title"><h3>Flights</h3></div>
-            <p>What is flying over right now. On the left a radar on an OpenStreetMap road map, scaled so the circle is exactly the radius you choose (3 km by default, up to 25); beside it up to four flights, each panel in its own colour — green, amber, blue, pink — and the same colour marks that plane and its flight number on the radar: callsign and airline, the route with both airports, altitude and whether it is climbing, speed, type and registration, distance and direction. Other aircraft in the circle are small grey planes. When the circle is empty it says so and shows the nearest aircraft within 25 km. The map tiles are fetched, darkened and cached by the Mac, so the bar needs no internet for them.</p>
+            <p>What is flying over right now. On the left a radar on an OpenStreetMap road map, scaled so the circle is exactly the radius you choose (3 km by default, up to 25); beside it up to four flights, each panel in its own colour — green, amber, blue, pink — and the same colour marks that plane and its flight number on the radar: callsign and airline, the route with both airports, altitude and whether it is climbing, speed, type and registration, distance and direction. Other aircraft in the circle are small grey planes. When the circle is empty it says so and shows the nearest aircraft within 25 km. The bar fetches the map tiles itself, darkens them for the night and keeps them for 30 days.</p>
             <p class="meta">nl.denoronha.deckhand.flights · adsb.lol and adsbdb.com, no key · map © OpenStreetMap · scheduled times need a paid API and are not shown</p>
           </div>
           <div class="shot"><img src="../assets/img/screens/bar-flights.png" alt="Flights app on the bar" loading="lazy"></div>
@@ -135,7 +135,7 @@
           <div class="icon"><img src="../assets/img/icons/sky.png" alt=""></div>
           <div class="body">
             <div class="title"><h3>Sun &amp; Moon</h3></div>
-            <p>The sun on its arc for today, with sunrise, sunset, solar noon, golden hour, civil dawn and dusk and the day's length; the moon drawn in its real phase, with how much is lit, its age, rise and set, and the dates of the next full and new moon. All computed on the Mac for the weather location.</p>
+            <p>The sun on its arc for today, with sunrise, sunset, solar noon, golden hour, civil dawn and dusk and the day's length; the moon drawn in its real phase, with how much is lit, its age, rise and set, and the dates of the next full and new moon. All computed on the bar for the weather location.</p>
             <p class="meta">nl.denoronha.deckhand.sky · no service, no key</p>
           </div>
           <div class="shot"><img src="../assets/img/screens/bar-sky.png" alt="Sun and Moon app on the bar" loading="lazy"></div>
@@ -162,7 +162,7 @@
           <div class="icon"><img src="../assets/img/icons/tasks.png" alt=""></div>
           <div class="body">
             <div class="title"><h3>Tasks</h3></div>
-            <p>Your open Linear issues: what you have started first, then by priority and due date, each with its state and due day; overdue and due-this-week counts at the top. Tap an issue on the bar and press Done to close it in Linear; the list is refreshed every twenty seconds while the page is open. Needs a personal Linear API key, which Deckhand keeps in a user-only file on the Mac.</p>
+            <p>Your open Linear issues: what you have started first, then by priority and due date, each with its state and due day; overdue and due-this-week counts at the top. Tap an issue on the bar and press Done to close it in Linear; the list is refreshed every twenty seconds while the page is open. Needs a personal Linear API key, which Deckhand keeps in the Keychain on the Mac and which never reaches the bar.</p>
             <p class="meta">nl.denoronha.deckhand.tasks · Linear GraphQL API: reads your issues, writes only the Done you press</p>
           </div>
           <div class="shot"><img src="../assets/img/screens/bar-tasks.png" alt="Tasks app on the bar" loading="lazy"></div>
@@ -216,7 +216,7 @@
           <div class="icon"><img src="../assets/img/icons/cask.png" alt=""></div>
           <div class="body">
             <div class="title"><h3>Whisky Portfolio</h3></div>
-            <p>Your whisky collection at auction prices. What your bottles are worth together, against what you paid and a month ago, with a two-year trend per bottle; tap one for its latest auction days and the lots on offer now. Prices from the Whiskystats Data API with your own key, cached on the Mac and refreshed within a strict monthly credit budget. The picture uses demo bottles.</p>
+            <p>Your whisky collection at auction prices. What your bottles are worth together, against what you paid and a month ago, with a two-year trend per bottle; tap one for its latest auction days and the lots on offer now. Prices from the Whiskystats Data API with your own key, cached on the Mac and refreshed within a strict monthly credit budget.</p>
             <p class="meta">nl.denoronha.deckhand.cask · Whiskystats Data API, only the Whisky IDs, asked by Deckhand on the Mac</p>
           </div>
           <div class="shot"><img src="../assets/img/screens/bar-cask.png" alt="Whisky Portfolio app on the bar" loading="lazy"></div>
@@ -233,7 +233,7 @@
         <p class="lede">The APKs are inside Deckhand; installing them is the one thing the bar's protocol cannot do, so it goes through Android's debug bridge.</p>
       </div>
       <ol class="steps">
-        <li><b>Turn on Wi-Fi ADB on the bar.</b><span>On the bar: Settings → About → tap Build number seven times → Developer options → Wi-Fi ADB; then Deckhand's Settings → Debug Bridge: <em>Keep On After Reboots</em>, so it survives a reboot. No USB cable: plugging the bar's PC-LINK port into a computer turns Wi-Fi ADB off. It gives anyone on your LAN a shell on the bar while it is on, so switch it off again when you are done.</span></li>
+        <li><b>Turn on Wi-Fi ADB on the bar.</b><span>On the bar: Settings → About → tap Build number seven times → Developer options → Wi-Fi ADB; then Deckhand's Settings → Debug Bridge: <em>Keep On After Reboots</em>, so it survives a reboot. No USB cable: plugging the bar's PC-LINK port into a computer turns Wi-Fi ADB off. While it is on, anyone on your LAN can get a shell on the bar; Settings → Debug Bridge → <em>Only this Mac may connect to the bar</em> closes it to everyone but your Mac.</span></li>
         <li><b>Put adb on the Mac.</b><span><code>brew install --cask android-platform-tools</code>. Deckhand finds it in the usual places.</span></li>
         <li><b>Deckhand → Apps → pick the app → Install.</b><span>Each app shows the version on the bar and whether an update is waiting; Install puts it on the bar, Update to x.y updates one, Update All takes care of the rest, Remove… takes it off. The filter above the list shows only what is on the bar, or only the updates.</span></li>
         <li><b>Publish the card.</b><span>Installing puts the app's card on the Deckhand page; on the CoreBar page, press Publish. The card shows the app's own icon; tap it on the bar to open the page.</span></li>
@@ -249,12 +249,12 @@
     <div class="container">
       <div class="section-head">
         <p class="eyebrow">Build your own</p>
-        <h2>A bar app is a page and a beacon listener.</h2>
+        <h2>A bar app is an Android app with one page.</h2>
         <p class="lede">Deckhand's apps are one Android project with a flavor per app, in the repository under <a href="https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor">android/DeckhandMonitor</a>. Fork it, or write the same thing in anything that runs on Android.</p>
       </div>
       <ol class="steps">
         <li><b>Draw for 1424 × 280 at 160 dpi.</b><span>One screenful, no scrolling, large type: the bar is read from arm's length. Plain HTML and canvas work well; the bar's WebView is a current Chromium.</span></li>
-        <li><b>Carry your page; listen for the beacon on UDP 5320 if you need the Mac.</b><span>Deckhand's apps load their page from inside the APK. For data from the Mac, Deckhand broadcasts and unicasts <code>{"deckhand":"monitor","url":"http://&lt;mac&gt;:7432/monitor","base":"http://&lt;mac&gt;:7432","v":2}</code> every five seconds; <code>base</code> is where its data API answers (the selected bar only). Do what Deckhand's apps do: accept a beacon only when it names its own sender on a private LAN address.</span></li>
+        <li><b>Carry your page and fetch your own data.</b><span>Deckhand's apps load their page from inside the APK, and the ones with public data fetch it on the bar; do the same. Deckhand's data API on the Mac answers only its own apps: its UDP beacon on port 5320 is signed and every request needs a per-bar key that Deckhand puts on the bar over the debug bridge.</span></li>
         <li><b>Give the bar a way back.</b><span>Leave Back to the bar's own Back button, as the vendor's apps do, and add a long press that returns to the cards: the apps call <code>finish()</code> through a small JavaScript bridge. No close button needed.</span></li>
         <li><b>List it.</b><span>Add an entry to the marketplace registry and open a pull request. A screenshot at 1424 × 280 and a link to the source are the only hard requirements.</span></li>
       </ol>
