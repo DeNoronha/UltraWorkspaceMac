@@ -23,6 +23,7 @@ The launcher-icon glyphs of the Deckhand bar apps (every flavor except `claude`)
 | portfolio | Money bag | `money_bag_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Money%20bag/3D/money_bag_3d.png |
 | status | Cloud | `cloud_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Cloud/3D/cloud_3d.png |
 | actions | Gear | `gear_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Gear/3D/gear_3d.png |
+| jira | Card index dividers | `card_index_dividers_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Card%20index%20dividers/3D/card_index_dividers_3d.png |
 | seo | Magnifying glass tilted right | `magnifying_glass_tilted_right_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Magnifying%20glass%20tilted%20right/3D/magnifying_glass_tilted_right_3d.png |
 | earth | Globe showing Europe-Africa | `globe_showing_europe-africa_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Globe%20showing%20europe-africa/3D/globe_showing_europe-africa_3d.png |
 

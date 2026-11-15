@@ -84,6 +84,10 @@ final class AppSettings: ObservableObject {
     /// GitHub Actions bar app: how many days of runs it shows, and whether forks count.
     @Published var actionsDays: Int = 7 { didSet { save() } }
     @Published var actionsForks: Bool = false { didSet { save() } }
+    /// Jira Board bar app: the Atlassian site (host only), the board's id (0 = none chosen) and whether only the user's cards show.
+    @Published var jiraSite: String = "" { didSet { save() } }
+    @Published var jiraBoard: Int = 0 { didSet { save() } }
+    @Published var jiraOnlyMine: Bool = false { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows this many single cards without scrolling (the clock card takes two slots) — counted on the bar 2026-11-04.
     static let coreCardsThatFit = 5
@@ -160,6 +164,9 @@ final class AppSettings: ObservableObject {
         var statusServices: [String]? = nil
         var actionsDays: Int? = nil
         var actionsForks: Bool? = nil
+        var jiraSite: String? = nil
+        var jiraBoard: Int? = nil
+        var jiraOnlyMine: Bool? = nil
     }
 
     // MARK: VivoCube cards (ordered, max 6)
@@ -253,6 +260,9 @@ final class AppSettings: ObservableObject {
             statusServices = CloudStatus.sanitize(p.statusServices)
             actionsDays = [1, 3, 7, 14].contains(p.actionsDays ?? 0) ? p.actionsDays! : 7
             actionsForks = p.actionsForks ?? false
+            jiraSite = p.jiraSite ?? ""
+            jiraBoard = max(0, p.jiraBoard ?? 0)
+            jiraOnlyMine = p.jiraOnlyMine ?? false
         }
         if let storedKey { accuWeatherKey = storedKey }
     }
@@ -268,7 +278,7 @@ final class AppSettings: ObservableObject {
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
                           claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes, barFirewall: barFirewall,
-                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL, portfolioCurrency: portfolioCurrency, portfolioMinValue: portfolioMinValue, statusServices: statusServices, actionsDays: actionsDays, actionsForks: actionsForks)
+                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL, portfolioCurrency: portfolioCurrency, portfolioMinValue: portfolioMinValue, statusServices: statusServices, actionsDays: actionsDays, actionsForks: actionsForks, jiraSite: jiraSite, jiraBoard: jiraBoard, jiraOnlyMine: jiraOnlyMine)
         // Holds the manual location: user-only from the moment it exists (Store.writePrivate).
         guard let data = try? JSONEncoder().encode(p), Store.writePrivate(data, to: url) else {
             NSLog("Deckhand: settings.json could not be saved"); return

@@ -856,6 +856,43 @@ do {
           && ActionsRuns.nextLink("<https://x/?page=1>; rel=\"prev\"") == nil, "actions: Link header rel=next")
 }
 
+// Jira Board: a made-up three-column board and five issues (the fields Deckhand asks for, as Jira sends them).
+do {
+    let config = """
+    [{"name": "To Do", "statuses": [{"id": "10000"}]},
+     {"name": "In Progress", "statuses": [{"id": "3"}, {"id": "10001"}]},
+     {"name": "Empty", "statuses": []},
+     {"name": "Done", "statuses": [{"id": "10002"}]}]
+    """
+    let issues = """
+    [{"key": "DEMO-1", "fields": {"summary": "Low one", "status": {"id": "10000"}, "priority": {"name": "Low"}, "issuetype": {"name": "Task"},
+      "assignee": {"accountId": "other", "displayName": "Sam Example"}, "updated": "2026-11-14T10:00:00.000+0100"}},
+     {"key": "DEMO-2", "fields": {"summary": "Mine, medium\\nsecond line", "status": {"id": "10000"}, "priority": {"name": "Medium"}, "issuetype": {"name": "Bug"},
+      "assignee": {"accountId": "me-123", "displayName": "Alex de Tester"}, "updated": "2026-11-10T10:00:00.000+0100"}},
+     {"key": "DEMO-3", "fields": {"summary": "Highest, unassigned", "status": {"id": "10000"}, "priority": {"name": "Highest"}, "issuetype": {"name": "Story"},
+      "assignee": null, "updated": "2026-11-12T10:00:00+0100"}},
+     {"key": "DEMO-4", "fields": {"summary": "Doing", "status": {"id": "3"}, "priority": {"name": "High"}, "assignee": {"accountId": "me-123", "displayName": "Alex de Tester"},
+      "updated": "2026-11-13T10:00:00.000+0100"}},
+     {"key": "DEMO-5", "fields": {"summary": "Not on the board", "status": {"id": "99"}, "priority": {"name": "High"}, "updated": "2026-11-13T10:00:00.000+0100"}}]
+    """
+    let cfg = (try? JSONSerialization.jsonObject(with: Data(config.utf8))) as? [[String: Any]] ?? []
+    let iss = (try? JSONSerialization.jsonObject(with: Data(issues.utf8))) as? [[String: Any]] ?? []
+    let cols = JiraBoard.columns(config: cfg, issues: iss, me: "me-123")
+    check(cols.map(\.name) == ["To Do", "In Progress", "Done"], "jira: columns in board order, a column without statuses left out")
+    check(cols.map(\.count) == [3, 1, 0] && cols.map(\.mine) == [1, 1, 0], "jira: counts per column; an unmapped status is ignored")
+    check(cols[0].cards.map(\.key) == ["DEMO-2", "DEMO-3", "DEMO-1"], "jira: mine first, then priority (Highest before Low)")
+    check(cols[0].cards[0].summary == "Mine, medium" && cols[0].cards[0].who == "AT" && cols[0].cards[1].who == "" && cols[0].cards[0].type == "Bug", "jira: first summary line, assignee initials, none when unassigned")
+    check(!cols[0].done && !cols[1].done && cols[2].done, "jira: the last column is the done column")
+    let mineOnly = JiraBoard.columns(config: cfg, issues: iss, me: "me-123", onlyMine: true)
+    check(mineOnly.map(\.count) == [1, 1, 0] && mineOnly[0].cards.map(\.key) == ["DEMO-2"], "jira: only mine keeps the user's cards")
+    check(JiraBoard.columns(config: cfg, issues: iss, me: "").map(\.mine) == [0, 0, 0], "jira: no account id, nothing is mine")
+    check(JiraBoard.date("2026-11-14T10:00:00.000+0100") == ISO8601DateFormatter().date(from: "2026-11-14T09:00:00Z"), "jira: timestamp with milliseconds and offset")
+    check(JiraBoard.initials("ada") == "A" && JiraBoard.initials("Ada King Lovelace") == "AL" && JiraBoard.initials("") == "", "jira: initials")
+    check(JiraBoard.host(" https://Example.atlassian.net/jira/software/projects ") == "example.atlassian.net" && JiraBoard.host("example") == nil
+          && JiraBoard.host("evil.net@x") == nil && JiraBoard.host("") == nil && JiraBoard.host("example.atlassian.ne") == nil
+          && JiraBoard.host("atlassian.net.evil.com") == nil && JiraBoard.host(".atlassian.net") == nil, "jira: site → host, only plain host names under atlassian.net")
+}
+
 // APK manifests: package and version read from the binary XML of a Deckhand bar app when a build is present.
 do {
     let apk = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("dist/bar-apps/DeckhandMonitor.apk")

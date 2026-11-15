@@ -16,7 +16,7 @@ import UltraBarKit
 @MainActor
 final class BarPages {
     /// Pages whose data comes from this Mac through `route` (Monitor's samples are served by `AppModel.startBarDataServer`).
-    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "seo", "portfolio", "actions"]
+    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "seo", "portfolio", "actions", "jira"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
@@ -37,7 +37,7 @@ final class BarPages {
     private let configWake = WakeSignal()
     private var subscriptions: [AnyCancellable] = []
     /// Wakes the loops that wait for a bar request: this class's own, the feeds', the Music poll.
-    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); seo.poke(); portfolio.poke(); actions.poke(); model?.musicWake.signal() }
+    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); seo.poke(); portfolio.poke(); actions.poke(); jira.poke(); model?.musicWake.signal() }
     /// Nobody can be looking at the bar apps: the bar's screen is off (presence over ADB) or this Mac is asleep,
     /// has its screens off or is locked, and no bar app asked for anything in the last two minutes (Deckhand Home
     /// asks every minute while it is on screen). The feeds pause then; the next request wakes them.
@@ -81,6 +81,8 @@ final class BarPages {
     let portfolio = KrakenFeed()
     /// The user's GitHub workflow runs for the GitHub Actions app, refreshed while it is on the bar.
     let actions = ActionsFeed()
+    /// One Jira board's columns and cards for the Jira Board app, refreshed while it is on the bar.
+    let jira = JiraFeed()
     private weak var model: AppModel?
     private var settings: AppSettings?
 
@@ -98,6 +100,11 @@ final class BarPages {
         actions.start(days: { [weak self] in self?.settings?.actionsDays ?? 7 }, forks: { [weak self] in self?.settings?.actionsForks ?? false }, wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
             return model.barAppVersion("actions") != nil || (self.lastHit["actions"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+        })
+        jira.start(site: { [weak self] in self?.settings?.jiraSite ?? "" }, board: { [weak self] in self?.settings?.jiraBoard ?? 0 },
+                   onlyMine: { [weak self] in self?.settings?.jiraOnlyMine ?? false }, wanted: { [weak self] in
+            guard let self, !self.dormant else { return false }
+            return model.barAppVersion("jira") != nil || (self.lastHit["jira"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
         seo.start(url: { [weak self] in self?.settings?.seoURL ?? "" }, wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
@@ -226,7 +233,7 @@ final class BarPages {
         })
     }
 
-    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); seo.stop(); portfolio.stop(); actions.stop() }
+    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); seo.stop(); portfolio.stop(); actions.stop(); jira.stop() }
 
     /// Linear for the Tasks app.
     private func startLinearFeed(model: AppModel) {
@@ -441,6 +448,7 @@ final class BarPages {
         case "seo": return seo.snapshot()
         case "portfolio": return portfolio.snapshot()
         case "actions": return actions.snapshot()
+        case "jira": return jira.snapshot()
         default: return [:]
         }
     }
@@ -521,6 +529,8 @@ final class BarPages {
         if let p = portfolio.homeLine() { apps["portfolio"] = ["line": p.line, "tone": p.tone] }
         // GitHub Actions: what is failing or running, else that everything passes.
         if let l = actions.homeLine() { apps["actions"] = ["line": l.line, "tone": l.tone] }
+        // Jira Board: the user's cards waiting for review or in progress, else how many are open.
+        if let l = jira.homeLine() { apps["jira"] = ["line": l.line, "tone": l.tone] }
         return ["apps": apps, "order": homeOrder(), "at": Int(Date().timeIntervalSince1970)]
     }
 

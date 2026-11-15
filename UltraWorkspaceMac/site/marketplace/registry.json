@@ -421,6 +421,25 @@
       "distribution": "bundled",
       "publisher": "De Noronha Consulting",
       "license": "MIT"
+    },
+    {
+      "id": "jira",
+      "name": "Jira Board",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.jira",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "A Jira board on the bar: each column with its number of cards and the top cards, yours highlighted; tap a column for more. Reads only, with your e-mail and an Atlassian API token kept in the Mac's Keychain.",
+      "icon": "../assets/img/icons/jira.png",
+      "screenshot": "../assets/img/screens/bar-jira.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
     }
   ],
   "cards": [

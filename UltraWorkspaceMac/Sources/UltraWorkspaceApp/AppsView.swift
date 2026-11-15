@@ -20,6 +20,7 @@ struct AppsView: View {
         case "seo": return "chart.line.uptrend.xyaxis"
         case "portfolio": return "chart.pie"
         case "actions": return "gearshape.2"
+        case "jira": return "rectangle.split.3x1"
         case "status": return "exclamationmark.icloud"
         default: return "waveform.path.ecg" }
     }
@@ -45,6 +46,7 @@ struct AppsView: View {
         case "strava": return "Your own Strava activities: the latest with its route, this week against last week per sport, and the year so far. Powered by Strava."
         case "schiphol": return "Amsterdam Schiphol: which runways are in use for landing and take-off, the aircraft on and around them, the last 15 minutes' movements, and with a Schiphol API key the next arrivals and departures."
         case "status": return "Whether Microsoft 365, Azure, AWS, Google Cloud and Workspace, GitHub, Cloudflare, Slack and other services are up, from their official status pages. Tap a service for what is going on."
+        case "jira": return "A Jira board on the bar: each column with its number of cards and the top cards, yours highlighted."
         case "actions": return "Your GitHub workflow runs from the last days, newest first: which passed, failed or are still running, on which branch and how long they took."
         case "portfolio": return "Your Kraken account at a glance: what it is worth, how it moved over a day, week, month or year, and per coin its price, value and change, with the market's 24-hour high and low, VWAP, volume and spread."
         case "seo": return "Your website's health and search traffic: Google's Lighthouse scores and Core Web Vitals, a check of the page itself, and from Search Console the clicks, impressions, position and top search terms."
@@ -259,6 +261,8 @@ struct AppsView: View {
             PortfolioSettings(feed: model.barPages.portfolio)
         case "actions":
             ActionsSettings(feed: model.barPages.actions)
+        case "jira":
+            JiraSettings(feed: model.barPages.jira)
         case "status":
             StatusSettings()
         case "earth":
