@@ -66,7 +66,7 @@ struct ScreensaversView: View {
         }
         .navigationSubtitle("What the bar shows when nobody touches it")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { UpdateAllButton(screensavers: true) }
+            ToolbarItem(placement: .primaryAction) { UpdateAllButton(screensavers: true) }.accentToolbarItem()
         }
         .onAppear {
             model.refreshAppStore()

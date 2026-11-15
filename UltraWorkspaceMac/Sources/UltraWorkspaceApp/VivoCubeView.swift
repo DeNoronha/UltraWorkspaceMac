@@ -31,7 +31,7 @@ struct VivoCubeView: View {
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(settings.vivoCards.isEmpty || model.cubeProgress.isRunning || model.isWorking)
                     .help("Draw the cards, upload them as one package and show card 1 (⌘↩)")
-            }
+            }.accentToolbarItem()
         }
         .onAppear { model.selectedModuleSerial = module.serial }
         .sheet(isPresented: $model.showingVivoWiFi) { VivoWiFiSheet(serial: module.serial).environmentObject(model) }

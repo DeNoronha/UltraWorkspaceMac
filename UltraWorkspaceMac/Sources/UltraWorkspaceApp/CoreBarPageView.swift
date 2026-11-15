@@ -31,7 +31,7 @@ struct CoreBarPageView: View {
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(model.isWorking || model.pageProgress.isRunning || settings.coreCards.isEmpty)
                     .help("Send these cards, and the knob and key bindings, to the bar (⌘↩)")
-            }
+            }.accentToolbarItem()
         }
         .onAppear { reloadCover(); if model.corebarPages.isEmpty { model.refreshPages() } }
         .publishConfirmation(isPresented: $ui.confirm)

@@ -491,7 +491,19 @@ final class BarPages {
             if arriving > 0 { apps["haven"] = ["line": "\(arriving) arriving", "tone": "live"] }
             else if alongside > 0 { apps["haven"] = ["line": "\(alongside) alongside"] }
         }
-        return ["apps": apps, "at": Int(Date().timeIntervalSince1970)]
+        return ["apps": apps, "order": homeOrder(), "at": Int(Date().timeIntervalSince1970)]
+    }
+
+    /// The order of Deckhand Home's tiles, the same as Deckhand's Apps list: Deckhand's apps in their fixed order, then the
+    /// marketplace apps on the bar, then the firmware's own apps (each by name). Home keeps Settings and UltraBar last itself.
+    func homeOrder() -> [String] {
+        var order = AppModel.barAppPages.map { BarPages.package(for: $0.page) }
+        guard let model else { return order }
+        let others = model.barApps.filter { !$0.isScreensaver && !$0.packageName.hasPrefix(BarPages.packagePrefix) && !model.turnedOffApps.contains($0.packageName) }
+        let byName: (CoreBarSession.AppInfo, CoreBarSession.AppInfo) -> Bool = { $0.appName.lowercased() < $1.appName.lowercased() }
+        order += others.filter { !$0.systemApp }.sorted(by: byName).map(\.packageName)
+        order += others.filter { $0.systemApp }.sorted(by: byName).map(\.packageName)
+        return order
     }
 
     // MARK: helpers

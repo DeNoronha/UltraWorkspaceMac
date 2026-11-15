@@ -22,7 +22,7 @@ A tiny full-screen kiosk app for the Sanytron UltraBar X CoreBar (Android 10, 14
 | schiphol | nl.denoronha.deckhand.schiphol | Schiphol | /schiphol |
 | teletekst | nl.denoronha.deckhand.teletekst | Teletekst | /teletekst (on the bar: NOS Teletekst pages, `onbar/TeletekstFeed.kt`) |
 
-The flavors are declared in `app/build.gradle.kts` (one dimension, `page`); each sets `applicationId`, the `app_name` string and `BuildConfig.PAGE`. All seventeen share one version: `versionCode 16` / `versionName 2.5` in `app/build.gradle.kts`, which must move together with `AppModel.barAppsVersion` in the Mac app (the Apps page compares the bar's copy against it) and the `version` fields in `site/marketplace/registry.json`. The shared code lives in `src/main`; everything icon-related per flavor lives in `src/<flavor>/res/` and is generated (see below).
+The flavors are declared in `app/build.gradle.kts` (one dimension, `page`); each sets `applicationId`, the `app_name` string and `BuildConfig.PAGE`. All seventeen share one version: `versionCode 17` / `versionName 2.6` in `app/build.gradle.kts`, which must move together with `AppModel.barAppsVersion` in the Mac app (the Apps page compares the bar's copy against it) and the `version` fields in `site/marketplace/registry.json`. The shared code lives in `src/main`; everything icon-related per flavor lives in `src/<flavor>/res/` and is generated (see below).
 
 ## Deckhand Home (`home/`)
 

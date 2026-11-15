@@ -65,7 +65,10 @@ class HomeActivity : Activity() {
         private const val SETTINGS_PACKAGE = "com.android.settings"
         /** Always the last two tiles of the row, so they are left out of the sorted part. */
         private val LAST = setOf(SETTINGS_PACKAGE, VENDOR_LAUNCHER)
-        private val OUR_ORDER = listOf("monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks", "haven", "tide", "teletekst", "schiphol", "strava", "cask")
+        /** Deckhand's apps in the order of Deckhand's Apps list (AppModel.barAppPages); used until the Mac sends its order. */
+        private val OUR_ORDER = listOf("monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks", "haven", "tide", "strava", "cask", "schiphol", "teletekst")
+        private const val PREFS = "home"
+        private const val PREF_ORDER = "order"
 
         private const val BG = 0xFF000000.toInt()
         private const val TILE = 0xFF15171C.toInt()
@@ -85,6 +88,9 @@ class HomeActivity : Activity() {
     private class Live(val icon: ImageView, val line: TextView, val badge: TextView, val temp: TextView)
     private val live = HashMap<String, Live>()          // by page id ("cask", "haven", …)
     private var glance: JSONObject? = null
+    /** The tile order the Mac last sent with `/home/glance.json` (packages, the order of Deckhand's Apps list), remembered
+     *  so the row keeps it after a restart while no Mac is heard. Empty: the built-in order. */
+    private var macOrder: List<String> = emptyList()
     private var glanceAt = 0L
     private var deckhandBase: String? = null
 
@@ -296,17 +302,22 @@ class HomeActivity : Activity() {
         try { startActivity(intent) } catch (e: Exception) { Log.w(TAG, "Cannot start $intent", e) }
     }
 
-    /** Every LAUNCHER activity except this one: Deckhand's pages first in their known order, then the rest by label,
+    /** Every LAUNCHER activity except this one, in the order the Mac sends (Deckhand's Apps list; see `takeOrder`),
      *  and Settings and the bar's own launcher at the end of the row. */
     private fun populate() {
         val pm = packageManager
         val all = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
             .filter { it.activityInfo.packageName != packageName }
+        if (macOrder.isEmpty()) macOrder = getSharedPreferences(PREFS, MODE_PRIVATE).getString(PREF_ORDER, null)?.split(',')?.filter { it.isNotEmpty() }.orEmpty()
+        // The Mac's order first (the same as Deckhand's Apps list); apps it does not list follow: ours in the built-in
+        // order, then the rest by label.
         fun rank(r: ResolveInfo): Int {
             val p = r.activityInfo.packageName
-            if (!p.startsWith(OUR_PREFIX)) return 1000
+            val m = macOrder.indexOf(p)
+            if (m >= 0) return m
+            if (!p.startsWith(OUR_PREFIX)) return 10_000
             val i = OUR_ORDER.indexOf(p.removePrefix(OUR_PREFIX))
-            return if (i >= 0) i else 100
+            return 5_000 + (if (i >= 0) i else 100)
         }
         val sorted = all.filter { it.activityInfo.packageName !in LAST }.sortedWith(compareBy<ResolveInfo> { rank(it) }.thenBy { it.loadLabel(pm).toString().lowercase() })
         tiles.removeAllViews()
@@ -354,11 +365,21 @@ class HomeActivity : Activity() {
             } catch (e: Exception) { Log.d(TAG, "glance: ${e.message}"); null }
             main.post {
                 if (isFinishing || isDestroyed) return@post
-                if (json != null) { glance = json; glanceAt = System.currentTimeMillis() }
+                if (json != null) { glance = json; glanceAt = System.currentTimeMillis(); takeOrder(json) }
                 else if (System.currentTimeMillis() - glanceAt > GLANCE_STALE_MS) glance = null
                 applyGlance()
             }
         }, "deckhand-glance").apply { isDaemon = true }.start()
+    }
+
+    /** A new tile order from the Mac: remember it and lay out the row again (only when it changed). */
+    private fun takeOrder(json: JSONObject) {
+        val arr = json.optJSONArray("order") ?: return
+        val order = (0 until minOf(arr.length(), 200)).map { arr.optString(it) }.filter { it.isNotEmpty() && !it.contains(',') }
+        if (order.isEmpty() || order == macOrder) return
+        macOrder = order
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(PREF_ORDER, order.joinToString(",")).apply()
+        populate(); applyGlance()
     }
 
     /** Put the last answer on the tiles; a tile the answer does not mention goes back to its plain look. */

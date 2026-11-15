@@ -154,7 +154,7 @@ struct AppsView: View {
         }
         .navigationSubtitle("Run on the bar itself")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { UpdateAllButton(screensavers: false) }
+            ToolbarItem(placement: .primaryAction) { UpdateAllButton(screensavers: false) }.accentToolbarItem()
         }
         .onAppear {
             if model.storeApps.isEmpty { model.refreshAppStore() }

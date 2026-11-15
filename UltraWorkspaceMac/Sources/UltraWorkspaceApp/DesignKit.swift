@@ -7,8 +7,8 @@ import AppKit
 //    "update available", secondary for everything informational. Never colour alone: always a symbol and words.
 //  • Status and error lines are `.callout`, not `.caption`; caption is for metadata (versions, times).
 //  • One prominent action per page, in the toolbar (`prominentAction()`), filled with the accent colour so it reads as
-//    enabled at a glance; in a detail pane the item's main action (Install, Update to …) is `primaryInline()`. Other
-//    inline buttons are plain push buttons. A disabled prominent button draws grey, so grey means "not now" only.
+//    enabled at a glance, also when the window is not active; in a detail pane the item's main action (Install,
+//    Update to …) is `primaryInline()`. Other inline buttons are plain push buttons. Grey means disabled, nothing else.
 //  • Removing from a list is the same minus mark everywhere (`RemoveMark`); device and account actions ask first.
 
 /// What a status line is about. Decides the symbol, the colour and the words a screen reader hears first.
@@ -85,18 +85,41 @@ struct Tag: View {
     }
 }
 
-extension View {
-    /// The page's one key action in the toolbar: Liquid Glass prominent on macOS 26 and later, bordered prominent before,
-    /// always tinted with the accent colour (an untinted toolbar button looked disabled in the first test, 2026-11-15).
-    @ViewBuilder func prominentAction() -> some View {
-        if #available(macOS 26.0, *) { self.buttonStyle(.glassProminent).tint(.accentColor) }
-        else { self.buttonStyle(.borderedProminent).tint(.accentColor) }
+/// The accent-filled capsule behind the page's key action and a detail pane's main action. Drawn by Deckhand rather than
+/// the system on purpose: the system's prominent styles turn grey whenever the window is not the active one, and in
+/// test that read as "disabled" (Update All, 2026-11-15, twice). This one stays blue while it can be pressed and is grey
+/// only when it is really disabled.
+struct AccentFillButtonStyle: ButtonStyle {
+    var toolbar = false
+    @Environment(\.isEnabled) private var enabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .foregroundStyle(enabled ? Color.white : Color.secondary)
+            .padding(.horizontal, toolbar ? 14 : 10)
+            .padding(.vertical, toolbar ? 6 : 3)
+            .background(Capsule().fill(enabled ? Color.accentColor : Color.secondary.opacity(0.18)))
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .contentShape(Capsule())
     }
+}
 
-    /// The main action of a detail pane or section (Install, Update to 2.4): a filled accent button, so it is clearly
+extension View {
+    /// The page's one key action in the toolbar: an accent capsule (see `AccentFillButtonStyle`). Wrap it in
+    /// `ToolbarItem(...).accentToolbarItem()` so the toolbar does not draw its own glass around it as well.
+    func prominentAction() -> some View { buttonStyle(AccentFillButtonStyle(toolbar: true)) }
+
+    /// The main action of a detail pane or section (Install, Update to 2.4): the same accent capsule, so it is clearly
     /// the thing to press and clearly enabled. Pass `false` to draw it as a plain push button (e.g. Reinstall).
     @ViewBuilder func primaryInline(_ prominent: Bool = true) -> some View {
-        if prominent { self.buttonStyle(.borderedProminent).tint(.accentColor) } else { self }
+        if prominent { self.buttonStyle(AccentFillButtonStyle()) } else { self }
+    }
+}
+
+extension ToolbarContent {
+    /// No shared glass background behind a toolbar item that draws its own accent capsule (macOS 26 and later).
+    @ToolbarContentBuilder func accentToolbarItem() -> some ToolbarContent {
+        if #available(macOS 26.0, *) { self.sharedBackgroundVisibility(.hidden) } else { self }
     }
 }
 
