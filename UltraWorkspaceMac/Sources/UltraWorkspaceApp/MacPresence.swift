@@ -58,6 +58,12 @@ enum AppActivation {
         if !open { NSApp.setActivationPolicy(.accessory) }
     }
 
+    /// ⌘Q with the menu bar icon on: close every Deckhand window (minimized ones too); the app keeps running and,
+    /// in menu-bar-only mode, gives up its Dock icon once the last one has closed (`returnToMenuBarIfNoWindows`).
+    static func closeAllWindows() {
+        for w in NSApp.windows where isAppWindow(w) && (w.isVisible || w.isMiniaturized) { w.close() }
+    }
+
     /// A Deckhand window came forward some other way (opened at launch, clicked while Deckhand was an accessory):
     /// become regular. Switching while already active can leave the old menu bar up, so activate again afterwards.
     static func windowBecameKey(_ w: NSWindow) {

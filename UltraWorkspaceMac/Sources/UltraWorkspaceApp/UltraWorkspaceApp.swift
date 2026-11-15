@@ -32,6 +32,9 @@ struct UltraWorkspaceApp: App {
             CommandGroup(replacing: .appInfo) {
                 Button("About Deckhand") { AboutPanel.show() }
             }
+            CommandGroup(replacing: .appTermination) {
+                QuitCommands()
+            }
             CommandGroup(after: .windowList) {
                 PeopleCommand()
             }
@@ -63,6 +66,24 @@ private struct PeopleCommand: View {
     var body: some View {
         Button("People") { openWindow(id: PeopleWindow.id) }
             .keyboardShortcut("p", modifiers: [.command, .option])
+    }
+}
+
+/// Deckhand › Quit. With the menu bar icon on, ⌘Q closes Deckhand's windows and leaves it running in the menu bar,
+/// so the bar apps' data, presence and the cube keep working; ⌥⌘Q (and Quit in the icon's menu, the Dock or a
+/// logout) really quits. Without the icon, ⌘Q quits as in any Mac app.
+private struct QuitCommands: View {
+    @AppStorage(MacPresence.key) private var presence: MacPresence = .dock
+    var body: some View {
+        if presence.showsMenuBarIcon {
+            Button("Close to Menu Bar") { AppActivation.closeAllWindows() }
+                .keyboardShortcut("q")
+            Button("Quit Deckhand") { NSApp.terminate(nil) }
+                .keyboardShortcut("q", modifiers: [.command, .option])
+        } else {
+            Button("Quit Deckhand") { NSApp.terminate(nil) }
+                .keyboardShortcut("q")
+        }
     }
 }
 

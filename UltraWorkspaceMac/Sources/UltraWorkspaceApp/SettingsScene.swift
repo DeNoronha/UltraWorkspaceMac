@@ -37,8 +37,8 @@ private struct GeneralSettingsPane: View {
                 LaunchAtLoginRow()
             } footer: {
                 Footnote(presence == .menuBar
-                     ? "Deckhand keeps running when you close its window. Open it again from the menu bar icon. While a Deckhand window is open, Deckhand is in the Dock and has its menu bar."
-                     : presence == .both ? "The menu bar icon shows whether the bar is connected." : "Deckhand is in the Dock like any other app.")
+                     ? "Deckhand keeps running when you close its window or press ⌘Q, so the bar apps keep their data. Open it again from the menu bar icon; quit with ⌥⌘Q or Quit in the icon's menu. While a Deckhand window is open, Deckhand is in the Dock and has its menu bar."
+                     : presence == .both ? "The menu bar icon shows whether the bar is connected. ⌘Q closes Deckhand's windows and keeps it running; ⌥⌘Q quits." : "Deckhand is in the Dock like any other app.")
             }
         }
         .formStyle(.grouped)
