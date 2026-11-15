@@ -3,63 +3,79 @@ import UltraBarKit
 
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
-    @StateObject private var contacts = ContactStore()
-    @StateObject private var settings = AppSettings()
-
-    /// Resume timed switching if it was on when the app last quit, as soon as the bar's VivoCube is known.
-    private func resumeCubeRotation() {
-        guard model.vivoCubeSerial != nil, settings.vivoRotationOn, settings.vivoSwitchMode == .timed, !model.themeRunning else { return }
-        model.sendToCube(settings: settings)
-    }
+    /// Owned by `AppDelegate` with the model, so reopening the window does not create a second copy, and the
+    /// background services (started at launch, `AppDelegate.startServices`) run without a window.
+    @EnvironmentObject var settings: AppSettings
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        NavigationSplitView {
-            SidebarView()
-        } detail: {
-            HStack(spacing: 0) {
+        MainWindowLayout()
+            // The menu bar icon's "Open Deckhand" opens a new window through this when the last one was closed; the
+            // Help button and menu open the Help window the same way.
+            .onAppear {
+                let open = openWindow
+                MainWindow.open = { open(id: MainWindow.id) }
+                HelpWindow.openAction = { open(id: HelpWindow.id) }
+                PeopleWindow.openAction = { open(id: PeopleWindow.id) }
+            }
+            .registersSettingsOpener()
+            .sheet(isPresented: $model.showingConnect) { ConnectView(asSheet: true).environmentObject(model).frame(width: 520, height: 520) }
+            .sheet(isPresented: $model.showingAddIP) { ConnectByAddressSheet().environmentObject(model) }
+            .sheet(isPresented: Binding(get: { model.pairingPrompt != nil }, set: { if !$0 { model.pairingPrompt = nil } })) {
+                PairingSheet().environmentObject(model)
+            }
+    }
+}
+
+/// The main window's layout: sidebar, the page, and Activity as an inspector on the right. Shared with the developer
+/// snapshots (Snapshots.swift), which build the same window without ContentView's start-up wiring.
+struct MainWindowLayout: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        ActivityInspectorHost {
+            NavigationSplitView {
+                SidebarView()
+            } detail: {
                 DetailRouter()
-                if model.showActivity {
-                    Divider()
-                    ActivityLog().frame(width: 260)
-                }
+                    .navigationTitle(model.nav.title)
             }
         }
-        .environmentObject(contacts)
-        .environmentObject(settings)
-        .onAppear {
-            // The cube keeps its last package across restarts: let DotKey "next" wrap at that count.
-            model.lastPublishedVivoLayers = max(model.lastPublishedVivoLayers, settings.vivoLayerCount)
-            model.startMusicPolling(settings: settings); model.startDailyCoverRefresh(settings: settings); model.startClaudeWatch(settings: settings); model.startBarDataServer(settings: settings); model.startPresence(settings: settings)
-            resumeCubeRotation()
-            model.setBarFirewall(settings.barFirewall)
-        }
-        // The cube's serial is only known once the link has listed the bar's modules, which is after onAppear on
-        // a fresh launch: resume then (and again if the cube reappears after the bar restarted).
-        .onChange(of: model.vivoCubeSerial) { _ in resumeCubeRotation() }
+        // The widest minimum is a library page: sidebar (200) + list (240) + detail (320). 1200 before 2026-11-15, with Activity.
+        .frame(minWidth: 760, minHeight: 480)
         .toolbar {
-            // The link to the bar, right of the window title: the same badge on every page.
-            ToolbarItem(placement: .status) {
-                HStack(spacing: 10) {
-                    // What Deckhand last did (the Activity panel has the whole list).
-                    if model.isScanning || model.isWorking { ProgressView().controlSize(.small) }
-                    Text(model.statusLine).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail).frame(maxWidth: 420, alignment: .trailing)
-                        .help(model.statusLine)
-                    Divider().frame(height: 14)
-                    LinkBadge()
-                    if model.link.isConnected, let age = model.lastPushAt.map({ Int(Date().timeIntervalSince($0)) }) {
-                        Text("last request \(age) s ago").font(.caption).foregroundStyle(.tertiary)
-                    }
+            ToolbarItem(placement: .automatic) { ConnectionBadge() }
+        }
+    }
+}
+
+/// Activity on the right of every page: a real inspector on macOS 14 and later (toggled from the toolbar, ⌥⌘I), a
+/// plain column on macOS 13.
+private struct ActivityInspectorHost<Content: View>: View {
+    @EnvironmentObject var model: AppModel
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if #available(macOS 14.0, *) {
+            content
+                .inspector(isPresented: $model.showActivity) {
+                    ActivityList().inspectorColumnWidth(min: 220, ideal: 260, max: 380)
                 }
+                .toolbar { ToolbarItem(placement: .automatic) { toggle } }
+        } else {
+            HStack(spacing: 0) {
+                content.frame(maxWidth: .infinity)
+                if model.showActivity { Divider(); ActivityList().frame(width: 260) }
             }
-            ToolbarItem { Button { model.showActivity.toggle() } label: { Label("Activity", systemImage: "sidebar.trailing") }
-                .help(model.showActivity ? "Hide the activity list" : "Show the activity list: what Deckhand did, newest last")
-                .accessibilityLabel(model.showActivity ? "Hide activity" : "Show activity") }
+            .toolbar { ToolbarItem(placement: .automatic) { toggle } }
         }
-        .sheet(isPresented: $model.showingConnect) { ConnectView(asSheet: true).environmentObject(model).frame(width: 520, height: 520) }
-        .sheet(isPresented: $model.showingAddIP) { ConnectByAddressSheet().environmentObject(model) }
-        .sheet(isPresented: Binding(get: { model.pairingPrompt != nil }, set: { if !$0 { model.pairingPrompt = nil } })) {
-            PairingSheet().environmentObject(model)
-        }
+    }
+
+    private var toggle: some View {
+        Button { model.showActivity.toggle() } label: { Label("Activity", systemImage: "sidebar.trailing") }
+            .keyboardShortcut("i", modifiers: [.command, .option])
+            .help(model.showActivity ? "Hide Activity (⌥⌘I)" : "Show Activity: what Deckhand did, newest first (⌥⌘I)")
+            .accessibilityLabel(model.showActivity ? "Hide Activity" : "Show Activity")
     }
 }
 
@@ -69,30 +85,26 @@ private struct DetailRouter: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        if model.selectedCoreBar == nil, [.coreBarPage, .vivoCube, .knobKey, .dotKey, .senseCube].contains(model.nav) {
+        if model.selectedCoreBar == nil, model.nav.needsBar {
             ConnectView(asSheet: false)
         } else {
             switch model.nav {
+            case .overview: OverviewView()
             case .coreBarPage: CoreBarPageView()
-            case .vivoCube: moduleView("VIVO_CUBE", "VivoCube") { VivoCubeView(module: $0) }
-            case .knobKey: moduleView("KNOB_KEY", "KnobKey") { KnobKeyView(module: $0) }
-            case .dotKey: moduleView("DOT_KEY", "DotKey") { DotKeyView(module: $0) }
-            case .senseCube: moduleView("SENSE_CUBE", "SenseCube") { SenseCubeView(module: $0) }
-            case .installed: InstalledView()
-            case .widgets: WidgetsView()
-            case .people: PeopleView()
+            case .vivoCube: moduleView(["VIVO_CUBE"], "VivoCube") { VivoCubeView(module: $0) }
+            case .controls: moduleView(["KNOB_KEY", "DOT_KEY"], "KnobKey or DotKey") { _ in ControlsView() }
+            case .senseCube: moduleView(["SENSE_CUBE"], "SenseCube") { SenseCubeView(module: $0) }
+            case .barSystem: BarSystemView()
             case .apps: AppsView()
+            case .cubeCards: CubeCardsView()
             case .screensavers: ScreensaversView()
-            case .settings: SettingsView()
-            case .about: AboutView()
-            case .status: StatusView()
             case .logs: LogsView()
             }
         }
     }
 
-    @ViewBuilder private func moduleView<V: View>(_ type: String, _ name: String, _ make: (AttachedModule) -> V) -> some View {
-        if let m = model.modules.first(where: { $0.type == type }) { make(m) }
+    @ViewBuilder private func moduleView<V: View>(_ types: [String], _ name: String, _ make: (AttachedModule) -> V) -> some View {
+        if let m = model.modules.first(where: { types.contains($0.type) }) { make(m) }
         else { MissingModule(name: name) }
     }
 }
@@ -101,9 +113,140 @@ private struct MissingModule: View {
     @EnvironmentObject var model: AppModel
     let name: String
     var body: some View {
-        EmptyState(icon: "cube", title: "No \(name) found", text: "Tap the bar's screen so the modules are awake, then look again.") {
-            Button { model.refreshModules() } label: { Label("Find modules", systemImage: "magnifyingglass") }.disabled(model.isWorking)
+        EmptyState(icon: "cube", title: "No \(name) Found", text: "Tap the bar's screen so the modules are awake, then look again.") {
+            Button { model.refreshModules() } label: { Label("Find Modules", systemImage: "magnifyingglass") }.disabled(model.isWorking)
         }
+    }
+}
+
+// MARK: - Connection badge
+
+/// "● Connected": the link to the bar, the same words in the toolbar, the sidebar and the menu bar menu.
+struct ConnectionText: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol).foregroundStyle(color).imageScale(.small)
+            Text(Self.text(model)).foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Self.text(model))
+    }
+    private var symbol: String {
+        switch model.link {
+        case .connected: return "circle.fill"
+        case .connecting, .reconnecting: return "circle.dotted"
+        case .stopped: return "exclamationmark.circle.fill"
+        }
+    }
+    private var color: Color {
+        switch model.link {
+        case .connected: return .green
+        case .connecting, .reconnecting: return .secondary
+        case .stopped: return .orange
+        }
+    }
+    @MainActor static func text(_ model: AppModel) -> String {
+        switch model.link {
+        case .connected: return "Connected"
+        case .connecting: return "Connecting…"
+        case .reconnecting: return "Reconnecting…"
+        case .stopped: return model.selectedCoreBar == nil ? "No CoreBar" : "Not connected"
+        }
+    }
+}
+
+/// The toolbar's only status: the connection, with the details (requests answered, the last thing Deckhand did) in a
+/// popover. Raw errors never reach the toolbar; they are in the popover's last line, in Activity and on Overview.
+private struct ConnectionBadge: View {
+    @EnvironmentObject var model: AppModel
+    @State private var open = false
+
+    var body: some View {
+        Button { open.toggle() } label: {
+            HStack(spacing: 6) {
+                if model.isScanning || model.isWorking { ProgressView().controlSize(.small) }
+                ConnectionText()
+            }
+            .padding(.horizontal, 4)
+        }
+        .buttonStyle(.borderless)
+        .help("Connection to the bar")
+        .popover(isPresented: $open, arrowEdge: .bottom) { ConnectionDetails().environmentObject(model) }
+    }
+}
+
+private struct ConnectionDetails: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(model.selectedCoreBar?.name ?? "No CoreBar").font(.headline)
+            ConnectionText()
+            // The push count and "last request" are plain properties (not published on every request): read every 5 s.
+            TimelineView(.periodic(from: .now, by: 5)) { _ in
+                VStack(alignment: .leading, spacing: 4) {
+                    if let bar = model.selectedCoreBar {
+                        LabeledContent("Address", value: model.ipForSelected() ?? bar.lastIp)
+                    }
+                    if model.link.isConnected {
+                        LabeledContent("Requests answered", value: "\(model.pushCount)")
+                        if let t = model.lastPushAt { LabeledContent("Last request", value: Self.ago(t)) }
+                    }
+                }.font(.callout)
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Last activity").font(.caption).foregroundStyle(.secondary)
+                Text(model.statusLine).font(.callout).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
+            HStack {
+                Button("Open Overview") { model.nav = .overview }
+                if model.link == .stopped, model.selectedCoreBar != nil { Button("Reconnect") { model.startLink() } }
+            }
+        }
+        .padding(16).frame(width: 300)
+    }
+    static func ago(_ t: Date) -> String {
+        let s = max(0, Int(Date().timeIntervalSince(t)))
+        return s < 120 ? "\(s) s ago" : "\(s / 60) min ago"
+    }
+}
+
+// MARK: - Activity
+
+/// What Deckhand did, newest first. Kept only while the diagnostic log is on (Settings → Privacy); the last line is
+/// always shown, so the inspector is never blank.
+struct ActivityList: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        List {
+            // While the list is kept its first entry is the latest line; otherwise show that line on its own.
+            if model.log.isEmpty {
+                Section("Latest") {
+                    Text(model.statusLine).font(.callout).textSelection(.enabled)
+                }
+            }
+            Section(model.log.isEmpty ? "Earlier" : "Newest first") {
+                if model.log.isEmpty {
+                    if WireLog.shared.enabled {
+                        Text("Nothing yet.").font(.callout).foregroundStyle(.secondary)
+                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Activity is kept only while the diagnostic log is on.").font(.callout).foregroundStyle(.secondary)
+                            Button("Privacy Settings…") { SettingsWindow.open(.privacy) }
+                        }
+                    }
+                }
+                ForEach(model.log) { e in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(e.time, style: .time).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        Text(e.text).font(.callout).textSelection(.enabled)
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .accessibilityLabel("Activity")
     }
 }
 
@@ -113,84 +256,63 @@ struct ConnectView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let asSheet: Bool
-    @StateObject private var ui = UI()
-    private final class UI: ObservableObject { @Published var showWhy = false }
 
     private var unpaired: [CoreBar] { model.discovered.filter { d in !model.paired.contains { $0.serialNo == d.serialNo } } }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(asSheet ? "Add a CoreBar" : "Connect your CoreBar").font(.title2).bold()
-                    Text("The bar and this Mac must be on the same Wi-Fi. The USB cable only powers the bar.").foregroundStyle(.secondary)
-                }
-                Panel("1 · Find the bar") {
+        VStack(spacing: 0) {
+            Form {
+                Section {
                     if model.isScanning, let t0 = model.scanStartedAt {
                         TimelineView(.periodic(from: t0, by: 0.25)) { ctx in
-                            ProgressView(value: min(1, ctx.date.timeIntervalSince(t0) / 8)) { Text("Looking on your network…") }
+                            ProgressView(value: min(1, ctx.date.timeIntervalSince(t0) / 8)) { Text("Looking on your network…").font(.callout) }
                         }
                     } else {
-                        Button { model.scan() } label: { Label(model.discovered.isEmpty ? "Look for CoreBars" : "Look again", systemImage: "antenna.radiowaves.left.and.right") }
-                            .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                        Button { model.scan() } label: { Label(model.discovered.isEmpty ? "Look for CoreBars" : "Look Again", systemImage: "antenna.radiowaves.left.and.right") }
+                            .keyboardShortcut(.defaultAction)
                     }
                     ForEach(unpaired) { bar in
-                        HStack {
-                            Image(systemName: "rectangle.on.rectangle.angled")
-                            VStack(alignment: .leading) {
-                                Text(bar.name.isEmpty ? bar.serialNo : bar.name).fontWeight(.medium)
-                                Text(bar.ip).font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button("Pair") { model.pair(bar) }.buttonStyle(.borderedProminent).disabled(model.isWorking)
-                        }.padding(.vertical, 2)
+                        LabeledContent {
+                            Button("Pair") { model.pair(bar) }.disabled(model.isWorking)
+                        } label: {
+                            Text(bar.name.isEmpty ? bar.serialNo : bar.name)
+                            Text(bar.ip)
+                        }
                     }
                     if !model.isScanning, model.scanStartedAt == nil, unpaired.isEmpty, !model.paired.isEmpty, asSheet {
-                        Text("All CoreBars found so far are already paired.").font(.caption).foregroundStyle(.secondary)
+                        StatusLabel("All CoreBars found so far are already paired.", .info)
                     }
                     HStack(spacing: 14) {
-                        Button("Can't see it? Connect by address…") { model.showingAddIP = true }.buttonStyle(.link)
-                        Button("Local Network permission…") {
+                        Button("Connect by Address…") { model.showingAddIP = true }
+                        Button("Local Network Permission…") {
                             if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork") { NSWorkspace.shared.open(u) }
-                        }.buttonStyle(.link).help("macOS asks for Local Network access the first time. If you declined, allow Deckhand there.")
-                    }.font(.caption)
+                        }.help("macOS asks for Local Network access the first time. If you declined, allow Deckhand there.")
+                    }
+                } header: {
+                    Text("1 · Find the bar")
+                } footer: {
+                    Footnote("The bar and this Mac must be on the same network.")
                 }
-                Panel("2 · Approve on the bar") {
-                    Text("After you press Pair, the bar shows an Approve button for 30 seconds. Tap it; Deckhand then finds the modules on its own.")
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Section("2 · Approve on the bar") {
+                    Text("Press Pair, then tap Approve on the bar's screen within 30 seconds. Deckhand then finds the modules on its own.")
+                        .font(.callout).foregroundStyle(.secondary)
                 }
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                    Text("Deckhand needs no USB cable. Power the bar from USB-OTG; leave PC-LINK unplugged.").font(.callout)
-                    Button("Why?") { ui.showWhy.toggle() }.buttonStyle(.link).font(.callout)
-                        .popover(isPresented: $ui.showWhy) { ConnectionHelp().padding().frame(width: 420) }
+                Section {
+                    HStack(alignment: .firstTextBaseline) {
+                        // Non-breaking hyphens: "PC‑LINK" and "USB‑OTG" must never break across lines (S15).
+                        StatusLabel("Deckhand needs no USB cable. Power the bar from USB\u{2011}OTG and leave PC\u{2011}LINK unplugged.", .attention)
+                        Spacer()
+                        HelpButton(.connecting)
+                    }
                 }
-                if asSheet { HStack { Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.cancelAction) } }
-            }.padding(24).frame(maxWidth: 560, alignment: .leading)
-        }
-        .onAppear { if model.discovered.isEmpty, !model.isScanning { model.scan() } }
-    }
-}
-
-/// Reusable connection + USB-port guidance. The vendor's two-port design is
-/// easy to get dangerously wrong, so we surface it prominently.
-struct ConnectionHelp: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Connecting your CoreBar", systemImage: "cable.connector").font(.headline)
-            Text("Deckhand controls the CoreBar over your **Wi-Fi / local network** — the Mac and the CoreBar must be on the same network. Deckhand needs no USB cable.")
-                .font(.callout).fixedSize(horizontal: false, vertical: true)
-            GroupBox {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("Use the correct USB port", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange).font(.subheadline.bold())
-                    Text("• **USB-OTG** → power (a PD/QC charger or the 12 V adapter).")
-                    Text("• **PC-LINK** (5 V only) → leave it unplugged. On a computer the bar becomes a USB keyboard and its Wi‑Fi ADB turns off, which Deckhand needs for the bar apps.")
-                    Text("• Never plug a laptop/PD fast-charger into PC-LINK — it can permanently damage the mainboard.")
-                        .foregroundStyle(.orange)
-                }.font(.caption).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .formStyle(.grouped)
+            if asSheet {
+                HStack { Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.cancelAction) }.padding(16)
             }
         }
+        .navigationTitle(asSheet ? "Add a CoreBar" : "Connect Your CoreBar")
+        .onAppear { if model.discovered.isEmpty, !model.isScanning { model.scan() } }
     }
 }
 
@@ -203,8 +325,9 @@ private struct PairingSheet: View {
                     let left = max(0, 30 - Int(ctx.date.timeIntervalSince(t0)))
                     ZStack {
                         ProgressView(value: Double(left), total: 30).progressViewStyle(.circular).controlSize(.large)
-                        Text("\(left)").font(.caption.monospacedDigit())
+                        Text("\(left)").font(.callout.monospacedDigit())
                     }
+                    .accessibilityLabel("\(left) seconds left")
                 }
             } else { ProgressView() }
             Text("Tap Approve on the bar's screen").font(.headline)
@@ -221,64 +344,36 @@ private struct ConnectByAddressSheet: View {
     @StateObject private var draft = DraftIP()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Connect by address").font(.title3).bold()
-            Text("Enter the bar's IP address (shown on the bar under Settings → Network).")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            TextField("192.168.1.50", text: $draft.ip).textFieldStyle(.roundedBorder).frame(width: 260)
+        VStack(alignment: .leading, spacing: 0) {
+            Form {
+                Section {
+                    TextField("IP address", text: $draft.ip, prompt: Text("192.168.1.50"))
+                } header: {
+                    Text("Connect by address")
+                } footer: {
+                    Footnote("The bar shows its address under Settings → Network.")
+                }
+            }
+            .formStyle(.grouped)
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Connect") { model.addCoreBar(byIP: draft.ip) }
-                    .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
                     .disabled(draft.ip.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }.padding(24).frame(width: 360)
+            }.padding(16)
+        }.frame(width: 380)
     }
 }
 
 // MARK: - Shared building blocks
-
-/// Page title row.
-struct Header<Trailing: View>: View {
-    let title: String; let subtitle: String; let trailing: Trailing
-    init(_ title: String, _ subtitle: String, @ViewBuilder trailing: () -> Trailing) { self.title = title; self.subtitle = subtitle; self.trailing = trailing() }
-    var body: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.title2).bold()
-                if !subtitle.isEmpty { Text(subtitle).font(.callout).foregroundStyle(.secondary) }
-            }
-            Spacer()
-            trailing
-        }.padding(.horizontal, 20).padding(.vertical, 14)
-    }
-}
-extension Header where Trailing == EmptyView {
-    init(_ title: String, _ subtitle: String) { self.init(title, subtitle) { EmptyView() } }
-}
-
-/// A grouped section: title, content, optional one-line footer.
-struct Panel<Content: View>: View {
-    let title: String?; let footer: String?; let content: Content
-    init(_ title: String? = nil, footer: String? = nil, @ViewBuilder content: () -> Content) { self.title = title; self.footer = footer; self.content = content() }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let title { Text(title).font(.headline) }
-            VStack(alignment: .leading, spacing: 10) { content }
-                .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.quaternary.opacity(0.35)))
-            if let footer { Text(footer).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-        }
-    }
-}
 
 struct EmptyState<Actions: View>: View {
     let icon: String; let title: String; let text: String; let actions: Actions
     init(icon: String, title: String, text: String, @ViewBuilder actions: () -> Actions) { self.icon = icon; self.title = title; self.text = text; self.actions = actions() }
     var body: some View {
         VStack(spacing: 10) {
-            Image(systemName: icon).font(.system(size: 40)).foregroundStyle(.secondary)
+            Image(systemName: icon).font(.largeTitle).imageScale(.large).foregroundStyle(.secondary)
             Text(title).font(.title3).bold()
             Text(text).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 380)
             actions
@@ -287,20 +382,19 @@ struct EmptyState<Actions: View>: View {
 }
 
 /// The one "Replace the bar's pages?" question, asked before a publish that would remove pages made in the
-/// official app — Publish page (CoreBar) and Publish bindings (Controls) share it, so the words are identical.
-/// Callers set `isPresented` when `model.publishNeedsConfirmation(settings:)` says so; "Replace pages" publishes.
+/// official app. Callers set `isPresented` when `model.publishNeedsConfirmation(settings:)` says so.
 struct PublishConfirmation: ViewModifier {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
     @Binding var isPresented: Bool
     func body(content: Content) -> some View {
         content.alert("Replace the bar's pages?", isPresented: $isPresented) {
-            Button("Replace pages", role: .destructive) { model.publishDeckhandPage(settings: settings) }
+            Button("Replace Pages", role: .destructive) { model.publishDeckhandPage(settings: settings) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(model.foreignPages.isEmpty
-                 ? "The bar will have two pages: its Standard page and the Deckhand page (the knob and key bindings travel with it). The bar cannot send pages back, so pages made in the official app would be removed — none were found right now."
-                 : "These pages were made in the official app and will be removed: \(model.foreignPages.map(\.name).joined(separator: ", ")). Re-deploy them from that app if you still need them.")
+                 ? "The bar will have two pages: its Standard page and the Deckhand page, with the knob and key bindings. Pages made in the official app would be removed; none were found."
+                 : "These pages were made in the official app and will be removed: \(model.foreignPages.map(\.name).joined(separator: ", ")).")
         }
     }
 }
@@ -308,35 +402,34 @@ extension View {
     func publishConfirmation(isPresented: Binding<Bool>) -> some View { modifier(PublishConfirmation(isPresented: isPresented)) }
 }
 
-/// Inline stepper under a Send / Publish button.
+/// Progress of a Publish or Send to Cube: the steps while it runs, then "Published 4:51" with a tick.
 struct ProgressRow: View {
     let progress: StepProgress
     let lastAt: Date?
     let idle: String
     var never: String = "Not sent yet."
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             if progress.isEmpty || (!progress.isRunning && progress.failure == nil && progress.succeeded && lastAt != nil && !recent) {
-                Text(lastAt.map { "\(idle) \($0.formatted(date: .omitted, time: .shortened)) ✓" } ?? never).font(.caption).foregroundStyle(.secondary)
+                if let lastAt { StatusLabel("\(idle) \(lastAt.formatted(date: .omitted, time: .shortened))", .ok) }
+                else { StatusLabel(never, .info) }
             } else {
+                // A flowing row of steps; wraps instead of measuring itself at zero width (the window-jump bug of 2026-11-03).
                 HStack(spacing: 10) {
                     ForEach(progress.steps) { st in
                         HStack(spacing: 4) {
                             switch st.state {
-                            case .pending: Image(systemName: "circle").foregroundStyle(.tertiary)
+                            case .pending: Image(systemName: "circle").foregroundStyle(.secondary).accessibilityLabel("Waiting")
                             case .running: ProgressView().controlSize(.mini)
-                            case .done: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                            case .failed: Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
+                            case .done: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).accessibilityLabel("Done")
+                            case .failed: Image(systemName: "xmark.octagon.fill").foregroundStyle(.red).accessibilityLabel("Failed")
                             }
                             Text(st.title).foregroundStyle(st.state == .pending ? .secondary : .primary)
                             if !st.note.isEmpty { Text(st.note).foregroundStyle(.secondary) }
-                        }.font(.caption)
-                        if st.id != progress.steps.last?.id { Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.quaternary) }
+                        }.font(.callout)
                     }
                 }
-                // No fixedSize(vertical:) here: this row sits beside a button in an HStack and would be
-                // measured at zero width (the window-jump bug of 2026-11-03). A flexible frame wraps instead.
-                if let f = progress.failure { Text(f).font(.callout).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .leading) }
+                if let f = progress.failure { StatusLabel(f, .failed).frame(maxWidth: .infinity, alignment: .leading) }
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -353,67 +446,13 @@ struct ProgressRow: View {
     }
 }
 
-struct ActivityLog: View {
-    @EnvironmentObject var model: AppModel
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Activity").font(.headline)
-            // Plain VStack on purpose: a LazyVStack here makes the ScrollView report its whole
-            // content height as minimum on macOS, which pushes the split view taller than the
-            // window and clips the top of every column (seen 2026-11-03).
-            ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(model.log) { e in
-                        HStack(alignment: .top) {
-                            Text(e.time, style: .time).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                            Text(e.text).font(.caption).textSelection(.enabled)
-                        }
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }.frame(minHeight: 0)
-        }.padding()
-    }
-}
-
-
-/// "● Connected · answering the bar" — the same words everywhere.
-struct LinkBadge: View {
-    @EnvironmentObject var model: AppModel
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle().fill(dot).frame(width: 7, height: 7)
-            Text(linkText).font(.caption).foregroundStyle(.secondary)
-        }
-        .help("Deckhand keeps a connection to the bar and answers its questions (CPU, memory, network, storage, volume) so the bar's Mac cards and the KnobKey work.")
-        .accessibilityLabel(linkText)
-    }
-    private var dot: Color {
-        switch model.link {
-        case .connected: return .green
-        case .connecting: return .secondary
-        case .stopped: return model.selectedCoreBar == nil ? .orange : .secondary
-        case .reconnecting: return .orange
-        }
-    }
-    private var linkText: String {
-        switch model.link {
-        case .connected: return model.pushCount > 0 ? "Connected · \(model.pushCount) requests answered" : "Connected"
-        case .connecting: return "Connecting…"
-        case .stopped: return model.selectedCoreBar == nil ? "No CoreBar" : "Not connected"
-        case .reconnecting: return "Reconnecting…"
-        }
-    }
-}
-
-
 /// A card's icon: the bar's own app icon when there is one, else the SF Symbol.
 struct CardIcon: View {
     let card: AppSettings.CoreCard
     var size: CGFloat = 18
     var body: some View {
-        if let url = card.imageURL {
-            AsyncImage(url: url) { img in img.resizable() } placeholder: { Image(systemName: card.icon) }
-                .frame(width: size, height: size).clipShape(RoundedRectangle(cornerRadius: size * 0.22))
+        if card.imageURL != nil {
+            AppIcon(url: card.imageURL, title: card.title, fallback: card.icon, size: size)
         } else {
             Image(systemName: card.icon).frame(width: size, height: size)
         }

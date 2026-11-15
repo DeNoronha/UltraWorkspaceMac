@@ -22,10 +22,11 @@ enum CmuxNames {
     nonisolated(unsafe) private static var statusCache: (at: Date, byDir: [String: String]) = (.distantPast, [:])
 
     /// What cmux's sidebar says about Claude Code in each workspace, by directory: "running", "waiting" or "idle"
-    /// (`cmux sidebar-state`, the `claude_code=` line). Read at most every 5 s, about 150 ms per workspace.
-    static func claudeStatus() -> [String: String] {
+    /// (`cmux sidebar-state`, the `claude_code=` line). Read at most every `maxAge` seconds (one process of about
+    /// 150 ms per workspace): 5 s while the Claude page is open, a minute when only Home's tile looks.
+    static func claudeStatus(maxAge: TimeInterval = 5) -> [String: String] {
         lock.lock(); let c = statusCache; lock.unlock()
-        if Date().timeIntervalSince(c.at) < 5 { return c.byDir }
+        if Date().timeIntervalSince(c.at) < maxAge { return c.byDir }
         var out: [String: String] = [:]
         for w in workspaces() where !w.ref.isEmpty {
             guard let data = run(["sidebar-state", "--workspace", w.ref]) else { continue }
@@ -76,10 +77,14 @@ enum CmuxNames {
         var env = ProcessInfo.processInfo.environment; env["CMUX_QUIET"] = "1"; p.environment = env
         let pipe = Pipe(); p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
         do { try p.run() } catch { return nil }
-        let deadline = Date().addingTimeInterval(3)
-        while p.isRunning, Date() < deadline { usleep(20_000) }
-        if p.isRunning { p.terminate(); return nil }
+        // Read until cmux closes its output, with a 3 s limit that ends it. Before, a 50 Hz `isRunning` poll
+        // waited for the exit first, so an answer over 64 KB filled the pipe and cmux hung until the limit.
+        final class Flag: @unchecked Sendable { var timedOut = false }
+        let flag = Flag()
+        let deadline = DispatchWorkItem { if p.isRunning { flag.timedOut = true; p.terminate() } }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3, execute: deadline)
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return p.terminationStatus == 0 ? data : nil
+        p.waitUntilExit(); deadline.cancel()
+        return !flag.timedOut && p.terminationStatus == 0 ? data : nil
     }
 }

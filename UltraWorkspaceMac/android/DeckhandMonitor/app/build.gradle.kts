@@ -9,8 +9,8 @@ android {
     defaultConfig {
         minSdk = 29
         targetSdk = 34
-        versionCode = 14
-        versionName = "2.3"
+        versionCode = 16
+        versionName = "2.5"
     }
 
     buildFeatures {
@@ -46,7 +46,6 @@ android {
             Triple("strava", "nl.denoronha.deckhand.strava", "Training"),
             Triple("cask", "nl.denoronha.deckhand.cask", "Whisky Portfolio"),
             Triple("schiphol", "nl.denoronha.deckhand.schiphol", "Schiphol"),
-            Triple("zeekr", "nl.denoronha.deckhand.zeekr", "Zeekr"),
             Triple("teletekst", "nl.denoronha.deckhand.teletekst", "Teletekst"),
         )
         // These fetch their own data on the bar (1.9): page and feeds in the APK, only config.json from the Mac.

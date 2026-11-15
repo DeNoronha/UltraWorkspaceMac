@@ -48,7 +48,7 @@ extension AppModel {
     func applyBarFirewall() async {
         guard let adb = AdbBridge.find(), let ip = ipForSelected() else { barFirewall = .unknown; return }
         let bridge = AdbBridge(path: adb, ip: ip)
-        guard await bridge.connect() else { barFirewall = .failed("The bar refuses ADB on \(ip):5555 — Settings → Debug bridge."); return }
+        guard await bridge.connect() else { barFirewall = .failed("The bar does not accept the debug bridge. See Settings → Debug Bridge."); return }
         if barFirewallWanted {
             guard let mac = macAddressForBar() else { barFirewall = .failed("This Mac's address on the bar's network is not known."); return }
             if await bridge.firewallAllowing() != mac {

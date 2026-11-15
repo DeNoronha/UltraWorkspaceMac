@@ -35,12 +35,12 @@ function render(d){
   if(!shown.length){ txt('No Claude Code session open.',M+W+GAP+P,Y+H/2,20,'#6b7280'); return; }
   const nameSize=Math.min(24,Math.round(W/8.5)), small=Math.min(15,Math.round(W/13));
   shown.forEach((s,i)=>{ x=M+(i+1)*(W+GAP);
-    // state: running (blue), waiting / question (yellow, first), idle (grey), as cmux's sidebar shows them.
+    // state: waiting (permission) / question (yellow, pulsing, first), running (blue), done (turn ended) and idle (grey).
     const wait=s.state==='waiting'||s.state==='question', run=s.state==='running';
     rr(x,Y,W,H,14, wait? 'rgba(250,204,21,'+(0.16+0.12*pulse)+')' : 'rgba(255,255,255,.07)');
     if(wait){ g.strokeStyle='rgba(250,204,21,'+(0.55+0.45*pulse)+')'; g.lineWidth=3; g.strokeRect(x+1.5,Y+1.5,W-3,H-3); }
     txt(fit(s.project,IW,nameSize,'700'),x+P,Y+38,nameSize,'#fff','left','700');
-    const label=s.state==='question'?'asks a question': wait?'waiting for you': run?'running':'idle';
+    const label=s.state==='question'?'asks a question': wait?'needs your permission': run?'running': s.state==='done'?'done · your turn':'idle';
     if(run){ g.fillStyle='#4C8DFF'; g.beginPath(); g.arc(x+P+5,Y+59,5,0,7); g.fill(); }
     txt(fit(label,IW-(run?16:0),small,'600'),x+P+(run?16:0),Y+64,small, wait?'#fde047': run?'#7aa7ff':'#8b94a6','left','600');
     // What Claude last said, as large as the tile allows (the session's title is in the name already).

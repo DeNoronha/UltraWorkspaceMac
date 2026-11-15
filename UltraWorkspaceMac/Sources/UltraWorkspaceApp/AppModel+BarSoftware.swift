@@ -67,6 +67,10 @@ extension AppModel {
             do {
                 for asset in assets {
                     let file = try await download(asset)
+                    // L2: exactly the file GitHub lists for the release, checked again right before it is used.
+                    guard VendorRelease.matches(file, asset) else {
+                        throw UltraBarError.protocolError("\(asset.name) does not match the SHA-256 GitHub lists for it; not installed.")
+                    }
                     let info = try ApkInfo.read(apk: file)
                     let expected = asset == st.release?.launcher ? VendorRelease.launcherPackage : VendorRelease.bridgePackage
                     guard info.package == expected else {
@@ -101,10 +105,18 @@ extension AppModel {
         }
     }
 
-    /// Fetch one release asset into the vendor cache; a file already there with the published size is reused.
+    /// Fetch one release asset into the vendor cache, named by its SHA-256 from GitHub's `digest` (L2). A cached file
+    /// is reused only when its contents still have that hash; a download that does not is deleted and refused. An
+    /// asset without a digest is not downloaded at all.
     private func download(_ asset: VendorRelease.Asset) async throws -> URL {
-        let dest = Self.vendorCacheDir.appendingPathComponent(asset.name)
-        if let size = (try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int), size == asset.size, size > 0 { return dest }
+        guard let sha = asset.sha256 else {
+            throw UltraBarError.protocolError("GitHub lists no SHA-256 for \(asset.name), so Deckhand cannot check it; not installed.")
+        }
+        let dest = Self.vendorCacheDir.appendingPathComponent("\(sha)-\(asset.name)")
+        if FileManager.default.fileExists(atPath: dest.path) {
+            if VendorRelease.matches(dest, asset) { return dest }
+            try? FileManager.default.removeItem(at: dest)
+        }
         barSoftwareBusy = "Downloading \(asset.name) (\(asset.size / 1_000_000) MB)…"
         var req = URLRequest(url: asset.url); req.timeoutInterval = 300
         req.setValue("Deckhand (+https://denoronha.github.io/UltraWorkspaceMac/)", forHTTPHeaderField: "User-Agent")
@@ -114,6 +126,10 @@ extension AppModel {
         }
         let got = (try? FileManager.default.attributesOfItem(atPath: tmp.path)[.size] as? Int) ?? 0
         guard asset.size == 0 || got == asset.size else { throw UltraBarError.protocolError("\(asset.name): got \(got) bytes, the release lists \(asset.size)") }
+        guard VendorRelease.matches(tmp, asset) else {
+            try? FileManager.default.removeItem(at: tmp)
+            throw UltraBarError.protocolError("\(asset.name): the download does not match the SHA-256 GitHub lists; not installed.")
+        }
         try? FileManager.default.removeItem(at: dest)
         try FileManager.default.moveItem(at: tmp, to: dest)
         return dest

@@ -13,30 +13,35 @@ struct HavenPlacesPanel: View {
 
     struct EditTarget: Identifiable { let id = UUID(); let index: Int?; let place: HavenPlace }
 
+    @State private var pendingRemove: HavenPlace?
+
     var body: some View {
-        Panel("Places", footer: "Up to six. A ship lying still in a place's area counts as alongside; a moving ship in its approach counts as on its way when it closes in or names one of the place's destination words. Sea ports count ships from a length you choose, terminals count barges. The list stays on this Mac; the bar follows a change within a few seconds. The map and the search use Apple Maps.") {
-            if !fromFile { Text("Watching the port of Rotterdam until you change the list.").font(.caption).foregroundStyle(.secondary) }
-            ForEach(Array(places.enumerated()), id: \.element.id) { i, p in
+        Section {
+            if !fromFile { StatusLabel("Watching the port of Rotterdam until you change the list.", .info) }
+            ReorderableRows(items: places, id: \.id, move: move) { i, p in
                 HStack(spacing: 10) {
                     Image(systemName: p.kind == "port" ? "building.2" : "shippingbox").foregroundStyle(.secondary).frame(width: 18)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(p.name)
-                        Text(Self.summary(p)).font(.caption).foregroundStyle(.secondary)
+                        Text(Self.summary(p)).font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button { move(i, -1) } label: { Image(systemName: "chevron.up") }.buttonStyle(.borderless).disabled(i == 0).help("Move left on the bar")
-                    Button { move(i, 1) } label: { Image(systemName: "chevron.down") }.buttonStyle(.borderless).disabled(i == places.count - 1).help("Move right on the bar")
                     Button("Edit…") { editing = EditTarget(index: i, place: p) }
-                    Button { remove(i) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).disabled(places.count == 1).help("Remove this place")
+                    RemoveMark(title: p.name) { pendingRemove = p }.disabled(places.count == 1)
                 }
             }
             HStack {
-                Button { editing = EditTarget(index: nil, place: HavenPlace(id: "", name: "", kind: "terminal", area: [], approach: nil)) } label: { Label("Add place", systemImage: "plus") }
+                Button("Add Place…") { editing = EditTarget(index: nil, place: HavenPlace(id: "", name: "", kind: "terminal", area: [], approach: nil)) }
                     .disabled(places.count >= 6)
-                Button { NSWorkspace.shared.activateFileViewerSelecting([HavenFeed.ensurePlacesFile()]) } label: { Label(fromFile ? "Show haven.json" : "Create haven.json", systemImage: "doc.text") }
-                    .buttonStyle(.borderless)
-                if let saveError { Text(saveError).font(.caption).foregroundStyle(.orange) }
+                Spacer()
+                Button(fromFile ? "Show haven.json" : "Create haven.json") { NSWorkspace.shared.activateFileViewerSelecting([HavenFeed.ensurePlacesFile()]) }
             }
+            if let saveError { StatusLabel(saveError, .failed) }
+            DetailsDisclosure(text: "A ship lying still in a place's area counts as alongside; a moving ship in its approach counts as on its way when it closes in or names one of the place's destination words. Sea ports count ships from a length you choose, terminals count barges. The map and the search use Apple Maps.")
+        } header: {
+            Text("Places")
+        } footer: {
+            Footnote("Up to six, left to right on the bar. Drag to reorder. The list stays on this Mac.")
         }
         .sheet(item: $editing) { t in
             HavenPlaceEditor(place: t.place, isNew: t.index == nil, takenIDs: Set(places.map(\.id)).subtracting([t.place.id])) { saved in
@@ -45,18 +50,20 @@ struct HavenPlacesPanel: View {
                 save(next)
             }
         }
+        .confirmationDialog("Remove \(pendingRemove?.name ?? "this place")?", isPresented: Binding(get: { pendingRemove != nil }, set: { if !$0 { pendingRemove = nil } }), titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { if let p = pendingRemove { save(places.filter { $0.id != p.id }) }; pendingRemove = nil }
+            Button("Cancel", role: .cancel) { pendingRemove = nil }
+        } message: { Text("Haven on the bar stops watching it within a few seconds.") }
     }
 
     static func summary(_ p: HavenPlace) -> String {
-        let c = p.center
-        var parts = [p.kind == "port" ? "sea port · ships from \(p.minLength ?? 0) m" : "inland terminal",
-                     String(format: "%.3f, %.3f", c.lat, c.lon)]
+        var parts = [p.kind == "port" ? "Sea port · ships from \(p.minLength ?? 0) m" : "Inland terminal"]
         if !p.match.isEmpty { parts.append(p.match.joined(separator: ", ")) }
         return parts.joined(separator: " · ")
     }
 
-    private func move(_ i: Int, _ d: Int) { var next = places; next.swapAt(i, i + d); save(next) }
-    private func remove(_ i: Int) { var next = places; next.remove(at: i); save(next) }
+    private func move(_ from: IndexSet, _ to: Int) { var next = places; next.move(fromOffsets: from, toOffset: to); save(next) }
+
     private func save(_ next: [HavenPlace]) {
         do { try HavenFeed.savePlaces(next); places = next; fromFile = true; saveError = nil }
         catch { saveError = "Could not save: \(error.localizedDescription)" }
@@ -108,8 +115,8 @@ private struct HavenPlaceEditor: View {
                     HStack(spacing: 14) {
                         Label("area: alongside", systemImage: "square.fill").foregroundStyle(.green)
                         Label("approach: on its way", systemImage: "square").foregroundStyle(.cyan)
-                    }.font(.caption)
-                    Text("Click on the map to move the place there.").font(.caption).foregroundStyle(.secondary)
+                    }.font(.callout)
+                    Text("Click on the map to move the place there.").font(.callout).foregroundStyle(.secondary)
                 }
             }
             HStack {
@@ -126,17 +133,17 @@ private struct HavenPlaceEditor: View {
     private var form: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Find").font(.caption).foregroundStyle(.secondary)
+                Text("Find").font(.callout).foregroundStyle(.secondary)
                 HStack {
                     TextField("A port, terminal or town", text: $query).onSubmit(search)
                     Button(action: search) { Image(systemName: "magnifyingglass") }.disabled(query.trimmingCharacters(in: .whitespaces).isEmpty || searching)
                 }
-                if let searchNote { Text(searchNote).font(.caption).foregroundStyle(.secondary) }
+                if let searchNote { Text(searchNote).font(.callout).foregroundStyle(.secondary) }
                 ForEach(Array(results.prefix(5).enumerated()), id: \.offset) { _, item in
                     Button { pick(item) } label: {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(item.name ?? "Place").lineLimit(1)
-                            Text(Self.address(item)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(Self.address(item)).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                         }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                     }.buttonStyle(.plain)
                 }
@@ -153,16 +160,16 @@ private struct HavenPlaceEditor: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Area: \(Self.km(areaKm)) around the place").font(.callout)
                 Slider(value: Binding(get: { areaKm }, set: { areaKm = $0; reshape() }), in: 0.2...20)
-                Text("Ships lying still in here count as alongside.").font(.caption).foregroundStyle(.secondary)
+                Text("Ships lying still in here count as alongside.").font(.callout).foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("Approach: \(Self.km(approachKm)) around the place").font(.callout)
                 Slider(value: Binding(get: { approachKm }, set: { approachKm = max($0, areaKm); reshape() }), in: 2...100)
-                Text("Moving ships in here that close in count as on their way.").font(.caption).foregroundStyle(.secondary)
+                Text("Moving ships in here that close in count as on their way.").font(.callout).foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 2) {
                 TextField("Destination words, e.g. NIJMEGEN, NLNIJ", text: $words)
-                Text("A moving ship whose AIS destination contains one of these is on its way, even before it closes in.").font(.caption).foregroundStyle(.secondary)
+                Text("A moving ship whose AIS destination contains one of these is on its way, even before it closes in.").font(.callout).foregroundStyle(.secondary)
             }
         }
     }

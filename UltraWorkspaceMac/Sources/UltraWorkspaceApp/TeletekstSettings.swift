@@ -15,39 +15,51 @@ struct TeletekstSettings: View {
     ]
     private static func name(_ p: String) -> String? { known.first { $0.page == p }?.name }
 
+    @State private var pendingRemove: TeletekstEntry?
+
     var body: some View {
-        Panel("Pages", footer: "The bar shows each page in the classic teletext colours, split into two columns, and turns to the next one after the interval; tap the right half for the next page, the left half for the previous. With stories on, an index page is followed by the pages it links to (on 101: the news stories, 104 and up). The bar fetches the pages itself from NOS (teletekst-data.nos.nl, no key) while Teletekst is open: an index page at most every 2 minutes, a story every 10.") {
-            ForEach(Array(entries.enumerated()), id: \.element.id) { i, e in
+        Section {
+            ReorderableRows(items: entries, id: \.id, move: move) { i, e in
                 HStack(spacing: 10) {
-                    Text(e.page).font(.system(.body, design: .monospaced).bold()).foregroundStyle(.yellow).frame(width: 36, alignment: .leading)
-                    Text(Self.name(e.page) ?? "Page \(e.page)").frame(minWidth: 120, alignment: .leading)
-                    Toggle("and its stories", isOn: Binding(get: { e.stories }, set: { v in var next = entries; next[i].stories = v; save(next) }))
-                        .toggleStyle(.checkbox).help("Follow the page with the pages it links to")
+                    Text(e.page).font(.body.monospacedDigit().bold()).frame(width: 36, alignment: .leading)
+                    Text(Self.name(e.page) ?? "Page \(e.page)")
                     Spacer()
-                    Button { move(i, -1) } label: { Image(systemName: "chevron.up") }.buttonStyle(.borderless).disabled(i == 0).help("Earlier in the rotation")
-                    Button { move(i, 1) } label: { Image(systemName: "chevron.down") }.buttonStyle(.borderless).disabled(i == entries.count - 1).help("Later in the rotation")
-                    Button { var next = entries; next.remove(at: i); save(next) } label: { Image(systemName: "trash") }
-                        .buttonStyle(.borderless).disabled(entries.count == 1).help("Remove this page")
+                    Toggle("With its stories", isOn: Binding(get: { e.stories }, set: { v in var next = entries; next[i].stories = v; save(next) }))
+                        .toggleStyle(.checkbox).help("Follow the page with the pages it links to")
+                    RemoveMark(title: "page \(e.page)") { pendingRemove = e }.disabled(entries.count == 1)
                 }
             }
             HStack {
-                TextField("Page, e.g. 103", text: $newPage).frame(width: 110).onSubmit(add)
+                TextField("Page", text: $newPage, prompt: Text("100–899")).frame(maxWidth: 160).onSubmit(add)
                 Button("Add", action: add).disabled(!canAdd)
-                Menu("Quick add") {
+                Menu("Quick Add") {
                     ForEach(Self.known.filter { k in !entries.contains { $0.page == k.page } }, id: \.page) { k in
                         Button("\(k.page)  \(k.name)") { save(entries + [TeletekstEntry(page: k.page, stories: false)]) }
                     }
                 }.fixedSize().disabled(entries.count >= TeletekstPages.maxEntries)
-                Button("Default set") { save(TeletekstPages.defaults) }.buttonStyle(.borderless).disabled(entries == TeletekstPages.defaults)
-                if let saveError { Text(saveError).font(.caption).foregroundStyle(.orange) }
-                else if !newPage.isEmpty && !TeletekstPages.isValid(newPage) { Text("A page from 100 to 899.").font(.caption).foregroundStyle(.secondary) }
+                Spacer()
+                Button("Default Set") { save(TeletekstPages.defaults) }.disabled(entries == TeletekstPages.defaults)
             }
+            if let saveError { StatusLabel(saveError, .failed) }
+            else if !newPage.isEmpty && !TeletekstPages.isValid(newPage) { StatusLabel("A page from 100 to 899.", .info) }
+            DetailsDisclosure(text: "The bar shows each page in the teletext colours, two columns at a time, and turns to the next after the interval; tap the right half for the next page, the left half for the previous. With stories on, an index page is followed by the pages it links to. The bar fetches the pages itself from NOS (no key): an index page at most every 2 minutes, a story every 10.")
+        } header: {
+            Text("Teletekst pages")
+        } footer: {
+            Footnote("Up to \(TeletekstPages.maxEntries), in this order. Drag to reorder.")
         }
-        Panel("Rotation") {
-            HStack {
-                Stepper("\(interval) s per page", value: Binding(get: { interval }, set: { v in interval = v; save(entries) }), in: TeletekstPages.intervalRange, step: 2)
-                Text("A long story with subpages gets this time per subpage.").font(.caption).foregroundStyle(.secondary)
+        .confirmationDialog("Remove page \(pendingRemove?.page ?? "")?", isPresented: Binding(get: { pendingRemove != nil }, set: { if !$0 { pendingRemove = nil } }), titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { if let e = pendingRemove { save(entries.filter { $0.id != e.id }) }; pendingRemove = nil }
+            Button("Cancel", role: .cancel) { pendingRemove = nil }
+        } message: { Text("The bar stops showing it within a few seconds.") }
+        Section {
+            Stepper(value: Binding(get: { interval }, set: { v in interval = v; save(entries) }), in: TeletekstPages.intervalRange, step: 2) {
+                LabeledContent("Per page", value: "\(interval) s")
             }
+        } header: {
+            Text("Rotation")
+        } footer: {
+            Footnote("A long story with subpages gets this time per subpage.")
         }
     }
 
@@ -56,7 +68,8 @@ struct TeletekstSettings: View {
         guard canAdd else { return }
         save(entries + [TeletekstEntry(page: newPage, stories: false)]); newPage = ""
     }
-    private func move(_ i: Int, _ d: Int) { var next = entries; next.swapAt(i, i + d); save(next) }
+    private func move(_ from: IndexSet, _ to: Int) { var next = entries; next.move(fromOffsets: from, toOffset: to); save(next) }
+
     private func save(_ next: [TeletekstEntry]) {
         do { try TeletekstPages.save(next, interval: interval); let l = TeletekstPages.load(); entries = l.entries; interval = l.interval; saveError = nil }
         catch { saveError = "Could not save: \(error.localizedDescription)" }

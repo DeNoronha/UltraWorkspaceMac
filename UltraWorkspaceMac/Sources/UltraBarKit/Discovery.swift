@@ -201,7 +201,8 @@ public enum Discovery {
         }
         guard let port = i("tcpPort"), (0...65535).contains(port) else { return nil }
         let serial = s("serialNo", max: 64)
-        guard !serial.isEmpty else { return nil }
+        // Letters and digits, 4–64 (every real bar): a serial is part of the bar's secret-store accounts (L1).
+        guard SecretAccount.isValidSerial(serial) else { return nil }
         let ipField = s("ip", max: 45)
         var a = in_addr()
         let ip = (!ipField.isEmpty && inet_pton(AF_INET, ipField, &a) == 1) ? ipField : from

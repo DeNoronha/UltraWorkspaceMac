@@ -1,9 +1,10 @@
 import SwiftUI
 import UltraBarKit
 
-/// Apps on the bar, laid out like Widgets: the list on the left (Deckhand's own apps, the vendor's
-/// marketplace, the firmware's), the chosen app on the right with an "On the bar" switch and its
-/// settings. Deckhand's apps install over ADB; marketplace apps are fetched by the bar itself (APP_MANAGER).
+/// Apps on the bar: the list on the left (Deckhand's own apps, the vendor's marketplace, the firmware's), the chosen
+/// app on the right with Install / Update / Remove…, "Show on Deckhand page" and its settings. Deckhand's apps install
+/// over the debug bridge; marketplace apps are fetched by the bar itself (APP_MANAGER). The toolbar filter (All /
+/// On the Bar / Updates) replaced the Installed page.
 struct AppsView: View {
     static func barAppIcon(_ page: String) -> String {
         switch page {
@@ -14,7 +15,6 @@ struct AppsView: View {
         case "strava": return "figure.run"
         case "cask": return "chart.line.uptrend.xyaxis"
         case "schiphol": return "airplane.departure"
-        case "zeekr": return "car.side"
         case "teletekst": return "tv"
         default: return "waveform.path.ecg" }
     }
@@ -28,7 +28,7 @@ struct AppsView: View {
         case "monitor": return "This Mac, live: CPU history, memory, network up and down, disk and the clock."
         case "claude": return "Which terminal needs you: every Claude Code session of the last hour, the waiting ones pulsing orange, with the project name and what it last said."
         case "crypto": return "Your coins with today's chart — the same coins as the cube's Crypto cards."
-        case "weather": return "The weather now plus three days, for the location of the Weather widget."
+        case "weather": return "The weather now plus three days, for your location."
         case "music": return "What Music is playing: album art, title, play/pause, next and previous."
         case "calendar": return "Today and the next two days from the calendars you pick."
         case "flights": return "Aircraft overhead on a small radar, with flight number, airline, route, altitude and speed (adsb.lol and adsbdb, no key)."
@@ -42,14 +42,13 @@ struct AppsView: View {
         case "teletekst": return "NOS Teletekst as it looks on television: the news index and its stories, sport and the weather map, in the teletext colours and blocks, two columns at a time, turning by itself."
         case "haven": return "Ships at the ports and terminals you choose, live from AIS: what lies alongside and what is on its way in, with a rough arrival time. Tap a place for its approach."
         case "cask": return "Your whisky collection at auction prices (Whiskystats): what it is worth, against what you paid and a month ago, with each bottle's trend. Tap a bottle for its auctions."
-        case "zeekr": return "Your Zeekr at a glance: charge and range, charging power and when it is full, locked or not, climate, tyres, odometer and where it is. Tap for the charge curve and the doors and tyres. Read-only."
         default: return ""
         }
     }
 
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
-    @MainActor final class UI: ObservableObject { @Published var selected: String? }
+    @MainActor final class UI: ObservableObject { @Published var filter: LibraryFilter = .all; @Published var search = "" }
     @StateObject private var ui = UI()
 
     /// One marketplace or firmware entry: catalogue and/or installed, merged by package.
@@ -80,90 +79,115 @@ struct AppsView: View {
         return out.values.sorted { ($0.installed == nil ? 1 : 0, $0.name.lowercased()) < ($1.installed == nil ? 1 : 0, $1.name.lowercased()) }
     }
     private func updateAvailable(_ e: Entry) -> Bool { e.installed != nil && model.marketUpdate(for: e.package) != nil }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Header("Apps", "Apps run on the bar itself. Switch one on to install it; its settings are here too.") {
-                HStack {
-                    RefreshButton()
-                    UpdateAllButton()
-                }
-            }
-            LibraryErrorStrip()
-            Divider()
-            HSplitView {
-                List(selection: $ui.selected) {
-                    Section {
-                        ForEach(AppModel.barAppPages, id: \.page) { app in
-                            let v = model.barAppVersion(app.page)
-                            LibraryRow(title: app.label, caption: v, inUse: v != nil, busy: model.barAppBusy == app.page, updateAvailable: model.barAppNeedsUpdate(app.page)) {
-                                AppIcon(url: Self.bundledIcon(app.page), fallback: Self.barAppIcon(app.page), size: 18)
-                            }.tag(BarPages.package(for: app.page))
-                        }
-                    } header: { Text("Deckhand apps") }
-                    let market = entries.filter { !$0.system }, firmware = entries.filter(\.system)
-                    Section {
-                        if market.isEmpty { Text(model.link.isConnected ? (model.storeApps.isEmpty ? "Press Refresh to load the catalogue." : "Nothing in the catalogue.") : "Connect to the bar to list them.").font(.caption).foregroundStyle(.secondary) }
-                        ForEach(market) { e in
-                            LibraryRow(title: e.name, caption: e.installed == nil ? nil : e.version, inUse: e.installed != nil, busy: model.appBusy == e.package, updateAvailable: updateAvailable(e)) {
-                                AppIcon(url: e.icon, fallback: "app", size: 18)
-                            }.tag(e.package)
-                        }
-                    } header: { Text("Marketplace") }
-                    if !firmware.isEmpty {
-                        Section("Built into the firmware") {
-                            ForEach(firmware) { e in
-                                LibraryRow(title: e.name, caption: e.off ? "turned off" : e.version, inUse: !e.off, busy: model.appBusy == e.package, updateAvailable: updateAvailable(e)) {
-                                    AppIcon(url: e.icon, fallback: "app.badge", size: 18)
-                                }.tag(e.package)
-                            }
-                        }
-                    }
-                }
-                .frame(minWidth: 240, maxWidth: 300)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if let sel = ui.selected {
-                            if let app = AppModel.barAppPages.first(where: { BarPages.package(for: $0.page) == sel }) { deckhandDetail(app) }
-                            else if let e = entries.first(where: { $0.package == sel }) { entryDetail(e) }
-                            else { Text("Pick an app on the left.").foregroundStyle(.secondary) }
-                        } else { Text("Pick an app on the left.").foregroundStyle(.secondary) }
-                        Spacer()
-                    }.padding(20).frame(minWidth: 360, maxWidth: .infinity, alignment: .leading)
-                }.frame(maxWidth: .infinity, maxHeight: .infinity).layoutPriority(1)
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+    private func matches(_ name: String) -> Bool {
+        let q = ui.search.trimmingCharacters(in: .whitespaces)
+        return q.isEmpty || name.localizedCaseInsensitiveContains(q)
+    }
+    private func shown(_ e: Entry) -> Bool {
+        guard matches(e.name) else { return false }
+        switch ui.filter {
+        case .all: return true
+        case .onBar: return e.installed != nil || e.unlisted
+        case .updates: return updateAvailable(e)
         }
-        .onAppear {
-            if model.storeApps.isEmpty { model.refreshAppStore() }
-            if ui.selected == nil { ui.selected = BarPages.package(for: AppModel.barAppPages[0].page) }
+    }
+    private func shown(page: String) -> Bool {
+        guard matches(AppModel.barAppPages.first { $0.page == page }?.label ?? page) else { return false }
+        switch ui.filter {
+        case .all: return true
+        case .onBar: return model.barAppVersion(page) != nil
+        case .updates: return model.barAppNeedsUpdate(page)
         }
     }
 
-    /// Put an app's icon on the Deckhand page, or take it off. Installing a Deckhand app puts it on, removing an app
-    /// takes it off, so the page never shows an icon for an app that is not on the bar.
-    private func setIcon(_ cardID: String, _ on: Bool) {
+    var body: some View {
+        LibraryLayout {
+            LibraryFilterBar(filter: $ui.filter, search: $ui.search)
+        } list: {
+            List(selection: $model.selectedApp) {
+                let ours = AppModel.barAppPages.filter { shown(page: $0.page) }
+                if !ours.isEmpty {
+                    Section("Deckhand apps") {
+                        ForEach(ours, id: \.page) { app in
+                            let v = model.barAppVersion(app.page)
+                            LibraryRow(title: app.label, caption: v, installed: v != nil, busy: model.barAppBusy == app.page, updateAvailable: model.barAppNeedsUpdate(app.page)) {
+                                AppIcon(url: Self.bundledIcon(app.page), title: app.label, fallback: Self.barAppIcon(app.page), size: 22)
+                            }.tag(BarPages.package(for: app.page))
+                        }
+                    }
+                }
+                let all = entries.filter(shown)
+                let market = all.filter { !$0.system }, firmware = all.filter(\.system)
+                if !market.isEmpty || ui.filter == .all {
+                    Section("Marketplace") {
+                        if market.isEmpty { Text(model.link.isConnected ? (model.storeApps.isEmpty ? "Press Refresh to load the catalogue." : "Nothing in the catalogue.") : "Connect to the bar to list them.").font(.callout).foregroundStyle(.secondary) }
+                        ForEach(market) { e in
+                            LibraryRow(title: e.name, caption: e.installed == nil ? nil : e.version, installed: e.installed != nil, busy: model.appBusy == e.package, updateAvailable: updateAvailable(e)) {
+                                AppIcon(url: e.icon, title: e.name, size: 22)
+                            }.tag(e.package)
+                        }
+                    }
+                }
+                if !firmware.isEmpty {
+                    Section("Built into the firmware") {
+                        ForEach(firmware) { e in
+                            LibraryRow(title: e.name, caption: e.off ? "Turned off" : e.version, installed: !e.off, busy: model.appBusy == e.package, updateAvailable: updateAvailable(e)) {
+                                AppIcon(url: e.icon, title: e.name, size: 22)
+                            }.tag(e.package)
+                        }
+                    }
+                }
+                if ours.isEmpty, all.isEmpty {
+                    Text(!ui.search.isEmpty ? "No app matches “\(ui.search)”." : ui.filter == .updates ? "Everything is up to date." : "Nothing on the bar yet.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            .listStyle(.inset)
+        } detail: {
+            Form {
+                LibraryErrorSection()
+                if let sel = model.selectedApp, let app = AppModel.barAppPages.first(where: { BarPages.package(for: $0.page) == sel }) { deckhandDetail(app) }
+                else if let sel = model.selectedApp, let e = entries.first(where: { $0.package == sel }) { entryDetail(e) }
+                else { Section { Text("Choose an app on the left.").foregroundStyle(.secondary) } }
+            }
+            .formStyle(.grouped)
+        }
+        .navigationSubtitle("Run on the bar itself")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { UpdateAllButton(screensavers: false) }
+        }
+        .onAppear {
+            if model.storeApps.isEmpty { model.refreshAppStore() }
+            if model.selectedApp == nil { model.selectedApp = BarPages.package(for: AppModel.barAppPages[0].page) }
+        }
+    }
+
+    /// Put an app's card on the Deckhand page, or take it off. Installing a Deckhand app puts it on, removing an app
+    /// takes it off, so the page never shows a card for an app that is not on the bar.
+    private func setCard(_ cardID: String, _ on: Bool) {
         if on { if !settings.coreCards.contains(cardID) { settings.coreCards.append(cardID) } }
         else { settings.coreCards.removeAll { $0 == cardID } }
     }
 
-    /// The second line under "On the bar": whether the app's icon is on Deckhand's page in the bar's launcher.
-    @ViewBuilder private func iconRow(_ cardID: String, known: Bool) -> some View {
+    /// "Show on Deckhand page": whether the app's card is on Deckhand's page in the bar's launcher. Instant, so a switch.
+    @ViewBuilder private func cardSection(_ cardID: String, known: Bool) -> some View {
         let onPage = settings.coreCards.contains(cardID)
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 10) {
-                if known {
-                    InstalledToggle(title: "Icon on the Deckhand page", isOn: onPage) { setIcon(cardID, $0) }
-                    if onPage, !settings.deckhandPagePublished { Text("not published yet").font(.caption).foregroundStyle(.orange) }
-                } else {
-                    Text("Press Refresh to see its icon.").font(.caption).foregroundStyle(.secondary)
+        Section {
+            if known {
+                Toggle("Show on Deckhand page", isOn: Binding(get: { onPage }, set: { setCard(cardID, $0) }))
+                if onPage, !settings.deckhandPagePublished {
+                    HStack {
+                        StatusLabel("Not published yet.", .attention)
+                        Spacer()
+                        Button("Open CoreBar") { model.nav = .coreBarPage }
+                    }
                 }
-                Button("Open CoreBar page") { model.nav = .coreBarPage }.buttonStyle(.borderless).font(.callout)
+            } else {
+                StatusLabel("Press Refresh to see its card.", .info)
             }
-            Text("The page of cards you swipe through on the bar; tap the icon there to open the app. Without it, the app is still in the bar's app list.")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        } footer: {
+            Footnote("Tap the card on the bar to open the app. Without it, the app is still in the bar's app list.")
         }
-        .padding(.leading, 20)
     }
 
     // MARK: Deckhand app
@@ -171,53 +195,42 @@ struct AppsView: View {
     @ViewBuilder private func deckhandDetail(_ app: (page: String, label: String, apk: String)) -> some View {
         let installed = model.barAppVersion(app.page), stale = model.barAppNeedsUpdate(app.page), busy = model.barAppBusy == app.page
         let pkg = BarPages.package(for: app.page), hasAPK = AppModel.bundledAPK(app.apk) != nil
-        DetailTitle(title: app.label, version: installed, tag: stale ? ("update \(AppModel.barAppsVersion)", .orange) : (installed != nil ? ("up to date", .green) : ("not installed", .secondary)), subtitle: pkg) {
-            AppIcon(url: Self.bundledIcon(app.page) ?? model.barAppIconURL(app.page), fallback: Self.barAppIcon(app.page), size: 48)
-        }
-        Text(Self.blurb(app.page)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        let adbOK = model.adbStatus.wifi == true && !model.adbStatus.unauthorized
         let cardID = AppModel.appCardPrefix + pkg
-        HStack(spacing: 14) {
-            InstalledToggle(title: "On the bar", isOn: installed != nil, busy: busy, disabled: !hasAPK || model.barAppBusy != nil,
-                            note: hasAPK ? nil : "No APK in this build.", confirmOff: "Remove \(app.label) from the bar?") { on in
-                setIcon(cardID, on)
-                if on { model.installBarApp(app.page) } else { model.uninstallBarApp(app.page) }
+        Section {
+            DetailTitle(title: app.label, version: installed, tag: stale ? ("Update \(AppModel.barAppsVersion)", .update) : (installed != nil ? ("On the bar", .ok) : ("Not installed", .info))) {
+                AppIcon(url: Self.bundledIcon(app.page) ?? model.barAppIconURL(app.page), title: app.label, fallback: Self.barAppIcon(app.page), size: 52)
             }
-            if stale, !busy {
-                Button { model.installBarApp(app.page) } label: { Label("Update to \(AppModel.barAppsVersion)", systemImage: "arrow.down.circle") }
-                    .buttonStyle(.borderedProminent).disabled(model.barAppBusy != nil)
-            }
+            Text(Self.blurb(app.page)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            InstallControls(name: app.label, installed: installed != nil, updateTo: stale ? AppModel.barAppsVersion : nil, busy: busy,
+                            canInstall: hasAPK && model.barAppBusy == nil,
+                            note: !hasAPK ? "This build has no copy of the app." : (installed == nil && !adbOK ? "Installs over the debug bridge (Settings → Debug Bridge)." : nil),
+                            install: { setCard(cardID, true); model.installBarApp(app.page) },
+                            remove: { setCard(cardID, false); model.uninstallBarApp(app.page) })
         }
-        if installed != nil {
-            iconRow(cardID, known: model.coreCard(cardID) != nil)
-        } else {
-            Text("Installs over the bar's debug bridge (Settings → Debug bridge), with its icon on the Deckhand page.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }
-        Divider()
+        if installed != nil { cardSection(cardID, known: model.coreCard(cardID) != nil) }
         appSettings(app.page)
+        AppDetailsSection(package: pkg)
     }
 
     /// The app's own settings. Apps that mirror a cube card share that card's settings.
     @ViewBuilder private func appSettings(_ page: String) -> some View {
         switch page {
         case "flights":
-            Panel("Flights settings") {
-                HStack { Stepper("Within \(settings.flightsRadiusKm) km", value: $settings.flightsRadiusKm, in: 1...25); Text("of the location below.").font(.caption).foregroundStyle(.secondary) }
-                Text("The bar fetches the positions itself, every 10 s while the page is on screen.").font(.caption).foregroundStyle(.secondary)
-            }
-            LocationPanel()
+            Section {
+                Stepper(value: $settings.flightsRadiusKm, in: 1...25) { LabeledContent("Radius", value: "\(settings.flightsRadiusKm) km") }
+                LocationSummaryRow()
+            } header: { Text("Flights") } footer: { Footnote("The bar fetches the aircraft itself, every 10 s while the page is open.") }
         case "news":
-            Panel("Headlines settings") {
-                Picker("Source", selection: $settings.newsSource) { ForEach(NewsFeed.sources) { s in Text(s.name).tag(s.id) } }.frame(width: 260)
-                Text("The bar fetches the headlines itself, every 10 minutes.").font(.caption).foregroundStyle(.secondary)
-            }
+            Section {
+                Picker("Source", selection: $settings.newsSource) { ForEach(NewsFeed.sources) { s in Text(s.name).tag(s.id) } }
+            } header: { Text("Headlines") } footer: { Footnote("The bar fetches the headlines itself, every 10 minutes.") }
         case "tasks":
-            Panel("Tasks settings", footer: "Linear → Settings → Security & access → Personal API keys. The key is kept in a user-only file on this Mac and only sent to api.linear.app.") {
-                HStack {
-                    SecureField("Linear personal API key (lin_api_…)", text: $model.linearKey).frame(width: 320)
-                    if let e = model.linearError { Text(e).font(.caption).foregroundStyle(.orange) }
-                    else { Text(model.linearKey.isEmpty ? "No key yet." : "Saved.").font(.caption).foregroundStyle(.secondary) }
-                }
-            }
+            Section {
+                SecureField("Linear API key", text: $model.linearKey, prompt: Text("lin_api_…"))
+                if let e = model.linearError { StatusLabel(e, .failed) }
+                else if model.linearKey.isEmpty { StatusLabel("No key yet.", .info) }
+            } header: { Text("Tasks") } footer: { Footnote("Linear → Settings → Security & access → Personal API keys. Kept in this Mac's Keychain.") }
         case "haven":
             HavenSettings()
         case "tide":
@@ -228,22 +241,19 @@ struct AppsView: View {
             CaskSettings(feed: model.barPages.cask)
         case "schiphol":
             SchipholSettings()
-        case "zeekr":
-            ZeekrSettings()
         case "teletekst":
             TeletekstSettings()
         case "sky":
-            LocationPanel()
-            Text("Sun and moon are computed on the bar for this location; nothing is fetched.").font(.caption).foregroundStyle(.secondary)
-        case "weather": AddonSettingsPanel(t: .weather)
-        case "crypto": AddonSettingsPanel(t: .crypto)
-        case "calendar": AddonSettingsPanel(t: .calendar)
-        case "claude": AddonSettingsPanel(t: .claude)
-        case "music": AddonSettingsPanel(t: .music)
+            Section { LocationSummaryRow() } header: { Text("Sun & Moon") } footer: { Footnote("Computed on the bar for this location; nothing is fetched.") }
+        case "weather": CardSettingsSections(t: .weather)
+        case "crypto": CardSettingsSections(t: .crypto)
+        case "calendar": CardSettingsSections(t: .calendar)
+        case "claude": CardSettingsSections(t: .claude)
+        case "music": CardSettingsSections(t: .music)
         case "verse":
-            Text("No settings. One of 98 well-known passages, picked by the day of the year; the bar fetches the text from bible-api.com.").font(.caption).foregroundStyle(.secondary)
+            Section { Text("No settings. One of 98 well-known passages, picked by the day of the year.").foregroundStyle(.secondary) }
         default:
-            Text("No settings: it shows this Mac as it is.").font(.caption).foregroundStyle(.secondary)
+            Section { Text("No settings: it shows this Mac as it is.").foregroundStyle(.secondary) }
         }
     }
 
@@ -251,62 +261,61 @@ struct AppsView: View {
 
     @ViewBuilder private func entryDetail(_ e: Entry) -> some View {
         let busy = model.appBusy == e.package, update = updateAvailable(e)
-        let tag: (String, Color) = update ? ("update \(e.store?.versionName ?? "")", .orange) : (model.staleCatalogueNote(e.package).map { ($0, .secondary) } ?? (e.off ? ("turned off", .secondary) : e.system ? ("built in", .secondary) : (e.installed != nil ? ("installed", .green) : ("not installed", .secondary))))
-        DetailTitle(title: e.name, version: e.installed == nil ? e.store?.versionName : e.version, tag: tag, subtitle: e.package + (e.store == nil ? " · not in the marketplace" : "")) {
-            AppIcon(url: e.icon, fallback: e.system ? "app.badge" : "app", size: 48)
+        let tag: (String, StatusKind) = update ? ("Update \(e.store?.versionName ?? "")", .update)
+            : (model.staleCatalogueNote(e.package).map { ($0, .info) } ?? (e.off ? ("Turned off", .info) : e.system ? ("Built in", .info) : (e.installed != nil ? ("On the bar", .ok) : ("Not installed", .info))))
+        let webUI: URL? = {
+            guard let a = e.installed, let port = a.port, let tok = a.sessionToken, let bar = model.selectedCoreBar else { return nil }
+            return URL(string: "http://\(model.address(for: bar.serialNo) ?? bar.lastIp):\(port)/?sessionToken=\(tok)")
+        }()
+        Section {
+            DetailTitle(title: e.name, version: e.installed == nil ? e.store?.versionName : e.version, tag: tag) {
+                AppIcon(url: e.icon, title: e.name, size: 52)
+            }
+            if let s = e.store, !s.summary.isEmpty { Text(s.summary).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+            if e.system {
+                FirmwareControls(name: e.name, isOn: !e.off, busy: busy,
+                                 disabled: model.appBusy != nil || !AppModel.canTurnOff(e.package) || model.adbStatus.wifi != true,
+                                 note: !AppModel.canTurnOff(e.package) ? "The bar needs this app; it cannot be turned off." : (model.adbStatus.wifi != true ? "Needs the debug bridge (Settings → Debug Bridge)." : nil)) { on in
+                    if !on { setCard(AppModel.appCardPrefix + e.package, false) }
+                    model.setAppTurnedOn(e.package, name: e.name, on)
+                }
+                if update, let s = e.store {
+                    Button("Update to \(s.versionName)") { model.installApp(e.package, name: e.name) }.primaryInline().disabled(model.appBusy != nil)
+                }
+            } else {
+                InstallControls(name: e.name, installed: e.installed != nil, updateTo: update ? e.store?.versionName : nil, busy: busy,
+                                canInstall: model.appBusy == nil && model.link.isConnected && (e.installed != nil || e.store != nil),
+                                install: { model.installApp(e.package, name: e.name) },
+                                remove: { setCard(AppModel.appCardPrefix + e.package, false); model.uninstallApp(e.package, name: e.name) })
+            }
+        } footer: {
+            Footnote(e.system ? "Part of the bar's firmware: it can be updated and turned off, not removed." : "The bar downloads and installs the app itself, in about ten seconds.")
         }
-        if let s = e.store, !s.summary.isEmpty { Text(s.summary).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-        if e.system {
-            InstalledToggle(title: "Turned on", isOn: !e.off, busy: busy, disabled: model.appBusy != nil || !AppModel.canTurnOff(e.package) || model.adbStatus.wifi != true,
-                            note: !AppModel.canTurnOff(e.package) ? "The bar needs this app; it cannot be turned off." : (model.adbStatus.wifi != true ? "Needs the debug bridge (Settings)." : nil),
-                            confirmOff: "Turn off \(e.name)? It disappears from the bar and does not run until you turn it on again here.") { on in
-                if !on { setIcon(AppModel.appCardPrefix + e.package, false) }
-                model.setAppTurnedOn(e.package, name: e.name, on)
-            }
-        }
-        HStack(spacing: 14) {
-            if !e.system {
-            InstalledToggle(title: "On the bar", isOn: e.installed != nil, busy: busy, disabled: model.appBusy != nil || !model.link.isConnected || e.system || (e.installed == nil && e.store == nil),
-                            note: e.system ? "Part of the firmware; it cannot be removed." : nil, confirmOff: "Remove \(e.name) from the bar?") { on in
-                if !on { setIcon(AppModel.appCardPrefix + e.package, false) }
-                if on { model.installApp(e.package, name: e.name) } else { model.uninstallApp(e.package, name: e.name) }
-            }
-            }
-            if update, let s = e.store, !busy {
-                Button { model.installApp(e.package, name: e.name) } label: { Label("Update to \(s.versionName)", systemImage: "arrow.down.circle") }
-                    .buttonStyle(.borderedProminent).disabled(model.appBusy != nil)
-            }
-            if let a = e.installed, let port = a.port, let tok = a.sessionToken, let bar = model.selectedCoreBar,
-               let url = URL(string: "http://\(model.address(for: bar.serialNo) ?? bar.lastIp):\(port)/?sessionToken=\(tok)") {
-                Link(destination: url) { Label("Web UI", systemImage: "safari") }.buttonStyle(.bordered).help("Opens the app's own web page on the bar in your browser.")
-            }
-        }
-        if let a = e.installed, a.allowProfile {
-            iconRow(AppModel.appCardPrefix + a.packageName, known: true)
-        }
+        if let a = e.installed, a.allowProfile { cardSection(AppModel.appCardPrefix + a.packageName, known: true) }
         if let s = e.store, !s.changeLog.isEmpty {
-            Panel("What's new in \(s.versionName)") { Text(s.changeLog).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+            Section("What's new in \(s.versionName)") { Text(s.changeLog).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
         }
-        Text(e.system ? "Part of the bar's system image: updatable from the marketplace, not removable. Turning it off is Android's own switch: the app stays on the bar but does not run and is not shown, until you turn it on again." : "The bar downloads and installs the app itself (it needs internet), one at a time, in about ten seconds. No settings on this side; the app has its own on the bar.")
-            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        AppDetailsSection(package: e.package, inMarketplace: e.store != nil, webUI: webUI)
     }
 }
 
-/// Haven: the aisstream.io key and the places file.
+/// Haven: the aisstream.io key and the places.
 private struct HavenSettings: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
-        Panel("Haven settings", footer: "A free key from aisstream.io (sign in with GitHub). It is kept in a user-only file on this Mac and only sent to stream.aisstream.io; the bar asks Deckhand for the ships.") {
-            HStack {
-                SecureField("aisstream.io API key", text: $model.aisstreamKey).frame(width: 320)
-                TimelineView(.periodic(from: .now, by: 3)) { _ in
-                    let h = model.barPages.haven
-                    if let e = h.lastError ?? h.placesError { Text(e).font(.caption).foregroundStyle(.orange) }
-                    else if model.aisstreamKey.isEmpty { Text("No key yet.").font(.caption).foregroundStyle(.secondary) }
-                    else if h.isLive { Text("Connected · \(h.messages) messages").font(.caption).foregroundStyle(.green) }
-                    else { Text("Saved. Connects while Haven is on the bar.").font(.caption).foregroundStyle(.secondary) }
-                }
+        Section {
+            SecureField("aisstream.io key", text: $model.aisstreamKey)
+            TimelineView(.periodic(from: .now, by: 3)) { _ in
+                let h = model.barPages.haven
+                if let e = h.lastError ?? h.placesError { StatusLabel(e, .failed) }
+                else if model.aisstreamKey.isEmpty { StatusLabel("No key yet.", .info) }
+                else if h.isLive { StatusLabel("Connected · \(h.messages) messages", .ok) }
+                else { StatusLabel("Saved. Connects while Haven is on the bar.", .info) }
             }
+        } header: {
+            Text("Haven")
+        } footer: {
+            Footnote("A free key from aisstream.io. Kept in this Mac's Keychain; the bar asks Deckhand for the ships.")
         }
         HavenPlacesPanel()
     }

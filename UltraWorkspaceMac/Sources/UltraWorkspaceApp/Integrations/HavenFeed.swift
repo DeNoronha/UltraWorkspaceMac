@@ -61,7 +61,8 @@ final class HavenFeed {
             return p.isEmpty ? (defaultPlaces, true, "haven.json lists no valid places") : (Array(p.prefix(6)), true, nil)
         } catch { return (defaultPlaces, true, "haven.json: \(error.localizedDescription)") }
     }
-    /// Writes the places from the editor in Apps → Haven. The running stream picks them up within 5 s.
+    /// Writes the places from the editor in Apps → Haven. The running stream picks them up within 5 s (by the
+    /// file's modification date).
     nonisolated static func savePlaces(_ places: [HavenPlace]) throws {
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         struct File: Codable { var places: [HavenPlace] }
@@ -96,28 +97,50 @@ final class HavenFeed {
     private var ships: [Int: Ship] = [:]
     private var socket: URLSessionWebSocketTask?
     private var loop: Task<Void, Never>?
+    /// Wakes the idle loop: a bar request or a new key (`BarPages.poke`).
+    private let wake = WakeSignal()
+    func poke() { wake.signal() }
+    /// haven.json's modification date when `places` was last read (nil: no file). The loop and the watchdog compare
+    /// it, one `stat`, instead of reading and decoding the file every 5 s.
+    private var placesStamp: Date?
+    private var placesRead = false
 
-    /// Runs while `wanted()` says so (a key is set and the Haven app is on the bar or was asked recently).
+    nonisolated static func placesModified() -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: placesURL.path))?[.modificationDate] as? Date
+    }
+
+    /// Reads haven.json again when it changed since the last read.
+    private func refreshPlaces() {
+        let stamp = Self.placesModified()
+        guard !placesRead || stamp != placesStamp else { return }
+        let loaded = Self.loadPlaces()
+        places = loaded.places; placesError = loaded.error
+        placesStamp = stamp; placesRead = true
+    }
+
+    /// Runs while `wanted()` says so (a key is set, the Haven app is on the bar or was asked recently, and someone
+    /// can see the bar). Not wanted, it sleeps until a bar request or a new key wakes it (`poke`).
     func start(key: @escaping @MainActor () -> String, wanted: @escaping @MainActor () -> Bool) {
         loop?.cancel()
         loop = Task { [weak self] in
-            var backoff: UInt64 = 5
+            var backoff = 5.0
             while !Task.isCancelled {
                 guard let self else { return }
                 let k = key().trimmingCharacters(in: .whitespacesAndNewlines)
-                let loaded = Self.loadPlaces()
-                self.places = loaded.places; self.placesError = loaded.error
+                self.refreshPlaces()
                 guard !k.isEmpty, wanted() else {
                     self.connected = false
-                    try? await Task.sleep(nanoseconds: 5_000_000_000); continue
+                    await self.wake.wait(300) { !key().trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && wanted() }
+                    continue
                 }
                 let started = Date()
-                await self.run(key: k, places: loaded.places, stillWanted: { key() == k && wanted() && Self.loadPlaces().places == loaded.places })
+                let stamp = self.placesStamp
+                await self.run(key: k, places: self.places, stillWanted: { key() == k && wanted() && Self.placesModified() == stamp })
                 self.connected = false
                 if Task.isCancelled { return }
                 // A connection that lived a while starts over quickly; one that keeps failing backs off to a minute.
                 backoff = Date().timeIntervalSince(started) > 120 ? 5 : min(60, backoff * 2)
-                try? await Task.sleep(nanoseconds: backoff * 1_000_000_000)
+                await Task.relaxedSleep(backoff)
             }
         }
     }
@@ -127,6 +150,10 @@ final class HavenFeed {
     /// One connection: subscribe within aisstream's 3 s, then read until it closes, the key or the places change,
     /// nobody wants Haven any more, or the stream has been silent for `idleLimit` (checked every 5 s, so an edited place shows on the bar almost at once).
     ///
+    /// The socket is read and its JSON parsed off the main actor (`read`); the main actor gets the parsed messages at
+    /// most once a second. Class B position reports (small craft) are not subscribed: their static data (message
+    /// 24) is not either, so those ships never had a length or type and passed as barges at the terminals.
+    ///
     /// The reader and the watchdog are separate tasks and `run` returns as soon as either finishes, so nothing here
     /// depends on a URLSession await coming back: after the Mac sleeps, `send` or `receive` on a dead connection can
     /// wait indefinitely, and the loop in `start` must still get to reload the places and reconnect. The watchdog
@@ -134,7 +161,7 @@ final class HavenFeed {
     private func run(key: String, places: [HavenPlace], stillWanted: @escaping @MainActor () -> Bool) async {
         let boxes = places.flatMap { p in [p.area] + (p.approach.map { [$0] } ?? []) }.map { b in [[b[0], b[2]], [b[1], b[3]]] }
         let sub: [String: Any] = ["APIKey": key, "BoundingBoxes": boxes,
-                                  "FilterMessageTypes": ["PositionReport", "StandardClassBPositionReport", "ShipStaticData"]]
+                                  "FilterMessageTypes": ["PositionReport", "ShipStaticData"]]
         guard let url = URL(string: "wss://stream.aisstream.io/v0/stream"),
               let body = try? JSONSerialization.data(withJSONObject: sub), let text = String(data: body, encoding: .utf8) else { return }
         let ws = URLSession.shared.webSocketTask(with: url)
@@ -149,25 +176,24 @@ final class HavenFeed {
             once.resume = { done.resume() }
             reader = Task { [weak self] in
                 defer { once.fire() }
-                do { try await ws.send(.string(text)) } catch { self?.report(error, ws); return }
-                while !Task.isCancelled {
-                    let msg: URLSessionWebSocketTask.Message
-                    do { msg = try await ws.receive() } catch { self?.report(error, ws); return }
-                    guard let self, !once.fired else { return }
-                    let data: Data
-                    switch msg { case .data(let d): data = d; case .string(let s): data = Data(s.utf8); @unknown default: continue }
-                    guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { continue }
-                    if let e = obj["error"] as? String { self.lastError = "aisstream.io: \(e)"; return }
+                do { try await ws.send(.string(text)) } catch { self?.report(error.localizedDescription, ws); return }
+                let end = await Self.read(ws) { batch in
+                    guard let self, !once.fired else { return false }
                     if !self.connected { self.connected = true; self.lastError = nil; WireLog.shared.event("haven: aisstream connected, \(boxes.count) boxes") }
-                    self.messages += 1
                     self.lastMessage = Date()
-                    self.ingest(obj)
+                    for m in batch { self.messages += 1; self.ingest(m) }
+                    return true
+                }
+                switch end {
+                case .serverError(let e): self?.lastError = "aisstream.io: \(e)"
+                case .failed(let why): self?.report(why, ws)
+                case .stopped: break
                 }
             }
             watchdog = Task { [weak self] in
                 defer { once.fire() }
                 while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    await Task.relaxedSleep(5)
                     guard let self, !Task.isCancelled else { return }
                     if !stillWanted() { self.aborted = true; return }
                     if Date().timeIntervalSince(self.lastMessage) > Self.idleLimit {
@@ -184,8 +210,62 @@ final class HavenFeed {
     }
 
     /// A failed send or receive, unless the watchdog aborted the socket on purpose or the server said goodbye.
-    private func report(_ error: Error, _ ws: URLSessionWebSocketTask) {
-        if !aborted, ws.closeCode != .goingAway { lastError = Self.closeReason(ws) ?? error.localizedDescription }
+    private func report(_ error: String, _ ws: URLSessionWebSocketTask) {
+        if !aborted, ws.closeCode != .goingAway { lastError = Self.closeReason(ws) ?? error }
+    }
+
+    /// One AIS message, parsed off the main actor.
+    struct AIS: Sendable {
+        var mmsi: Int
+        var name: String?
+        var isStatic: Bool
+        var type: Int?
+        var length: Int?
+        var destination: String?
+        var eta: DateComponents?
+        var lat: Double?, lon: Double?, sog: Double?
+    }
+    enum ReadEnd: Sendable { case serverError(String), failed(String), stopped }
+
+    /// Receives and parses until the socket fails, aisstream sends an error, or `deliver` says stop. Runs off the
+    /// main actor; parsed messages are handed over in batches, at most once a second (the stream brings a few a second).
+    nonisolated static func read(_ ws: URLSessionWebSocketTask, deliver: @MainActor ([AIS]) -> Bool) async -> ReadEnd {
+        var batch: [AIS] = [], flushedAt = Date.distantPast
+        while !Task.isCancelled {
+            let msg: URLSessionWebSocketTask.Message
+            do { msg = try await ws.receive() } catch { return .failed(error.localizedDescription) }
+            let data: Data
+            switch msg { case .data(let d): data = d; case .string(let s): data = Data(s.utf8); @unknown default: continue }
+            guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { continue }
+            if let e = obj["error"] as? String { return .serverError(e) }
+            if let m = parse(obj) { batch.append(m) }
+            if Date().timeIntervalSince(flushedAt) >= 1 {
+                let out = batch; batch = []; flushedAt = Date()
+                guard await deliver(out) else { return .stopped }
+            }
+        }
+        return .stopped
+    }
+
+    nonisolated static func parse(_ m: [String: Any]) -> AIS? {
+        guard let meta = m["MetaData"] as? [String: Any], let mmsi = meta["MMSI"] as? Int,
+              let type = m["MessageType"] as? String, let body = (m["Message"] as? [String: Any])?[type] as? [String: Any] else { return nil }
+        var a = AIS(mmsi: mmsi, isStatic: type == "ShipStaticData")
+        if let n = (meta["ShipName"] as? String)?.trimmingCharacters(in: .whitespaces), !n.isEmpty { a.name = n }
+        if a.isStatic {
+            a.type = body["Type"] as? Int
+            if let d = body["Dimension"] as? [String: Any] {
+                let len = ((d["A"] as? Int) ?? 0) + ((d["B"] as? Int) ?? 0)
+                if len > 0 { a.length = len }
+            }
+            a.destination = (body["Destination"] as? String)?.trimmingCharacters(in: .whitespaces).uppercased()
+            if let e = body["Eta"] as? [String: Any], let mo = e["Month"] as? Int, let d = e["Day"] as? Int, mo > 0, d > 0 {
+                a.eta = DateComponents(month: mo, day: d, hour: e["Hour"] as? Int, minute: e["Minute"] as? Int)
+            }
+        } else if let lat = meta["latitude"] as? Double, let lon = meta["longitude"] as? Double {
+            a.lat = lat; a.lon = lon; a.sog = (body["Sog"] as? Double) ?? 0
+        }
+        return a
     }
 
     /// Resumes `run` once, whichever of the reader and the watchdog finishes first.
@@ -200,27 +280,20 @@ final class HavenFeed {
         return "aisstream.io: \(s)"
     }
 
-    private func ingest(_ m: [String: Any]) {
-        guard let meta = m["MetaData"] as? [String: Any], let mmsi = meta["MMSI"] as? Int,
-              let type = m["MessageType"] as? String, let body = (m["Message"] as? [String: Any])?[type] as? [String: Any] else { return }
-        var s = ships[mmsi] ?? Ship()
+    private func ingest(_ m: AIS) {
+        var s = ships[m.mmsi] ?? Ship()
         s.seen = Date()
-        if let n = (meta["ShipName"] as? String)?.trimmingCharacters(in: .whitespaces), !n.isEmpty { s.name = n }
-        if type == "ShipStaticData" {
-            if let t = body["Type"] as? Int { s.type = t }
-            if let d = body["Dimension"] as? [String: Any] {
-                let len = ((d["A"] as? Int) ?? 0) + ((d["B"] as? Int) ?? 0)
-                if len > 0 { s.length = len }
-            }
-            if let dest = body["Destination"] as? String { s.destination = dest.trimmingCharacters(in: .whitespaces).uppercased() }
-            if let e = body["Eta"] as? [String: Any], let mo = e["Month"] as? Int, let d = e["Day"] as? Int, mo > 0, d > 0 {
-                s.eta = DateComponents(month: mo, day: d, hour: e["Hour"] as? Int, minute: e["Minute"] as? Int)
-            }
-        } else if let lat = meta["latitude"] as? Double, let lon = meta["longitude"] as? Double {
+        if let n = m.name { s.name = n }
+        if m.isStatic {
+            if let t = m.type { s.type = t }
+            if let l = m.length { s.length = l }
+            if let dest = m.destination { s.destination = dest }
+            if let e = m.eta { s.eta = e }
+        } else if let lat = m.lat, let lon = m.lon {
             if s.at != .distantPast, abs(s.lat - lat) + abs(s.lon - lon) > 0.0002 { s.prev = (s.lat, s.lon) }
-            s.lat = lat; s.lon = lon; s.sog = (body["Sog"] as? Double) ?? 0; s.at = Date()
+            s.lat = lat; s.lon = lon; s.sog = m.sog ?? 0; s.at = Date()
         }
-        ships[mmsi] = s
+        ships[m.mmsi] = s
         if messages % 500 == 0 { ships = ships.filter { Date().timeIntervalSince($0.value.seen) < 5400 } }
     }
 

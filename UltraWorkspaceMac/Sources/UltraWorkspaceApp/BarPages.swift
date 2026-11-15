@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Combine
 import UltraBarKit
 
 /// The data API for the bar's Deckhand apps (bar apps 2.0). Every app carries its own page in its APK and loads it
@@ -15,7 +16,7 @@ import UltraBarKit
 @MainActor
 final class BarPages {
     /// Pages whose data comes from this Mac through `route` (Monitor's samples are served by `AppModel.startBarDataServer`).
-    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "zeekr"]
+    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
@@ -27,8 +28,25 @@ final class BarPages {
     private var music: [String: Any] = ["playing": false, "hasTrack": false]
     private var art: (key: String, jpeg: Data)?
     private var linear: [String: Any] = ["issues": [], "hasKey": false]
-    /// When each page's data was last asked for: the Linear poll runs fast while the Tasks page is open.
-    private var lastHit: [String: Date] = [:]
+    /// When each page's data was last asked for: the Linear poll runs fast while the Tasks page is open. Every
+    /// request also wakes the feeds (`poke`), whose loops sleep until then instead of checking every 2 to 5 s.
+    private var lastHit: [String: Date] = [:] { didSet { poke() } }
+    /// Woken by every bar request (and a changed API key).
+    private let hits = WakeSignal()
+    /// Woken when the bar config may have changed: a setting, the Tide or Teletekst file, `repushConfig`.
+    private let configWake = WakeSignal()
+    private var subscriptions: [AnyCancellable] = []
+    /// Wakes the loops that wait for a bar request: this class's own, the feeds', the Music poll.
+    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); model?.musicWake.signal() }
+    /// Nobody can be looking at the bar apps: the bar's screen is off (presence over ADB) or this Mac is asleep,
+    /// has its screens off or is locked, and no bar app asked for anything in the last two minutes (Deckhand Home
+    /// asks every minute while it is on screen). The feeds pause then; the next request wakes them.
+    private var dormant: Bool {
+        guard let model, model.barScreenOn == false || PowerState.shared.idle else { return false }
+        return lastHit.values.max().map { Date().timeIntervalSince($0) > 120 } ?? true
+    }
+    /// `wanted`, and someone can see it.
+    private func feedWanted(_ page: String) -> Bool { wanted(page) && !dormant }
     /// Seconds since a page last asked for its data (nil: never) — `AppModel.musicWanted` slows the Music poll on it.
     func secondsSinceHit(_ page: String) -> TimeInterval? { lastHit[page].map { Date().timeIntervalSince($0) } }
     private var tasks: [Task<Void, Never>] = []
@@ -57,8 +75,6 @@ final class BarPages {
     let cask = CaskFeed()
     /// Schiphol's runways and traffic (adsb.lol) and, with the user's key, its timetable; polled while the app is on the bar.
     let schiphol = SchipholFeed()
-    /// The owner's Zeekr (Zeekr's EU gateway), polled while the Zeekr app is on the bar.
-    let zeekr = ZeekrFeed()
     private weak var model: AppModel?
     private var settings: AppSettings?
 
@@ -66,60 +82,81 @@ final class BarPages {
         stop()
         self.model = model; self.settings = settings
         haven.start(key: { model.aisstreamKey }, wanted: { [weak self] in
-            model.barAppVersion("haven") != nil || (self?.lastHit["haven"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+            guard let self, !self.dormant else { return false }
+            return model.barAppVersion("haven") != nil || (self.lastHit["haven"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
         strava.start(wanted: { [weak self] in
-            model.barAppVersion("strava") != nil || (self?.lastHit["strava"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+            guard let self, !self.dormant else { return false }
+            return model.barAppVersion("strava") != nil || (self.lastHit["strava"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
         cask.start(key: { model.whiskystatsKey }, wanted: { [weak self] in
             model.barAppVersion("cask") != nil || (self?.lastHit["cask"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
         schiphol.start(open: { [weak self] in self?.lastHit["schiphol"].map { Date().timeIntervalSince($0) < 120 } ?? false },
-                       installed: { [weak self] in model.barAppVersion("schiphol") != nil || (self?.lastHit["schiphol"].map { Date().timeIntervalSince($0) < 600 } ?? false) })
-        zeekr.start(wanted: { [weak self] in
-            model.barAppVersion("zeekr") != nil || (self?.lastHit["zeekr"].map { Date().timeIntervalSince($0) < 600 } ?? false)
-        }, pageOpen: { [weak self] in self?.lastHit["zeekr"].map { Date().timeIntervalSince($0) < 30 } ?? false })
+                       home: { [weak self] in self?.lastHit["home"].map { Date().timeIntervalSince($0) < 120 } ?? false },
+                       installed: { [weak self] in
+                           guard let self, !self.dormant else { return false }
+                           return model.barAppVersion("schiphol") != nil || (self.lastHit["schiphol"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+                       })
+        // A new Linear or aisstream key takes effect at once (after the assignment: `$` publishes before it).
+        model.$linearKey.combineLatest(model.$aisstreamKey).dropFirst().removeDuplicates { $0 == $1 }
+            .receive(on: DispatchQueue.main).sink { [weak self] _ in MainActor.assumeIsolated { self?.poke() } }.store(in: &subscriptions)
+        settings.objectWillChange.sink { [weak self] _ in MainActor.assumeIsolated { self?.configWake.signal() } }.store(in: &subscriptions)
+        subscriptions.append(AnyCancellable(NotificationCenter.default.publisher(for: Self.configFilesChanged).receive(on: DispatchQueue.main).sink { [weak self] _ in
+            MainActor.assumeIsolated { self?.configWake.signal() }
+        }))
         startLinearFeed(model: model)
         startConfigFeed(model: model, settings: settings)
-        tasks.append(Task { [weak self] in   // Claude sessions + Music: 2 s
+        tasks.append(Task { [weak self] in   // Claude sessions + Music: 2 s while their page is open, 30 s for Home's tile
             while !Task.isCancelled {
-                if let s = self, !s.wanted("claude"), !s.wanted("music") { try? await Task.sleep(nanoseconds: 2_000_000_000); continue }
+                if let s = self, !s.feedWanted("claude"), !s.feedWanted("music") {
+                    await s.hits.wait(600) { s.feedWanted("claude") || s.feedWanted("music") }; continue
+                }
+                // Every 2 s for the Claude and Music pages; every 30 s when only Home's tile is looking.
+                let pageOpen = (self?.lastHit["claude"].map { Date().timeIntervalSince($0) < 600 } ?? false) || (self?.wanted("music") ?? false)
+                // The Music page alone needs only the track: no cmux processes and no transcript reads for it.
+                let claudeOn = self?.feedWanted("claude") ?? false
                 // Low priority and incremental (ClaudeUsage.snapshot): this must never crowd out the link.
                 // Every Claude session open in cmux (its newest transcript per workspace), else the last hour's.
-                let s = await Task.detached(priority: .utility) { () -> [ClaudeUsage.Session] in
-                    let open = CmuxNames.workspaces()
-                    guard !open.isEmpty else { return ClaudeUsage.sessions() }
-                    var seen = Set<String>()
-                    return open.compactMap { w in
-                        guard var s = ClaudeUsage.latestSession(cwd: w.directory), seen.insert(s.id).inserted else { return nil }
-                        if let t = w.title { s.project = t }
-                        return s
+                if claudeOn, let self {
+                    let s = await Task.detached(priority: .utility) { () -> [ClaudeUsage.Session] in
+                        let open = CmuxNames.workspaces()
+                        guard !open.isEmpty else { return ClaudeUsage.sessions() }
+                        var seen = Set<String>()
+                        return open.compactMap { w in
+                            guard var s = ClaudeUsage.latestSession(cwd: w.directory), seen.insert(s.id).inserted else { return nil }
+                            if let t = w.title { s.project = t }
+                            return s
+                        }
+                    }.value
+                    let cmux = await Task.detached(priority: .utility) { CmuxNames.byDirectory() }.value
+                    // cmux's sidebar status costs a process per workspace: at most every 5 s while the page is open, else every minute.
+                    let cmuxStatus = await Task.detached(priority: .utility) { CmuxNames.claudeStatus(maxAge: pageOpen ? 5 : 60) }.value
+                    let snap = await Task.detached(priority: .utility) { ClaudeUsage.snapshot() }.value
+                    let now = Date()
+                    // Only a session that needs you counts as waiting: a question (AskUserQuestion) or a tool call waiting
+                    // for permission (cmux says waiting while the transcript ends in an unanswered tool call). A session whose
+                    // turn simply ended (Claude's last entry is text) is "done": your turn, but nothing is being asked.
+                    func status(_ x: ClaudeUsage.Session) -> String {
+                        if x.state == .question { return "question" }
+                        if let c = cmuxStatus[x.cwd] { return c == "waiting" ? (x.state == .waiting ? "done" : "waiting") : c }
+                        return x.state == .working ? "running" : "done"
                     }
-                }.value
-                let cmux = await Task.detached(priority: .utility) { CmuxNames.byDirectory() }.value
-                let cmuxStatus = await Task.detached(priority: .utility) { CmuxNames.claudeStatus() }.value
-                let snap = await Task.detached(priority: .utility) { ClaudeUsage.snapshot() }.value
+                    // Needs you first, then running, then done, then idle; within each, the most recent first.
+                    func rank(_ st: String) -> Int { st == "waiting" || st == "question" ? 0 : st == "running" ? 1 : st == "done" ? 2 : 3 }
+                    let ordered = s.sorted { a, b in
+                        let ra = rank(status(a)), rb = rank(status(b))
+                        return ra != rb ? ra < rb : a.lastAt > b.lastAt
+                    }
+                    let budget = settings.claudeDailyBudget
+                    self.claude = ["sessions": ordered.prefix(12).map { ["project": cmux[$0.cwd] ?? $0.project, "title": $0.title, "state": status($0), "ago": Int(now.timeIntervalSince($0.lastAt)), "last": $0.lastText] },
+                                   "tokens": ClaudeUsage.shortTokens(snap.todayTokens), "tokensRaw": snap.todayTokens, "budget": budget,
+                                   "plan": settings.claudePlan.title, "active": snap.activeSessions, "waiting": s.filter { ["waiting", "question"].contains(status($0)) }.count]
+                }
                 // Music's state comes from the model's own 3 s poll (and is refreshed at once by the page's
                 // play/next/previous): asking Music again here ran a second AppleScript on the main thread every 2 s.
                 let np = model.nowPlaying
                 guard let self else { return }
-                let now = Date()
-                // Status as cmux's sidebar shows it (running / waiting / idle) when cmux knows the workspace, else from
-                // the transcript: Claude busy = running, Claude done or asking = waiting.
-                func status(_ x: ClaudeUsage.Session) -> String {
-                    if let c = cmuxStatus[x.cwd] { return c == "waiting" && x.state == .question ? "question" : c }
-                    return x.state == .working ? "running" : x.state == .question ? "question" : "waiting"
-                }
-                // Waiting ones first, then running, then idle; within each, the most recent first.
-                func rank(_ st: String) -> Int { st == "waiting" || st == "question" ? 0 : st == "running" ? 1 : 2 }
-                let ordered = s.sorted { a, b in
-                    let ra = rank(status(a)), rb = rank(status(b))
-                    return ra != rb ? ra < rb : a.lastAt > b.lastAt
-                }
-                let budget = settings.claudeDailyBudget
-                self.claude = ["sessions": ordered.prefix(12).map { ["project": cmux[$0.cwd] ?? $0.project, "title": $0.title, "state": status($0), "ago": Int(now.timeIntervalSince($0.lastAt)), "last": $0.lastText] },
-                               "tokens": ClaudeUsage.shortTokens(snap.todayTokens), "tokensRaw": snap.todayTokens, "budget": budget,
-                               "plan": settings.claudePlan.title, "active": snap.activeSessions, "waiting": s.filter { ["waiting", "question"].contains(status($0)) }.count]
                 let key = np.title + "|" + np.artist + "|" + np.album
                 if np.hasTrack, self.art?.key != key {
                     let jpeg = AppleMusic.currentArtwork().flatMap { Self.jpeg($0, side: 240) }
@@ -127,27 +164,27 @@ final class BarPages {
                 }
                 self.music = ["playing": np.isPlaying, "hasTrack": np.hasTrack, "title": np.title, "artist": np.artist, "album": np.album, "artKey": key.hashValue]
                 self.updated["claude"] = Date()
-                // Every 2 s for the Claude and Music pages; every 30 s when only Home's tile is looking.
-                let pageOpen = (self.lastHit["claude"].map { Date().timeIntervalSince($0) < 600 } ?? false) || self.wanted("music")
-                for _ in 0..<(pageOpen ? 1 : 15) {
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
-                    if !pageOpen, self.lastHit["claude"].map({ Date().timeIntervalSince($0) < 5 }) ?? false { break }
-                }
+                if pageOpen { await Task.relaxedSleep(2) }
+                else { await self.hits.wait(30) { self.lastHit["claude"].map { Date().timeIntervalSince($0) < 5 } ?? false } }
             }
         })
         tasks.append(Task { [weak self] in   // Home's Weather tile: 10 min while Home is on screen
             var last = Date.distantPast
             while !Task.isCancelled {
-                if let s = self, s.homeWanted, Date().timeIntervalSince(last) > 600 {
+                guard let s = self else { return }
+                let shown = s.homeWanted && !s.dormant
+                if shown, Date().timeIntervalSince(last) > 600 {
                     last = Date()
-                    if let w = try? await model.resolveWeather(settings: settings, metric: settings.units != .imperial) { self?.homeWeather = w }
+                    if let w = try? await model.resolveWeather(settings: settings, metric: settings.units != .imperial) { s.homeWeather = w }
                 }
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                // Until the next 10-minute mark while Home is shown, else until Home asks again.
+                let left = shown ? max(1, 600 - Date().timeIntervalSince(last)) : 3600
+                await s.hits.wait(left) { s.homeWanted && !s.dormant && Date().timeIntervalSince(last) > 600 }
             }
         })
         tasks.append(Task { [weak self] in   // calendar: 1 min
             while !Task.isCancelled {
-                if let s = self, !s.wanted("calendar") { try? await Task.sleep(nanoseconds: 2_000_000_000); continue }
+                if let s = self, !s.feedWanted("calendar") { await s.hits.wait(600) { s.feedWanted("calendar") }; continue }
                 let events = await CalendarSource.upcoming(limit: 40, calendarIDs: settings.calendarIDs, days: 3)
                 guard let self else { return }
                 let cal = Calendar.current, today = cal.startOfDay(for: Date())
@@ -166,12 +203,12 @@ final class BarPages {
                 }
                 self.calendar = ["days": days, "authorized": CalendarSource.authStatus() == .authorized]
                 self.updated["calendar"] = Date()
-                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                await Task.relaxedSleep(60)
             }
         })
     }
 
-    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); zeekr.stop() }
+    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop() }
 
     /// Linear for the Tasks app.
     private func startLinearFeed(model: AppModel) {
@@ -179,25 +216,29 @@ final class BarPages {
             while !Task.isCancelled {
                 guard let self else { return }
                 let key = model.linearKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Only while the Tasks app is on the bar (or asked lately) and someone can see it.
+                let tasksWanted = { (model.barAppVersion("tasks") != nil || (self.lastHit["tasks"].map { Date().timeIntervalSince($0) < 600 } ?? false)) && !self.dormant }
+                if !key.isEmpty, !tasksWanted() {
+                    await self.hits.wait(600) { tasksWanted() || model.linearKey.trimmingCharacters(in: .whitespacesAndNewlines) != key }
+                    continue
+                }
                 if key.isEmpty {
-                    self.linear = ["issues": [], "hasKey": false]; model.linearError = nil
+                    self.linear = ["issues": [], "hasKey": false]; model.update(\.linearError, nil)
                 } else {
                     do {
                         let r = try await LinearTasks.fetch(apiKey: key)
-                        model.linearError = nil
+                        model.update(\.linearError, nil)
                         self.linear = Self.linearDict(r)
                     } catch {
-                        model.linearError = error.localizedDescription
+                        model.update(\.linearError, error.localizedDescription)
                         self.linear = ["hasKey": true, "issues": self.linear["issues"] ?? [], "error": error.localizedDescription]
                     }
                 }
                 // A new key takes effect at once. 20 s while the Tasks page is open on the bar (so an issue closed
                 // in Linear disappears quickly), two minutes otherwise, waking up as soon as the page is opened.
                 let open = self.lastHit["tasks"].map { Date().timeIntervalSince($0) < 60 } ?? false
-                for _ in 0..<(open ? 4 : 24) {
-                    try? await Task.sleep(nanoseconds: 5_000_000_000)
-                    if Task.isCancelled || model.linearKey != key { break }
-                    if !open, let t = self.lastHit["tasks"], Date().timeIntervalSince(t) < 10 { break }
+                await self.hits.wait(open ? 20 : 120) {
+                    model.linearKey.trimmingCharacters(in: .whitespacesAndNewlines) != key || (!open && self.lastHit["tasks"].map { Date().timeIntervalSince($0) < 10 } ?? false)
                 }
             }
         })
@@ -230,41 +271,72 @@ final class BarPages {
         return doc
     }
 
-    /// Keeps `/config.json` current (every 10 s; the location is cached by the model) and pushes a changed
-    /// document to the bar. A push that fails (ADB off) is retried on the next change or after 30 minutes.
+    /// Keeps `/config.json` current and pushes a changed document to the bar: at once when a setting, the Tide or
+    /// Teletekst file changes or `repushConfig` asks, else every 5 minutes (the location is cached by the model for
+    /// an hour). Until 2026-11-15 this ran every 10 s. A push that fails (ADB off) is retried on the next change or
+    /// after 30 minutes.
     private var pushedConfig: Data?
     private var pushedAt = Date.distantPast
+    /// Posted by the Tide and Teletekst editors after they saved their file.
+    nonisolated static let configFilesChanged = Notification.Name("DeckhandBarConfigFilesChanged")
     /// Forget what was pushed, so the next round pushes again (after a bar app was installed).
-    func repushConfig() { pushedConfig = nil }
+    func repushConfig() { pushedConfig = nil; configWake.signal() }
 
     private func startConfigFeed(model: AppModel, settings: AppSettings) {
         tasks.append(Task { [weak self] in
             while !Task.isCancelled {
                 let loc = try? await model.resolveLocation(settings: settings)
                 let doc = Self.configDocument(settings: settings, location: loc)
-                let data = (try? JSONSerialization.data(withJSONObject: doc, options: [.sortedKeys])) ?? Data()
+                // What is pushed over ADB also carries this Mac's address and the bar's data key (never served).
+                let data = (try? JSONSerialization.data(withJSONObject: Self.withMacSection(doc, model: model), options: [.sortedKeys])) ?? Data()
                 guard let self else { return }
                 self.barConfig = doc
                 if data != self.pushedConfig || Date().timeIntervalSince(self.pushedAt) > 1800 {
                     if await Self.pushConfig(data, model: model) { self.pushedConfig = data; self.pushedAt = Date() }
                     else { self.pushedAt = Date() }   // ADB off: try again on the next change or in 30 min
                 }
-                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                // `objectWillChange` comes before the new value is set, and typing sends one per key: wait a second.
+                if await self.configWake.sleep(300) { await Task.relaxedSleep(1) }
             }
         })
     }
 
-    /// `am broadcast` of the document to each on-bar app (base64, so no shell quoting). `-f 32` is
-    /// FLAG_INCLUDE_STOPPED_PACKAGES: an app that was installed but never opened is "stopped" and would not get it
-    /// (seen on the bar 2026-11-06). True when the bar took it.
+    /// The pushed document: `doc` plus `"mac": {"base": "http://<this Mac>:7432", "key": "<64 hex>"}` for the selected
+    /// bar (M2/M3, bar apps 2.4 and Home 1.6): the apps accept only beacons signed with that key and send it as
+    /// `X-Deckhand-Key` on every request. Only ever sent over ADB (DUMP-guarded receiver), never served as /config.json.
+    static func withMacSection(_ doc: [String: Any], model: AppModel) -> [String: Any] {
+        guard let serial = model.selectedSerial, let ip = model.ipForSelected(), let mine = LocalIP.address(reaching: ip) else { return doc }
+        let key = Store.shared.barKey(serial: serial)
+        guard !key.isEmpty else { return doc }
+        let port = MonitorServer.shared.port != 0 ? MonitorServer.shared.port : MonitorServer.defaultPort
+        var out = doc
+        out["mac"] = ["base": "http://\(mine):\(port)", "key": key]
+        return out
+    }
+
+    /// Every Deckhand package on the bar that takes the config broadcast: the on-bar apps (settings), the Mac apps and
+    /// Monitor (address and key), and Deckhand Home (address and key).
+    nonisolated static var configReceivers: [String] {
+        (onBar.union(macPages).union(["monitor"])).sorted().map { package(for: $0) } + ["nl.denoronha.deckhand.home"]
+    }
+
+    /// `am broadcast` of the document to each Deckhand app (base64, so no shell quoting), a few apps per shell
+    /// command so a command line stays short. `-f 32` is FLAG_INCLUDE_STOPPED_PACKAGES: an app that was installed but
+    /// never opened is "stopped" and would not get it (seen on the bar 2026-11-06). The command is not logged (it holds
+    /// the key). True when the bar took it.
     private static func pushConfig(_ data: Data, model: AppModel) async -> Bool {
         guard let adb = AdbBridge.find(), let ip = model.ipForSelected() else { return false }
         let b = AdbBridge(path: adb, ip: ip)
         guard await b.connect() else { return false }
         let b64 = data.base64EncodedString()
-        let cmd = onBar.sorted().map { "am broadcast -f 32 -a nl.denoronha.deckhand.CONFIG -p \(package(for: $0)) --es config64 \(b64)" }.joined(separator: "; ")
-        let out = await b.shell(cmd)
-        return out.contains("Broadcast completed")
+        var ok = true
+        let all = configReceivers
+        for start in stride(from: 0, to: all.count, by: 6) {
+            let cmd = all[start..<min(start + 6, all.count)].map { "am broadcast -f 32 -a nl.denoronha.deckhand.CONFIG -p \($0) --es config64 \(b64)" }.joined(separator: "; ")
+            let out = await b.shell(cmd)
+            ok = ok && out.contains("Broadcast completed")
+        }
+        return ok
     }
 
     nonisolated static func linearDict(_ r: LinearTasks.Result) -> [String: Any] {
@@ -279,7 +351,10 @@ final class BarPages {
         guard let page = parts.first, Self.macPages.contains(page) else { return nil }
         if page == "tasks", parts.count == 3, parts[1] == "done" {
             // The bar marks an issue done: Deckhand moves it to the team's Done state and drops it from the list.
+            // Only an issue this Mac served on the Tasks page (L6): the full-access key must not close any issue by UUID.
             let uid = parts[2]
+            let served = DispatchQueue.main.sync { ((self.linear["issues"] as? [[String: Any]]) ?? []).contains { ($0["uid"] as? String) == uid } }
+            guard served else { return MonitorServer.Response("404 Not Found", type: "text/plain", body: Data("not a served issue".utf8)) }
             DispatchQueue.main.async {
                 let key = model.linearKey.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !key.isEmpty, uid.range(of: "^[0-9a-fA-F-]{36}$", options: .regularExpression) != nil else { return }
@@ -313,12 +388,6 @@ final class BarPages {
         let parts = path.split(separator: "/").map(String.init)
         if parts == ["config.json"] { return .json(DispatchQueue.main.sync { self.barConfig }) }
         if parts == ["home", "glance.json"] { return .json(DispatchQueue.main.sync { () -> [String: Any] in self.lastHit["home"] = Date(); return self.glance() }) }
-        // The owner's own car picture for the Zeekr page (kept in Deckhand's private folder, never in the APK).
-        if parts.count == 3, parts[0] == "zeekr", parts[1] == "car", parts[2].hasSuffix(".png") {
-            let variant = String(parts[2].dropLast(4))
-            guard ZeekrFeed.pictures.contains(where: { $0.variant == variant }) else { return nil }
-            return DispatchQueue.main.sync { self.zeekr.picture(variant) }.map { MonitorServer.Response(type: "image/png", body: $0) }
-        }
         guard parts.count == 2, let page = parts.first, Self.macPages.contains(page) else { return nil }
         if parts[1] == "data.json" {
             // A request that wakes an idle feed gets 503: the page retries in 2 s and then gets fresh data, instead
@@ -347,7 +416,6 @@ final class BarPages {
         case "schiphol": return schiphol.snapshot(clock24h: settings?.clock24h ?? true)
         case "haven": return haven.snapshot(hasKey: !(model?.aisstreamKey.isEmpty ?? true), clock24h: settings?.clock24h ?? true)
         case "strava": return strava.snapshot(metric: settings?.units != .imperial, clock24h: settings?.clock24h ?? true)
-        case "zeekr": return zeekr.snapshot(clock24h: settings?.clock24h ?? true)
         case "cask": return cask.snapshot(hasKey: !(model?.whiskystatsKey.isEmpty ?? true))
         default: return [:]
         }
@@ -394,18 +462,6 @@ final class BarPages {
 
         // Weather: temperature on the icon, the sky in words.
         if let w = homeWeather { apps["weather"] = ["line": w.sky.label, "temp": "\(Int(w.temperature.rounded()))°"] }
-
-        // Zeekr: battery and range, or charging and when it is full.
-        let z = zeekr.snapshot(clock24h: clock24h)
-        if z["signIn"] as? Bool ?? false { apps["zeekr"] = ["line": "Sign in again", "tone": "warn"] }
-        else if let car = z["car"] as? [String: Any], let soc = car["soc"] as? Int {
-            if car["charge"] as? String == "charging" {
-                apps["zeekr"] = ["line": "⚡ \(soc)%" + ((car["fullAt"] as? String).map { " · \($0)" } ?? ""), "tone": "live"]
-            } else {
-                let range = (car["range"] as? Double).map { " · \(Int($0.rounded())) km" } ?? (car["range"] as? Int).map { " · \($0) km" } ?? ""
-                apps["zeekr"] = ["line": "\(soc)%" + range, "tone": soc <= 20 ? "warn" : ""]
-            }
-        }
 
         // Training: this week's distance in the sport done most.
         let st = strava.snapshot(metric: settings?.units != .imperial, clock24h: clock24h)

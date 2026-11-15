@@ -47,7 +47,7 @@ extension AppModel {
             defer { adbBusy = false }
             let out = await AdbBridge.enableTcpip(adb: adb, usbSerial: serial)
             if out.contains("restarting in TCP mode") {
-                say("Wi-Fi ADB is on (until the bar's next reboot) — connecting over Wi-Fi…")
+                say("WiFi ADB is on until the bar's next reboot. Connecting…")
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 adbBusy = false; checkAdb()
             } else {
@@ -63,9 +63,9 @@ extension AppModel {
         Task {
             defer { adbBusy = false }
             let b = AdbBridge(path: adb, ip: ip)
-            guard await b.connect() else { say("The bar refuses ADB on \(ip):5555 — turn Wi-Fi ADB on first (over USB, or in the bar's Developer options)."); return }
+            guard await b.connect() else { say("The bar does not accept the debug bridge. Turn on WiFi ADB in the bar's Developer options first."); return }
             if await b.makePersistent() {
-                say("Wi-Fi ADB now stays on after a reboot.")
+                say("The debug bridge now stays on after a reboot.")
                 adbStatus.persistent = true; adbStatus.wifi = true
             } else {
                 say("The bar did not accept the settings (persist.adb.tcp.port 5555 and USB debugging on).")

@@ -19,8 +19,8 @@ enum Theme: String, CaseIterable, Codable, Identifiable {
     var title: String {
         switch self {
         case .weather: return "Weather"
-        case .music: return "Music (album art)"
-        case .claude: return "Claude Code monitor"
+        case .music: return "Music"
+        case .claude: return "Claude"
         case .cpu: return "CPU & memory"
         case .network: return "Network"
         case .battery: return "Battery & power"

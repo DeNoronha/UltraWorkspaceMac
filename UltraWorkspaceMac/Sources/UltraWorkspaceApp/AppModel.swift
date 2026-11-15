@@ -8,10 +8,15 @@ final class AppModel: ObservableObject {
     // CoreBars
     @Published var discovered: [CoreBar] = []
     @Published var paired: [Store.PairedCoreBar] = Store.shared.pairedCoreBars
-    @Published var selectedSerial: String? { didSet { if oldValue != selectedSerial { startLink() } } }
+    /// Another bar: its own data key goes to its apps at once (`repushConfig`).
+    @Published var selectedSerial: String? { didSet { if oldValue != selectedSerial { startLink(); barPages.repushConfig() } } }
 
     // Selected CoreBar state
-    @Published var modules: [AttachedModule] = []
+    @Published var modules: [AttachedModule] = [] {
+        // The cube's serial is only known once the link has listed the bar's modules, which can be after launch:
+        // resume timed switching then (and again if the cube reappears after the bar restarted).
+        didSet { if oldValue.first(where: { $0.isVivoCube })?.serial != modules.first(where: { $0.isVivoCube })?.serial { resumeCubeRotation() } }
+    }
     @Published var selectedModuleSerial: String?
 
     // UI state
@@ -22,15 +27,19 @@ final class AppModel: ObservableObject {
     @Published var pairingPrompt: String?
     @Published var showingAddIP = false
     @Published var showingConnect = false
-    @Published var nav: NavItem = .coreBarPage
+    @Published var nav: NavItem = .coreBarPage { didSet { if nav != oldValue { musicWake.signal() } } }
     @Published var showActivity = UserDefaults.standard.bool(forKey: "showActivity") { didSet { UserDefaults.standard.set(showActivity, forKey: "showActivity") } }
     @Published var scanStartedAt: Date?
     @Published var pairingStartedAt: Date?
-    @Published var selectedAddon: Theme = .weather
+    @Published var selectedAddon: Theme = .weather { didSet { if selectedAddon != oldValue { musicWake.signal() } } }
+    /// The app chosen on the Apps page (a package name), kept here so it survives switching pages.
+    @Published var selectedApp: String?
 
     // Music
     @Published var nowPlaying = AppleMusic.NowPlaying(isPlaying: false, title: "", artist: "", album: "", hasTrack: false)
     var musicPollTask: Task<Void, Never>?
+    /// Wakes the Music poll when something starts wanting `nowPlaying` (the Widgets page, the bar's Music app).
+    let musicWake = WakeSignal()
 
     // Weather
     @Published var lastWeather: OpenMeteo.Now?
@@ -70,7 +79,7 @@ final class AppModel: ObservableObject {
     @Published var barHome = BarHomeStatus()
     @Published var barHomeBusy: String?
     @Published var screensaver: CoreBarSession.ScreensaverConfig?
-    // Persistent link ("Mac agent") that answers the CoreBar's push queries. Wording lives in `LinkBadge`.
+    // Persistent link ("Mac agent") that answers the CoreBar's push queries. Wording lives in `ConnectionText`.
     @Published var link: CoreBarLink.State = .stopped
     /// Bar hardening (AppModel+Hardening): the firewall as last seen, whether the user wants it, and the bar's boot id
     /// (a new one means the bar restarted).
@@ -78,7 +87,10 @@ final class AppModel: ObservableObject {
     var barFirewallWanted = false
     var barFirewallTask: Task<Void, Never>?
     var lastBarBootID: String?
-    @Published var pushCount = 0
+    /// Push bookkeeping (`notePush`): plain properties, not `@Published`. The bar asks for the volume about 24 times a
+    /// minute, and publishing each one re-rendered every view that watches the model; the views that show these read
+    /// them on their own timer (`TimelineView`).
+    var pushCount = 0
     @Published var lastKnobVolume: Int?
     var activeLink: CoreBarLink?
     let agentSystemStats = SystemStats()
@@ -91,8 +103,8 @@ final class AppModel: ObservableObject {
     @Published var doctorItems: [DoctorItem] = []
     @Published var doctorRunning = false
     @Published var doctorRanAt: Date?
-    @Published var lastPushAt: Date?
-    @Published var lastVolumePushAt: Date?
+    var lastPushAt: Date?
+    var lastVolumePushAt: Date?
     /// Names + rendered previews of the layers in the last VivoCube package.
     @Published var vivoLayerNames: [String] = []
     @Published var vivoLayerImages: [Int: NSImage] = [:]
@@ -116,12 +128,13 @@ final class AppModel: ObservableObject {
     @Published var cubeProgress = StepProgress()
     @Published var pageProgress = StepProgress()
     @Published var lastCubeSentAt: Date?
-    /// Personal API key for the Tasks bar app (Linear). Stored as a user-only file, never in settings.json.
-    @Published var linearKey: String = Store.shared.loadSecret(name: "linear") ?? "" { didSet { Store.shared.saveSecret(linearKey, name: "linear") } }
-    /// aisstream.io API key for the Haven bar app (user-only file, like the Linear key; only sent to stream.aisstream.io).
-    @Published var aisstreamKey: String = Store.shared.loadSecret(name: "aisstream") ?? "" { didSet { Store.shared.saveSecret(aisstreamKey, name: "aisstream") } }
-    /// Whiskystats Data API key for the Cask bar app (user-only file; only sent to data.api.whiskystats.com).
-    @Published var whiskystatsKey: String = Store.shared.loadSecret(name: "whiskystats") ?? "" { didSet { Store.shared.saveSecret(whiskystatsKey, name: "whiskystats") } }
+    /// Personal API key for the Tasks bar app (Linear). In the secret store (Keychain `api:linear`), never in
+    /// settings.json; written once typing stops (`debounce`), not per keystroke.
+    @Published var linearKey: String = Store.shared.loadSecret(name: "linear") ?? "" { didSet { Store.shared.saveSecret(linearKey, name: "linear", debounce: true) } }
+    /// aisstream.io API key for the Haven bar app (secret store, like the Linear key; only sent to stream.aisstream.io).
+    @Published var aisstreamKey: String = Store.shared.loadSecret(name: "aisstream") ?? "" { didSet { Store.shared.saveSecret(aisstreamKey, name: "aisstream", debounce: true) } }
+    /// Whiskystats Data API key for the Cask bar app (secret store; only sent to data.api.whiskystats.com).
+    @Published var whiskystatsKey: String = Store.shared.loadSecret(name: "whiskystats") ?? "" { didSet { Store.shared.saveSecret(whiskystatsKey, name: "whiskystats", debounce: true) } }
     @Published var linearError: String?
     /// SHA-256 over the layer images of the last accepted cube package — an unchanged package is not sent again.
     var lastCubeDigest: Data?
@@ -137,7 +150,11 @@ final class AppModel: ObservableObject {
     @Published var barAppBusy: String?
     var presenceTask: Task<Void, Never>?
     var presenceLog: Process?
-    @Published var lastPresenceAt: Date?
+    /// Every presence line from the SenseCube sets this (several a minute while someone is there), so it is not
+    /// `@Published`; Settings reads it on its own timer.
+    var lastPresenceAt: Date?
+    /// Wakes the presence loop on a presence line or a dead log tail (AppModel+Presence).
+    let presenceWake = WakeSignal()
     @Published var barScreenOn: Bool?
     @Published var presenceStatus = "Off."
     @Published var lastPagePublishedAt: Date?
@@ -149,6 +166,11 @@ final class AppModel: ObservableObject {
     /// Last resolved "here" (AppModel+Weather): the bar pages ask every few seconds, CoreLocation and the
     /// reverse geocoder must not be hit that often.
     var locationCache: (key: String, at: Date, loc: (lat: Double, lon: Double, name: String))?
+    /// The last failed lookup: not retried for ten minutes (AppModel+Weather).
+    var locationFailure: (key: String, at: Date, message: String)?
+    /// The settings the background services run with, set once by `AppDelegate.startServices`; nil until then
+    /// (and in the developer snapshot mode, which starts no services).
+    var serviceSettings: AppSettings?
     /// URL of the bar's `openBrowser` request the user has not answered yet (AppModel+Link); one at a time.
     var browserRequestPending: String?
     /// "serial@ip" of discovered addresses that differ from the stored one and that a pinned AUTH is checking
@@ -167,6 +189,7 @@ final class AppModel: ObservableObject {
         if selectedSerial == nil, let first = paired.first { selectedSerial = first.serialNo }
         loadCachedModules()
         startLink()
+        reportSecretMigration()
     }
 
     /// Populate `modules` from the on-disk endpoint cache (written by the last
@@ -182,8 +205,16 @@ final class AppModel: ObservableObject {
         say("\(mods.count) module\(mods.count == 1 ? "" : "s") from the last scan. Use Find modules to rescan.")
     }
 
+    /// Assigns only when the value changed: every assignment to a `@Published` property re-renders the views that
+    /// watch the model, even when the value is the same.
+    func update<T: Equatable>(_ keyPath: ReferenceWritableKeyPath<AppModel, T>, _ value: T) {
+        if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
+    }
+
     func say(_ s: String) {
         statusLine = s
+        // Activity is kept only while the diagnostic log is on (Settings → Privacy); the status line always shows.
+        guard WireLog.shared.enabled else { if !log.isEmpty { log.removeAll() }; return }
         log.insert(LogEntry(text: s), at: 0)
         if log.count > 400 { log.removeLast(log.count - 400) }
     }

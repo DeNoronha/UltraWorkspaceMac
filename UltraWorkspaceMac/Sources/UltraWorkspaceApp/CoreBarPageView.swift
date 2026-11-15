@@ -1,34 +1,36 @@
 import SwiftUI
 import UltraBarKit
 
-/// CoreBar page: preview strip drawn from the card list, the list itself
-/// (drag, remove, add), one Publish button, details in disclosures.
+/// CoreBar: the Deckhand page on the bar. What the bar shows, a preview drawn from the card list, the list itself
+/// (drag, remove with Undo, add), and Publish in the toolbar. This is the one place where the bar's cards are chosen.
 struct CoreBarPageView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var settings: AppSettings
+    @Environment(\.undoManager) private var undo
     @StateObject private var cover = PreviewModel()
     @StateObject private var ui = UI()
-    private final class UI: ObservableObject { @Published var confirm = false; @Published var keyOpen = false; @Published var stripPage = 0 }
+    private final class UI: ObservableObject { @Published var confirm = false; @Published var stripPage = 0 }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Header("CoreBar", "A row of the bar's own cards; about \(AppSettings.coreCardsThatFit) fit, more scroll sideways.") {
-                Button { publish() } label: { Label("Publish page", systemImage: "arrow.up.circle.fill").frame(minWidth: 120) }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
+        Form {
+            DeviceStatusSection(kind: .bar) {
+                ProgressRow(progress: model.pageProgress, lastAt: model.lastPagePublishedAt, idle: "Published",
+                            never: settings.deckhandPagePublished ? "Published before this session." : "Not published yet.")
+            }
+            preview
+            cardsSection
+            if settings.coreCards.contains("WEATHER") { weatherKeySection }
+        }
+        .formStyle(.grouped)
+        .navigationSubtitle("Deckhand page")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { publish() } label: { Label("Publish", systemImage: "arrow.up.circle") }
+                    .labelStyle(.titleAndIcon)
+                    .prominentAction()
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(model.isWorking || model.pageProgress.isRunning || settings.coreCards.isEmpty)
-                    .help("Send these cards to the bar (⌘↩)")
-            }
-            DeviceStrip(kind: .bar)
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    ProgressRow(progress: model.pageProgress, lastAt: model.lastPagePublishedAt, idle: "Published", never: settings.deckhandPagePublished ? "Published before this session." : "Not sent yet.")
-                    preview
-                    onPage
-                    Panel("Pages on the bar") { pagesOnBar }
-                    Panel("Maintenance") { advanced }
-                }.padding(20)
+                    .help("Send these cards, and the knob and key bindings, to the bar (⌘↩)")
             }
         }
         .onAppear { reloadCover(); if model.corebarPages.isEmpty { model.refreshPages() } }
@@ -40,16 +42,13 @@ struct CoreBarPageView: View {
     }
     private func reloadCover() { cover.reload { guard let png = await model.renderPageCover(settings: settings) else { return nil }; return NSImage(data: png) } }
 
-
     // MARK: Preview strip
 
     private var preview: some View {
         let cards = settings.coreCards.compactMap(model.coreCard)
-        // One screenful of the bar at a time (about 4 cards on the 1424 × 280 strip); the bar scrolls
-        // sideways through the rest, so the preview pages through them the same way. A fixed width keeps
-        // a long list from pushing the split view wider than the window (2026-11-03).
+        // One screenful of the bar at a time; the bar scrolls sideways through the rest, so the preview pages through
+        // them the same way. Screenfuls by slots: the clock card takes two.
         let per = AppSettings.coreCardsThatFit
-        // Screenfuls by slots: the clock card takes two.
         var screenfuls: [[AppSettings.CoreCard]] = [[]]; var used = 0
         for c in cards {
             let w = c.id == "TIME" ? 2 : 1
@@ -59,7 +58,8 @@ struct CoreBarPageView: View {
         let pages = screenfuls.count
         let page = min(ui.stripPage, pages - 1)
         let shown = screenfuls[page]
-        return Panel("Preview", footer: "Drawn from the list below — not read back from the bar.") {
+        return Section {
+            // A fixed width keeps a long list from pushing the window wider (2026-11-03).
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black)
                 HStack(spacing: 6) {
@@ -67,17 +67,26 @@ struct CoreBarPageView: View {
                         tile(c, cover: c.id == "TIME" ? cover.image : nil)
                             .frame(width: c.id == "TIME" ? 164 : 82, height: 82)
                     }
-                    if cards.isEmpty { Text("No cards yet.").foregroundStyle(.secondary).padding(.leading, 12) }
+                    if cards.isEmpty { Text("No cards yet.").foregroundStyle(.white.opacity(0.7)).padding(.leading, 12) }
                 }.padding(8)
             }
             .frame(width: 8 + CGFloat(per) * 88 + 8, height: 98).clipped()
-            if pages > 1 {
-                HStack(spacing: 8) {
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Preview: " + shown.map(\.title).joined(separator: ", "))
+            HStack(spacing: 8) {
+                if pages > 1 {
                     Button { ui.stripPage = max(0, page - 1) } label: { Image(systemName: "chevron.left") }.disabled(page == 0).accessibilityLabel("Previous screenful")
-                    Text("Screenful \(page + 1) of \(pages) · the bar scrolls sideways through them").font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    Text("Screenful \(page + 1) of \(pages)").font(.callout).foregroundStyle(.secondary).monospacedDigit()
                     Button { ui.stripPage = min(pages - 1, page + 1) } label: { Image(systemName: "chevron.right") }.disabled(page >= pages - 1).accessibilityLabel("Next screenful")
                 }
+                Spacer()
+                Button("Redraw Preview") { reloadCover() }.help("Draw the preview again from the card list")
             }
+        } header: {
+            Text("Preview")
+        } footer: {
+            Footnote("Drawn from the card list, not read back from the bar.")
         }
     }
 
@@ -89,7 +98,7 @@ struct CoreBarPageView: View {
             } else {
                 VStack(spacing: 4) {
                     CardIcon(card: c, size: 28).font(.title2).foregroundStyle(.white.opacity(0.9))
-                    Text(c.title).font(.caption2).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+                    Text(c.title).font(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                 }.padding(4)
             }
         }
@@ -97,55 +106,55 @@ struct CoreBarPageView: View {
 
     // MARK: Cards on the page
 
-    private var onPage: some View {
+    private var cardsSection: some View {
         let cards = settings.coreCards.compactMap(model.coreCard)
-        return Panel("Cards on the bar", footer: "Drag to reorder. \(cards.count) card\(cards.count == 1 ? "" : "s") · about \(AppSettings.coreCardsThatFit) fit without scrolling. ⌁ = live from this Mac, only while Deckhand runs.") {
-            if cards.isEmpty { Text("Nothing on the bar yet — add a card below.").foregroundStyle(.secondary) }
-            List {
-                ForEach(Array(cards.enumerated()), id: \.element.id) { i, c in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary)
-                            Label { Text(c.title) } icon: { CardIcon(card: c) }
-                            if c.needsMac { Image(systemName: "bolt.horizontal").font(.caption).foregroundStyle(.orange).help("Live from this Mac") }
-                            if c.id == "WEATHER" {
-                                if settings.accuWeatherKey.isEmpty { Tag("needs key", .orange).help("The bar's weather card needs an AccuWeather key — press Key… to paste one.") }
-                                Button(ui.keyOpen ? "Hide key" : "Key…") { ui.keyOpen.toggle() }.buttonStyle(.link).font(.caption)
-                                    .help(ui.keyOpen ? "Hide the AccuWeather key field" : "Show the AccuWeather key field")
-                            }
-                            if c.id == "TIME" {
-                                Button("Update picture") { model.refreshDeckhandCover(settings: settings); reloadCover() }.buttonStyle(.link).font(.caption)
-                                    .disabled(!settings.deckhandPagePublished).help("Re-draws today's weather & date on the clock card")
-                            }
-                            Spacer()
-                            RemoveMark(title: c.title) { settings.coreCards.removeAll { $0 == c.id } }
-                        }
-                        if c.id == "WEATHER", ui.keyOpen {
-                            VStack(alignment: .leading, spacing: 4) {
-                                TextField("AccuWeather API key", text: $settings.accuWeatherKey).textFieldStyle(.roundedBorder).frame(maxWidth: 320)
-                                HStack(spacing: 6) {
-                                    Text("AccuWeather: 14-day trial, paid afterwards. Deckhand's own weather on the Clock card is free.").font(.caption).foregroundStyle(.secondary)
-                                    Link("Get a key", destination: URL(string: "https://developer.accuweather.com")!).font(.caption)
-                                }
-                            }.padding(.leading, 26)
-                        }
+        return Section {
+            if cards.isEmpty { Text("No cards yet. Add one below.").foregroundStyle(.secondary) }
+            ReorderableRows(items: cards, id: \.id, directions: ("Left", "Right"), move: { moveCards(cards, $0, $1) }) { _, c in
+                HStack(spacing: 8) {
+                    Label { Text(c.title) } icon: { CardIcon(card: c) }
+                    if c.needsMac {
+                        Image(systemName: "bolt.horizontal").foregroundStyle(.secondary)
+                            .help("Live from this Mac: updates only while Deckhand runs")
+                            .accessibilityLabel("Live from this Mac")
                     }
-                    // Row lines: with a wide list the ✕ sits far from the name, the line ties them together (2026-11-03).
-                    .listRowSeparator(.visible).listRowSeparatorTint(Color.primary.opacity(0.12))
-                    .accessibilityActions {
-                        Button("Move left") { settings.moveCoreCard(c.id, by: -1) }
-                        Button("Move right") { settings.moveCoreCard(c.id, by: 1) }
+                    if c.id == "WEATHER", settings.accuWeatherKey.isEmpty { Tag("Needs a key", .attention) }
+                    Spacer()
+                    if c.id == "TIME" {
+                        Button("Update Picture") { model.refreshDeckhandCover(settings: settings); reloadCover() }
+                            .disabled(!settings.deckhandPagePublished).help("Draw today's weather and date on the clock card again and upload it")
                     }
+                    RemoveMark(title: c.title) { remove(c) }
                 }
-                .onMove { from, to in var l = settings.coreCards; l.move(fromOffsets: from, toOffset: to); settings.coreCards = l }
+            } menu: { _, c in
+                Divider()
+                Button("Remove") { remove(c) }
             }
-            .listStyle(.inset).scrollContentBackground(.hidden)
-            .frame(height: CGFloat(max(1, cards.count)) * 28 + (ui.keyOpen ? 60 : 0) + 10)
             addCardMenu
+        } header: {
+            Text("Cards on the Deckhand page")
+        } footer: {
+            Footnote("\(cards.count) card\(cards.count == 1 ? "" : "s"); about \(AppSettings.coreCardsThatFit) fit without scrolling. Drag to reorder. Which page the bar shows is on Bar System.")
         }
     }
 
-    /// Same control as on the VivoCube page: one "Add a card…" menu.
+    /// `from`/`to` count the cards shown. When every stored id is a known card (always, unless a card was dropped from
+    /// Deckhand) that is the stored list itself; otherwise the shown cards are reordered and unknown ids kept after them.
+    private func moveCards(_ cards: [AppSettings.CoreCard], _ from: IndexSet, _ to: Int) {
+        if cards.count == settings.coreCards.count {
+            var l = settings.coreCards; l.move(fromOffsets: from, toOffset: to); settings.coreCards = l
+        } else {
+            var shown = cards.map(\.id); shown.move(fromOffsets: from, toOffset: to)
+            settings.coreCards = shown + settings.coreCards.filter { !shown.contains($0) }
+        }
+    }
+
+    private func remove(_ c: AppSettings.CoreCard) {
+        let before = settings.coreCards
+        settings.coreCards.removeAll { $0 == c.id }
+        registerUndo(undo, settings, \.coreCards, old: before, name: "Remove \(c.title)")
+    }
+
     private var addCardMenu: some View {
         let available = model.allCoreCardsNow.filter { !settings.coreCards.contains($0.id) }
         let hasSense = model.modules.contains { $0.type == "SENSE_CUBE" }
@@ -153,46 +162,25 @@ struct CoreBarPageView: View {
             ForEach(available) { c in
                 let needsSense = c.id.hasPrefix("SENSE_") && !hasSense
                 Button { settings.coreCards.append(c.id) } label: {
-                    Label(c.title + (needsSense ? " (no SenseCube found)" : (c.note.isEmpty ? "" : " — " + c.note)), systemImage: c.icon)
+                    Label(c.title + (needsSense ? " (no SenseCube found)" : ""), systemImage: c.icon)
                 }.disabled(needsSense)
+                .help(c.note)
             }
-        } label: { Label("Add a card…", systemImage: "plus") }
-        .frame(width: 150).disabled(available.isEmpty)
+        } label: { Label("Add a Card", systemImage: "plus") }
+        .fixedSize()
+        .disabled(available.isEmpty)
         .help(available.isEmpty ? "Every card is on the page." : "")
     }
 
-    // MARK: Disclosures
-
-    private var pagesOnBar: some View {
-        Group {
-            if model.corebarPages.isEmpty { Text("Not read yet.").foregroundStyle(.secondary) }
-            ForEach(model.corebarPages, id: \.id) { p in
-                HStack {
-                    Image(systemName: model.currentPageId == p.id ? "checkmark.circle.fill" : "circle").foregroundStyle(model.currentPageId == p.id ? .green : .secondary)
-                    Text(p.name)
-                    if ![AppModel.defaultPageId, AppModel.deckhandPageId].contains(p.id) { Text("from the official app").font(.caption).foregroundStyle(.secondary) }
-                    Spacer()
-                    Button("Show") { model.switchPage(id: p.id) }.buttonStyle(.link).disabled(model.currentPageId == p.id)
-                        .help("Switch the bar to the \(p.name) page").accessibilityLabel("Show the \(p.name) page")
-                }
-            }
-            Text("Publishing rewrites all pages (the bar cannot send them back). The official app's Deploy removes Deckhand's pictures — publish again afterwards.")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var advanced: some View {
-        Group {
-            HStack(spacing: 10) {
-                Button { model.refreshModules() } label: { Label(model.isWorking ? "Looking for modules…" : "Find modules", systemImage: "magnifyingglass") }.disabled(model.isWorking)
-                    .help("Scan the bar for attached modules (about 16 s). Tap the bar's screen first so they are awake.")
-                Button { model.refreshPages() } label: { Label("Re-read pages", systemImage: "arrow.clockwise") }
-                    .help("Ask the bar which pages it has")
-                Button { reloadCover() } label: { Label("Redraw preview", systemImage: "photo") }
-                    .help("Draw the preview strip again from the card list")
-            }
-            Text("Knob and key bindings are published with the page — see Controls.")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    /// The bar's own weather card needs an AccuWeather key; shown only while that card is on the page.
+    private var weatherKeySection: some View {
+        Section {
+            CommitSecureField("AccuWeather key", value: $settings.accuWeatherKey)
+            Link("Get a Key", destination: URL(string: "https://developer.accuweather.com")!)
+        } header: {
+            Text("Weather (bar's own)")
+        } footer: {
+            Footnote("AccuWeather has a 14-day trial, then it is paid. The Clock card's weather is free.")
         }
     }
 }

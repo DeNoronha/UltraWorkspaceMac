@@ -24,14 +24,14 @@ extension AppModel {
     nonisolated static let homeComponent = homePackage + "/.HomeActivity"
     nonisolated static let vendorHomeComponent = VendorRelease.launcherPackage + "/.ui.activity.MainActivity"
     /// Keep in step with android/DeckhandMonitor/home/build.gradle.kts.
-    nonisolated static let homeVersion = "1.5"
-    nonisolated static let homeVersionCode = 6
+    nonisolated static let homeVersion = "1.6"
+    nonisolated static let homeVersionCode = 7
 
     private func homeBridge() async -> AdbBridge? {
         guard let adb = AdbBridge.find() else { barHome.message = "adb not found — brew install --cask android-platform-tools."; return nil }
         guard let ip = ipForSelected() else { barHome.message = "No CoreBar selected."; return nil }
         let b = AdbBridge(path: adb, ip: ip)
-        guard await b.connect() else { barHome.message = "The bar refuses ADB on \(ip):5555 — Settings → Debug bridge."; return nil }
+        guard await b.connect() else { barHome.message = "The bar does not accept the debug bridge. See Settings → Debug Bridge."; return nil }
         return b
     }
 
@@ -62,6 +62,7 @@ extension AppModel {
             barHome.installed = await b.packageVersion(Self.homePackage)
             barHome.current = await b.currentHome()
             barHome.message = nil
+            barPages.repushConfig()   // Home 1.6 needs this Mac's address and the bar's data key before it trusts a beacon
             say("Deckhand Home \(Self.homeVersion) is on the bar. Press Use Deckhand Home to make it the bar's home screen.")
         }
     }

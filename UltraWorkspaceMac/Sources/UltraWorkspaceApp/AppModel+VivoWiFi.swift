@@ -10,7 +10,7 @@ extension AppModel {
             let w = await session.readModuleWiFi(serial: serial)
             self.vivoWiFi[serial] = w
             if let w {
-                WireLog.shared.event("cube wifi: \(w.ssid)\(w.isCoreBarHotspot ? " (CoreBar hotspot)" : "")")
+                WireLog.shared.event("cube wifi: \(WireLog.maskSSID(w.ssid))\(w.isCoreBarHotspot ? " (CoreBar hotspot)" : "")")
             }
             else { self.say("Could not read the cube's Wi-Fi setting.") }
             await self.refreshDeviceState()

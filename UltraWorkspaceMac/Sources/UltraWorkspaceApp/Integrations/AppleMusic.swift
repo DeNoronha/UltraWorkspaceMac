@@ -8,8 +8,8 @@ import AppKit
 /// Everything here runs on the main thread on purpose: Apple documents `NSAppleScript` as usable
 /// from the main thread only (Threading Programming Guide, "Thread-Unsafe Classes"; the compile and
 /// execute go through the shared OSA component), so the script cannot be moved to a detached task.
-/// The cost is kept down by asking less often instead: `AppModel.startMusicPolling` polls every 3 s
-/// only while something shows the result and every 30 s otherwise.
+/// The cost is kept down by asking less often instead (`AppModel.startMusicPolling` polls only while something
+/// shows the result), by compiling each script once, and by not asking at all while Music is not running.
 @MainActor
 enum AppleMusic {
     struct NowPlaying: Equatable {
@@ -20,10 +20,18 @@ enum AppleMusic {
         var hasTrack: Bool
     }
 
+    /// Compiled scripts by source: compiling is most of the cost of a call, and the sources are a handful of constants.
+    private static var compiled: [String: NSAppleScript] = [:]
+
     @discardableResult
     private static func run(_ source: String) -> NSAppleEventDescriptor? {
         var errorDict: NSDictionary?
-        let script = NSAppleScript(source: source)
+        let script: NSAppleScript?
+        if let s = compiled[source] { script = s }
+        else {
+            script = NSAppleScript(source: source)
+            if let script, script.compileAndReturnError(&errorDict) { compiled[source] = script }
+        }
         let result = script?.executeAndReturnError(&errorDict)
         if let errorDict { NSLog("AppleMusic script error: \(errorDict)") }
         return result
@@ -41,7 +49,11 @@ enum AppleMusic {
     /// shifted the artist and album into the wrong fields.
     private static let sep = "<|>"
 
+    static var isRunning: Bool { !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music").isEmpty }
+
     static func nowPlaying() -> NowPlaying {
+        // Music closed: the same answer the script gives, without an Apple Event.
+        guard isRunning else { return NowPlaying(isPlaying: false, title: "", artist: "", album: "", hasTrack: false) }
         let src = #"""
         tell application "Music"
             if it is not running then return "stopped<|><|><|>"

@@ -65,8 +65,11 @@ extension AppModel {
             var lastRefresh = Date()
             var step = 0
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
+                await Task.relaxedSleep(Double(interval))
                 if Task.isCancelled { break }
+                // Nobody can see the cube: no card switch and no redraw (each switch is a TLS connection to the bar,
+                // 24/7 otherwise). The next tick after someone is back switches again.
+                if self.cubeUnseen(settings: settings) { continue }
                 if Date().timeIntervalSince(lastRefresh) >= refreshEvery {
                     // One attempt per refresh interval, whatever the outcome: a failing upload is not something to
                     // hammer every tick (2026-11-04: 259 retries in two hours, a failure line in Activity each time).
@@ -82,6 +85,21 @@ extension AppModel {
                 _ = await self.showCubeCard(layer, session: session, serial: serial)
             }
         }
+    }
+
+    /// Resume timed switching if it was on when the app last quit, as soon as the bar's VivoCube is known (at launch,
+    /// and when the cube's serial changes). Only once the services run (`serviceSettings`).
+    func resumeCubeRotation() {
+        guard let settings = serviceSettings, vivoCubeSerial != nil, settings.vivoRotationOn, settings.vivoSwitchMode == .timed, !themeRunning else { return }
+        sendToCube(settings: settings)
+    }
+
+    /// Nobody can see the cube right now: the bar's screen is off, presence says nobody has been at the desk for the
+    /// switch-off time, or this Mac sleeps, has its screens off or is locked.
+    func cubeUnseen(settings: AppSettings) -> Bool {
+        if barScreenOn == false || PowerState.shared.idle { return true }
+        if settings.presenceWake, let t = lastPresenceAt, Date().timeIntervalSince(t) > Double(max(1, settings.presenceSleepMinutes)) * 60 { return true }
+        return false
     }
 
     /// Ask for macOS permissions a card needs the moment it is added, so the
@@ -105,8 +123,8 @@ extension AppModel {
         let code = await session.setLayer(serial: serial, layer: layer, widget: Self.widgetId(forLayer: layer))
         if code == 200 {
             vivoLayerIndex = layer - 1
-            vivoLayerShowing = layer; vivoWidgetShowing = Self.widgetId(forLayer: layer)
-            currentThemeLabel = (layer - 1 < vivoLayerNames.count) ? vivoLayerNames[layer - 1] : ""
+            update(\.vivoLayerShowing, layer); update(\.vivoWidgetShowing, Self.widgetId(forLayer: layer))
+            update(\.currentThemeLabel, (layer - 1 < vivoLayerNames.count) ? vivoLayerNames[layer - 1] : "")
         }
         return code
     }
@@ -163,7 +181,8 @@ extension AppModel {
         let digest = Data(hasher.finalize())
         if !force, digest == lastCubeDigest {
             WireLog.shared.event("cube: pictures unchanged — not uploaded again")
-            vivoLayerNames = names; vivoLayerImages = previews
+            // Same pictures: only publish the names and previews when they differ (each assignment re-renders the views).
+            if names != vivoLayerNames || previews.count != vivoLayerImages.count { vivoLayerNames = names; vivoLayerImages = previews }
             return true
         }
         let tgz = DeployPackager.buildTgz(layers: layers, defaultLayer: 1)

@@ -12,18 +12,19 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal const val TAG = "DeckhandMonitor"
-internal const val USER_AGENT = "Deckhand-bar/2.0 (+https://denoronha.github.io/UltraWorkspaceMac/)"
+internal const val USER_AGENT = "Deckhand-bar/2.4 (+https://denoronha.github.io/UltraWorkspaceMac/)"
 
 /** Background work for feed refreshes; three threads are plenty for one page per app. */
 internal val pool: ExecutorService = Executors.newFixedThreadPool(3)
 
 /** Plain GET with a timeout. Returns the body for a 2xx answer, else null. Never throws. */
-internal fun httpGet(url: String, timeoutMs: Int = 12_000, accept: String? = null): ByteArray? = try {
+internal fun httpGet(url: String, timeoutMs: Int = 12_000, accept: String? = null, headers: Map<String, String> = emptyMap()): ByteArray? = try {
     val c = URL(url).openConnection() as HttpURLConnection
     c.connectTimeout = timeoutMs; c.readTimeout = timeoutMs
     c.instanceFollowRedirects = true
     c.setRequestProperty("User-Agent", USER_AGENT)
     if (accept != null) c.setRequestProperty("Accept", accept)
+    for ((k, v) in headers) c.setRequestProperty(k, v)
     try {
         if (c.responseCode !in 200..299) { Log.w(TAG, "GET $url → HTTP ${c.responseCode}"); null }
         else c.inputStream.use { input -> ByteArrayOutputStream().also { input.copyTo(it) }.toByteArray() }
@@ -33,8 +34,8 @@ internal fun httpGet(url: String, timeoutMs: Int = 12_000, accept: String? = nul
     null
 }
 
-internal fun httpJson(url: String, timeoutMs: Int = 12_000): JSONObject? =
-    httpGet(url, timeoutMs, "application/json")?.let { try { JSONObject(String(it, Charsets.UTF_8)) } catch (_: Exception) { null } }
+internal fun httpJson(url: String, timeoutMs: Int = 12_000, headers: Map<String, String> = emptyMap()): JSONObject? =
+    httpGet(url, timeoutMs, "application/json", headers)?.let { try { JSONObject(String(it, Charsets.UTF_8)) } catch (_: Exception) { null } }
 
 internal fun JSONObject.dbl(k: String): Double? = (opt(k) as? Number)?.toDouble()?.takeIf { it.isFinite() }
 internal fun JSONObject.int(k: String): Int? = (opt(k) as? Number)?.toInt()
@@ -42,8 +43,9 @@ internal fun nullable(v: Any?): Any = v ?: JSONObject.NULL
 internal fun round1(v: Double) = Math.round(v * 10) / 10.0
 
 /**
- * What Deckhand says the apps should show: pushed over adb ([ConfigReceiver]) or picked up as `/config.json` when
- * its beacon is heard, and kept in preferences, so the apps keep working while the Mac is off. Without any Mac ever seen: the Mac app's own
+ * What Deckhand says the apps should show: pushed over adb ([ConfigReceiver]) and kept in preferences, so the apps
+ * keep working while the Mac is off. A `/config.json` picked up from the Mac over HTTP is only used in memory
+ * ([LocalSite.liveConfig]) and never stored (2.4): plain HTTP on the LAN is not trusted to change the settings. Without any Mac ever seen: the Mac app's own
  * defaults, and the position from the bar's public IP (ipwho.is), as Deckhand itself falls back to.
  */
 internal class BarConfig(
@@ -67,8 +69,7 @@ internal class BarConfig(
          * `apps.<page>` for the app's own settings, and an optional `apps.<page>.location` that overrides the shared
          * one. v1 (flat, only ever served as /config.json during development) is read too. Every value is clamped.
          */
-        fun load(ctx: Context, page: String): BarConfig {
-            val raw = stored(ctx)
+        fun load(ctx: Context, page: String, raw: String = stored(ctx)): BarConfig {
             val o = try { if (raw.isEmpty()) JSONObject() else JSONObject(raw) } catch (_: Exception) { JSONObject() }
             val v2 = o.optInt("v", 1) >= 2
             val app = if (v2) o.optJSONObject("apps")?.optJSONObject(page) ?: JSONObject() else o
@@ -90,7 +91,7 @@ internal class BarConfig(
                 coins, currency, news, radius.coerceIn(1, 50), raw)
         }
 
-        /** Store a config.json from the Mac; returns true when it differs from what was stored. */
+        /** Store a document pushed over adb (never one fetched over HTTP); returns true when it differs from what was stored. */
         fun save(ctx: Context, json: JSONObject): Boolean {
             val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val s = json.toString()

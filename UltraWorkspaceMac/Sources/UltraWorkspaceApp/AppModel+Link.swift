@@ -21,7 +21,7 @@ extension AppModel {
             await l.start(onState: { [weak self] st in
                 Task { @MainActor in
                     guard let self else { return }
-                    self.link = st
+                    self.update(\.link, st)
                     if st == .connected { self.showDeckhandPageIfPublished(); self.afterBarConnected() }
                 }
             }, handler: { [weak self] type, payloadJSON in
@@ -36,7 +36,7 @@ extension AppModel {
                 case "SET_VOLUME":
                     let v = max(0, min(100, Self.intValue(CoreBarLink.value(payloadJSON)) ?? 50))
                     MacAudio.shared.setVolume(v)
-                    Task { @MainActor in self.notePush(type: type); self.lastKnobVolume = v }
+                    Task { @MainActor in self.notePush(type: type); self.update(\.lastKnobVolume, v) }
                     return CoreBarLink.json(v)
                 default:
                     return await self.handlePush(type: type, payloadJSON: payloadJSON)
@@ -52,7 +52,8 @@ extension AppModel {
 
     // MARK: Push handling (runs on the main actor; keep it quick)
 
-    /// Bookkeeping for the status views; the volume fast path above calls it without waiting.
+    /// Bookkeeping for the status views; the volume fast path above calls it without waiting. Plain properties, so
+    /// the volume poll (every ~2.5 s) does not re-render the views (they read these on a timer).
     func notePush(type: String) {
         pushCount += 1
         lastPushAt = Date()

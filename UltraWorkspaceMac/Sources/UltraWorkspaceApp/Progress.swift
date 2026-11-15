@@ -54,8 +54,8 @@ enum FriendlyError {
     // The eight sentences, each used from exactly one place below.
     static let cubeNoLink = "The cube is not on Wi-Fi, so the upload could not reach it. Set the cube's Wi-Fi (Maintenance) or detach and re-attach the cube."
     static let cubeOffWiFi = "The cube says it is not on Wi-Fi (it is usually stuck “connecting”). Send its Wi-Fi settings again under Maintenance, wait until it shows “connected”, then send the cards again."
-    static let launcherExhausted = "The bar's launcher has used up its upload slots — a leak in its firmware, one per upload, 100 per start. Deckhand restarts the launcher over Wi-Fi ADB when it can; otherwise restart the bar."
-    static let cubeModuleOffline = "The bar does not see the cube. Check that it sits firmly on the bar and its battery is not flat; if it does and the bar still says offline, Deckhand restarts the bar's launcher (needs Wi-Fi ADB) or restart the bar."
+    static let launcherExhausted = "The bar's launcher has used up its upload slots — a leak in its firmware, one per upload, 100 per start. Deckhand restarts the launcher over the debug bridge when it can; otherwise restart the bar."
+    static let cubeModuleOffline = "The bar does not see the cube. Check that it sits firmly on the bar and its battery is not flat; if it does and the bar still says offline, Deckhand restarts the bar's launcher (needs the debug bridge), or restart the bar."
     static let uploadRefused = "The cube did not take the upload (it may be busy or off Wi-Fi). Try again in a minute or check the cube's Wi-Fi."
     static let noAnswer = "The bar did not answer in time. Is it on the same Wi-Fi?"
     static let pairAgain = "The bar no longer accepts this Mac — pair again."

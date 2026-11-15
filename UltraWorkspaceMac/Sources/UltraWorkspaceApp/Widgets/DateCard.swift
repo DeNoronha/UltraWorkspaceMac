@@ -2,12 +2,20 @@ import Foundation
 import AppKit
 import CoreGraphics
 
-/// "Date" card: weekday, day, month, year in the Mac's language; long / short / numeric.
+/// "Date" card: weekday, day, month, year in Deckhand's own language with this Mac's region (date order); long / short /
+/// numeric. It followed the Mac's language before 2026-11-15, so an English Deckhand drew a Dutch card (review S8).
 @MainActor
 enum DateCard {
+    /// The app's language (the first of its localizations, English today) with the Mac's region, e.g. en_NL.
+    static var locale: Locale {
+        let lang = Bundle.main.preferredLocalizations.first ?? "en"
+        guard let region = Locale.current.region?.identifier else { return Locale(identifier: lang) }
+        return Locale(identifier: "\(lang)_\(region)")
+    }
+
     static func render(size: Int, style: AppSettings.DateStyle, showWeekday: Bool, showYear: Bool, now: Date = Date()) -> [UInt8]? {
         CardKit.draw(size: size, accent: (CardKit.c(0.30, 0.12, 0.16), CardKit.c(0.10, 0.04, 0.06)), title: nil, icon: nil) { g, W, H in
-            let loc = Locale.current
+            let loc = Self.locale
             func fmt(_ pattern: String) -> String {
                 let f = DateFormatter(); f.locale = loc
                 f.setLocalizedDateFormatFromTemplate(pattern)

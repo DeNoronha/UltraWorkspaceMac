@@ -132,13 +132,30 @@ enum CaskImport {
         return String(s[r])
     }
 
+    /// A member is read up to this size (a zip bomb would otherwise fill the memory); larger is refused (L3).
+    static let maxMemberBytes = 20_000_000
+    /// Rows read from the sheet at most (a collection has hundreds).
+    static let maxRows = 10_000
+
     private static func unzip(_ url: URL, _ member: String) throws -> Data {
+        // A member name from the workbook's own relationships could start with "-" and pass as an option.
+        guard !member.hasPrefix("-"), !url.path.hasPrefix("-") else { throw Failure.unreadable("unexpected part name in the workbook") }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
         p.arguments = ["-p", url.path, member]
         let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
         do { try p.run() } catch { throw Failure.unreadable(error.localizedDescription) }
-        let data = out.fileHandleForReading.readDataToEndOfFile()
+        var data = Data()
+        let h = out.fileHandleForReading
+        while true {
+            let chunk = h.readData(ofLength: 1 << 16)
+            if chunk.isEmpty { break }
+            data.append(chunk)
+            if data.count > maxMemberBytes {
+                p.terminate(); p.waitUntilExit()
+                throw Failure.unreadable("\(member) is larger than \(maxMemberBytes / 1_000_000) MB unpacked; is this a Whiskystats export?")
+            }
+        }
         p.waitUntilExit()
         guard p.terminationStatus == 0, !data.isEmpty else { throw Failure.unreadable("\(member) is missing; is this an Excel (.xlsx) file?") }
         return data
@@ -161,12 +178,18 @@ enum CaskImport {
         var rows: [[String]] = [], row: [String] = [], type: String?, col = 0, text = "", inValue = false
         init(shared: [String]) { self.shared = shared }
         static func parse(_ d: Data, shared: [String]) -> [[String]] { let s = SheetRows(shared: shared); let p = XMLParser(data: d); p.delegate = s; p.parse(); return s.rows }
-        /// "C12" → 2 (zero-based column), so empty cells that Excel leaves out keep the columns in place.
-        static func column(_ ref: String) -> Int { ref.prefix { $0.isLetter }.uppercased().unicodeScalars.reduce(0) { $0 * 26 + Int($1.value) - 64 } - 1 }
+        /// "C12" → 2 (zero-based column), so empty cells that Excel leaves out keep the columns in place. Only
+        /// `^[A-Z]{1,3}[0-9]+$` up to Excel's last column XFD (16384) is a reference; anything else is nil (L3: a long
+        /// or non-ASCII reference overflowed and trapped, or made a row of billions of empty cells).
+        static func column(_ ref: String) -> Int? {
+            guard ref.range(of: "^[A-Z]{1,3}[0-9]+$", options: .regularExpression) != nil else { return nil }
+            let n = ref.unicodeScalars.prefix { $0.value >= 65 && $0.value <= 90 }.reduce(0) { $0 * 26 + Int($1.value) - 64 }
+            return n >= 1 && n <= 16_384 ? n - 1 : nil
+        }
         func parser(_ p: XMLParser, didStartElement e: String, namespaceURI: String?, qualifiedName: String?, attributes a: [String: String] = [:]) {
             switch e {
             case "row": row = []
-            case "c": type = a["t"]; col = a["r"].map(Self.column) ?? row.count; text = ""
+            case "c": type = a["t"]; col = a["r"].flatMap(Self.column) ?? row.count; text = ""
             case "v", "t": inValue = true
             default: break
             }
@@ -177,10 +200,12 @@ enum CaskImport {
             case "v", "t": inValue = false
             case "c":
                 var v = text
-                if type == "s", let i = Int(text), i < shared.count { v = shared[i] }
+                if type == "s", let i = Int(text), i >= 0, i < shared.count { v = shared[i] }
                 while row.count < col { row.append("") }
                 if row.count == col { row.append(v) }
-            case "row": rows.append(row)
+            case "row":
+                rows.append(row)
+                if rows.count >= CaskImport.maxRows { p.abortParsing() }
             default: break
             }
         }

@@ -11,52 +11,83 @@ extension AppModel {
     static let barScreenNeverMs = 2_147_483_647
     static let senseLogTag = "QLinkSenseCube++++++++++"
 
+    /// Event-driven since 2026-11-15: the log tail's presence lines wake the loop, the switch-off time is one timed
+    /// wake-up, and the bar's screen state (`dumpsys power`, an adb process and a shell on the bar each time) is read
+    /// only when it matters (someone arrived, the timeout is due, right after a change) and otherwise every two
+    /// minutes as a safety net. Before, all of that ran every 15 s, day and night.
     func startPresence(settings: AppSettings) {
         presenceTask?.cancel(); presenceTask = nil
         presenceLog?.terminate(); presenceLog = nil
-        guard settings.presenceWake else { presenceStatus = "Off."; return }
-        guard let adb = AdbBridge.find() else { presenceStatus = "adb not found — install android-platform-tools (brew)."; return }
+        guard settings.presenceWake else { update(\.presenceStatus, "Off."); return }
+        guard let adb = AdbBridge.find() else { update(\.presenceStatus, "adb not found — install android-platform-tools (brew)."); return }
         presenceTask = Task { [weak self] in
+            // Tails a crash or a forced quit left behind (child processes outlive Deckhand), each one a reader on the bar.
+            await AdbBridge.endOrphanedTails(adb: adb, tag: Self.senseLogTag)
             var connectedTo: String?
             var parkedNever = false
+            var wasPresent = false
+            var screenCheckedAt = Date.distantPast
             while !Task.isCancelled {
                 guard let self else { return }
-                guard let ip = self.ipForSelected() else { self.presenceStatus = "No bar selected."; try? await Task.sleep(nanoseconds: 15_000_000_000); continue }
+                guard let ip = self.ipForSelected() else { self.update(\.presenceStatus, "No bar selected."); await self.presenceWake.sleep(15); continue }
                 let bridge = AdbBridge(path: adb, ip: ip)
                 // (Re)start the log tail when the bar's address changed or the logcat process died (the bar
-                // rebooted, ADB dropped): a dead tail never reports presence again.
+                // rebooted, ADB dropped): a dead tail never reports presence again. Its exit wakes this loop.
                 if connectedTo != ip || !(self.presenceLog?.isRunning ?? false) {
                     guard await bridge.connect() else {
-                        self.presenceStatus = "Bar refuses ADB — turn Wi-Fi ADB on in the bar's Developer options."
-                        connectedTo = nil; try? await Task.sleep(nanoseconds: 30_000_000_000); continue
+                        self.update(\.presenceStatus, "The bar refuses the debug bridge. Turn on WiFi ADB in the bar's Developer options.")
+                        connectedTo = nil; await Task.relaxedSleep(30); continue
                     }
                     connectedTo = ip
                     self.presenceLog?.terminate()
-                    self.presenceLog = bridge.tailLog(tag: Self.senseLogTag) { [weak self] line in
+                    self.presenceLog = bridge.tailLog(tag: Self.senseLogTag, onExit: { [weak self] in
+                        Task { @MainActor in self?.presenceWake.signal() }
+                    }) { [weak self] line in
                         guard line.contains("onProximityTriggerSignalReport") else { return }
-                        Task { @MainActor in self?.lastPresenceAt = Date() }
+                        Task { @MainActor in
+                            guard let self else { return }
+                            // Only an arrival needs the loop at once; further lines just move the time on.
+                            let arrived = self.lastPresenceAt.map { Date().timeIntervalSince($0) >= 90 } ?? true
+                            self.lastPresenceAt = Date()
+                            if arrived { self.presenceWake.signal() }
+                        }
                     }
                 }
                 let minutes = max(1, settings.presenceSleepMinutes)
                 let since = self.lastPresenceAt.map { Date().timeIntervalSince($0) }
                 let present = (since ?? .infinity) < 90
-                let awake = await bridge.shell("dumpsys power | grep -m1 mWakefulness=").contains("Awake")
-                self.barScreenOn = awake
+                let timedOut = since.map { $0 > Double(minutes) * 60 } ?? false
+                let checkDue = Date().timeIntervalSince(screenCheckedAt) >= (present ? 15 : 120)
+                var awake = self.barScreenOn ?? true
+                if present != wasPresent || (timedOut && parkedNever) || checkDue || self.barScreenOn == nil {
+                    awake = await bridge.shell("dumpsys power | grep -m1 mWakefulness=").contains("Awake")
+                    screenCheckedAt = Date()
+                    self.update(\.barScreenOn, awake)
+                }
+                wasPresent = present
                 if present {
-                    if !awake { _ = await bridge.shell("input keyevent KEYCODE_WAKEUP"); self.say("Someone is at the desk — bar screen on.") }
+                    if !awake { _ = await bridge.shell("input keyevent KEYCODE_WAKEUP"); self.say("Someone is at the desk — bar screen on."); self.update(\.barScreenOn, true) }
                     if !parkedNever {
                         _ = await bridge.shell("settings put system screen_off_timeout \(Self.barScreenNeverMs)"); parkedNever = true
                     }
-                    self.presenceStatus = "Someone is here — screen stays on."
-                } else if let since, since > Double(minutes) * 60 {
+                    self.update(\.presenceStatus, "Someone is here — screen stays on.")
+                } else if timedOut {
                     if parkedNever || awake {
                         _ = await bridge.shell("settings put system screen_off_timeout \(minutes * 60_000)"); parkedNever = false
+                        screenCheckedAt = .distantPast   // read the screen again on the next round
                     }
-                    self.presenceStatus = "Nobody for \(Int(since / 60)) min — screen may sleep."
+                    self.update(\.presenceStatus, "Nobody for over \(minutes) min — screen may sleep.")
                 } else {
-                    self.presenceStatus = since == nil ? "Watching the SenseCube for presence…" : "Nobody for \(Int(since!)) s."
+                    self.update(\.presenceStatus, since == nil ? "Watching the SenseCube for presence…" : "Nobody here — the screen switches off after \(minutes) min without anyone.")
                 }
-                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                // Until the next thing that can change the picture: someone counts as gone 90 s after the last line,
+                // the timeout is restored at the switch-off time, and the screen is re-read every 15 s / 2 min.
+                var next = present ? 15.0 : 120.0
+                if let since {
+                    if present { next = min(next, 90 - since) }
+                    else if !timedOut || parkedNever { next = min(next, Double(minutes) * 60 - since) }
+                }
+                await self.presenceWake.sleep(max(1, next))
             }
         }
     }
@@ -147,10 +178,11 @@ struct AdbBridge {
         return await isPersistent()
     }
 
-    /// `adb logcat -s <tag>` as a long-running process; `onLine` runs on a background queue.
-    func tailLog(tag: String, onLine: @escaping @Sendable (String) -> Void) -> Process? {
+    /// `adb logcat -s <tag>` as a long-running process; `onLine` and `onExit` run on a background queue.
+    func tailLog(tag: String, onExit: (@Sendable () -> Void)? = nil, onLine: @escaping @Sendable (String) -> Void) -> Process? {
         let p = Process(); p.executableURL = URL(fileURLWithPath: path)
         p.arguments = ["-s", device, "logcat", "-T", "1", "-s", "\(tag):I"]
+        if let onExit { p.terminationHandler = { _ in onExit() } }
         let pipe = Pipe(); p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
         final class Buf: @unchecked Sendable { var rest = Data() }
         let buf = Buf()
@@ -164,6 +196,26 @@ struct AdbBridge {
         }
         do { try p.run() } catch { return nil }
         return p
+    }
+
+    /// Ends `adb … logcat … -s <tag>` processes whose parent is gone (parent pid 1): tails an earlier Deckhand left
+    /// running when it crashed or was killed (a normal quit ends its own, `AppDelegate.applicationWillTerminate`).
+    /// Each one kept a logcat reader running on the bar and a stream open in the adb server.
+    static func endOrphanedTails(adb: String, tag: String) async {
+        let killed = await Task.detached(priority: .utility) { () -> Int in
+            let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/ps"); p.arguments = ["-Ao", "pid=,ppid=,command="]
+            let pipe = Pipe(); p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
+            do { try p.run() } catch { return 0 }
+            let out = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self); p.waitUntilExit()
+            var n = 0
+            for line in out.split(separator: "\n") {
+                let f = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
+                guard f.count == 3, f[1] == "1", let pid = Int32(f[0]), f[2].hasPrefix(adb), f[2].contains("logcat -T 1 -s \(tag)") else { continue }
+                if kill(pid, SIGTERM) == 0 { n += 1 }
+            }
+            return n
+        }.value
+        if killed > 0 { WireLog.shared.event("presence: ended \(killed) adb logcat tail\(killed == 1 ? "" : "s") left over from an earlier run") }
     }
 
     private func run(_ args: [String], timeout: TimeInterval) async -> String {

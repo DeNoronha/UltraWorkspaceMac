@@ -1,5 +1,7 @@
 import Foundation
 import CoreLocation
+import Security
+import UltraBarKit
 
 /// App-wide preferences, persisted to Application Support. These feed the
 /// weather feature (location + units) and the per-device widget rotations.
@@ -22,8 +24,17 @@ final class AppSettings: ObservableObject {
     @Published var coreCards: [String] = AppSettings.defaultCoreCards { didSet { save() } }
     /// Whether the Deckhand page has been published (enables the daily cover refresh).
     @Published var deckhandPagePublished: Bool = false { didSet { save() } }
-    /// AccuWeather API key for the CoreBar's OWN weather card (stored on the device via 1010).
-    @Published var accuWeatherKey: String = "" { didSet { save() } }
+    /// AccuWeather API key for the CoreBar's OWN weather card (stored on the device via 1010). Kept in the secret store
+    /// (Keychain, `api:accuweather`), not in settings.json; only if that write fails does it stay in the file.
+    @Published var accuWeatherKey: String = "" {
+        didSet {
+            guard accuWeatherKey != oldValue else { return }
+            let failed = Store.shared.setSecret(accuWeatherKey.trimmingCharacters(in: .whitespacesAndNewlines), for: .api("accuweather")) != errSecSuccess
+            if failed || accuKeyInFile { accuKeyInFile = failed; save() }
+        }
+    }
+    /// True while the key could not be put in the secret store and is therefore still written to settings.json.
+    private var accuKeyInFile = false
     /// VivoCube rotation was running when the app last quit → resume at launch.
     @Published var vivoRotationOn: Bool = false { didSet { save() } }
     /// Layers in the last VivoCube package that the module accepted (for "next" stepping).
@@ -56,7 +67,7 @@ final class AppSettings: ObservableObject {
     @Published var presenceSleepMinutes: Int = 10 { didSet { save() } }
     /// Bar hardening: only this Mac may open TCP connections to the bar (AppModel+Hardening).
     @Published var barFirewall: Bool = false { didSet { save() } }
-    // Bar apps (2026-11-04): Flights radius, Headlines source. The Linear key lives in Store (user-only file).
+    // Bar apps (2026-11-04): Flights radius, Headlines source. The Linear key lives in the secret store (Keychain).
     @Published var flightsRadiusKm: Int = 3 { didSet { save() } }
     @Published var newsSource: String = "cnn" { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
@@ -172,6 +183,8 @@ final class AppSettings: ObservableObject {
             .appendingPathComponent("UltraWorkspaceMac", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         url = base.appendingPathComponent("settings.json")
+        // First touch of the store: at launch it moves old plain-file secrets (this file's accuWeatherKey too).
+        let storedKey = Store.shared.secret(.api("accuweather"))
         var loaded: Persisted?
         if let data = try? Data(contentsOf: url) {
             do { loaded = try JSONDecoder().decode(Persisted.self, from: data) }
@@ -191,7 +204,7 @@ final class AppSettings: ObservableObject {
             vivoSeconds = p.vivoSeconds ?? p.rotateSeconds ?? 30
             coreCards = p.coreCards ?? AppSettings.defaultCoreCards
             deckhandPagePublished = p.deckhandPagePublished ?? false
-            accuWeatherKey = p.accuWeatherKey ?? ""
+            if let k = p.accuWeatherKey, !k.isEmpty, storedKey == nil { accuWeatherKey = k; accuKeyInFile = true }   // not moved yet
             vivoRotationOn = p.vivoRotationOn ?? false
             vivoLayerCount = p.vivoLayerCount ?? 1
             vivoSwitchMode = p.vivoSwitchMode ?? .timed
@@ -211,6 +224,7 @@ final class AppSettings: ObservableObject {
             flightsRadiusKm = p.flightsRadiusKm ?? 3
             newsSource = p.newsSource ?? "cnn"
         }
+        if let storedKey { accuWeatherKey = storedKey }
     }
 
     func save() {
@@ -219,17 +233,16 @@ final class AppSettings: ObservableObject {
                           units: units, clock24h: clock24h,
                           enabledThemes: nil, rotateSeconds: nil,
                           vivoThemes: vivoThemes, vivoSeconds: vivoSeconds,
-                          coreCards: coreCards, deckhandPagePublished: deckhandPagePublished, accuWeatherKey: accuWeatherKey, vivoRotationOn: vivoRotationOn, vivoLayerCount: vivoLayerCount,
+                          coreCards: coreCards, deckhandPagePublished: deckhandPagePublished, accuWeatherKey: accuKeyInFile ? accuWeatherKey : nil, vivoRotationOn: vivoRotationOn, vivoLayerCount: vivoLayerCount,
                           vivoSwitchMode: vivoSwitchMode, vivoPicturePath: vivoPicturePath,
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
                           claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes, barFirewall: barFirewall,
                           flightsRadiusKm: flightsRadiusKm, newsSource: newsSource)
-        do {
-            try JSONEncoder().encode(p).write(to: url, options: .atomic)
-            // Holds the AccuWeather key and the manual location: user-only, like the token files.
-            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-        } catch { NSLog("Deckhand: settings.json could not be saved: \(error)") }
+        // Holds the manual location: user-only from the moment it exists (Store.writePrivate).
+        guard let data = try? JSONEncoder().encode(p), Store.writePrivate(data, to: url) else {
+            NSLog("Deckhand: settings.json could not be saved"); return
+        }
     }
 
     /// This Mac's timezone identifier (e.g. "Europe/Amsterdam").

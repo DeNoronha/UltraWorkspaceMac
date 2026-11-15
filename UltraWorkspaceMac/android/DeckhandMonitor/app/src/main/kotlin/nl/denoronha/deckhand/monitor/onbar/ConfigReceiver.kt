@@ -13,8 +13,9 @@ import org.json.JSONObject
  *     am broadcast -a nl.denoronha.deckhand.CONFIG -p <package> --es config64 <base64 of the JSON>
  *
  * The manifest guards this receiver with `android.permission.DUMP`, which the shell user has and no ordinary
- * app can get, so only `adb shell` (that is, Deckhand) can set the configuration. The document is stored as is;
- * [BarConfig.load] reads it, clamping every value, and the page follows on its next data request.
+ * app can get, so only `adb shell` (that is, Deckhand) can set the configuration. The `mac` section (Deckhand's
+ * address and the per-bar key, 2.4) is kept apart by [MacLink] and never stored with the settings; the rest is
+ * stored as is, [BarConfig.load] reads it, clamping every value, and the page follows on its next data request.
  */
 class ConfigReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -22,6 +23,10 @@ class ConfigReceiver : BroadcastReceiver() {
         val json = try { JSONObject(String(Base64.decode(b64, Base64.DEFAULT), Charsets.UTF_8)) } catch (e: Exception) {
             Log.w(TAG, "Ignoring a config push that is not JSON"); return
         }
+        json.optJSONObject("mac")?.let { mac ->
+            if (MacLink.save(context, mac)) Log.i(TAG, "Deckhand's address and key pushed") else Log.w(TAG, "Ignoring an invalid mac section")
+        }
+        json.remove("mac")
         if (json.optInt("v", 0) < 2) { Log.w(TAG, "Ignoring a config push without v2"); return }
         if (BarConfig.save(context, json)) Log.i(TAG, "New settings pushed by Deckhand")
     }

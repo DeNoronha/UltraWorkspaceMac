@@ -69,7 +69,7 @@ extension AppModel {
         }
         if !cube, settings.deckhandPagePublished, !corebarPages.isEmpty, !corebarPages.contains(where: { $0.id == Self.deckhandPageId }) {
             return ("The Deckhand page is gone from the bar (did the official app deploy?).",
-                    DoctorAction(title: "Publish page") { [weak self] in self?.publishDeckhandPage(settings: settings) })
+                    DoctorAction(title: "Publish") { [weak self] in self?.publishDeckhandPage(settings: settings) })
         }
         return nil
     }
@@ -110,12 +110,12 @@ extension AppModel {
     @discardableResult
     func restartBarLauncher(reason: String) async -> Bool {
         guard let adb = AdbBridge.find() else {
-            say("The bar's launcher needs a restart (\(reason)). Install android-platform-tools and turn on Wi-Fi ADB so Deckhand can do that, or restart the bar."); return false
+            say("The bar's launcher needs a restart (\(reason)). Set up the debug bridge (Settings → Debug Bridge) so Deckhand can do that, or restart the bar."); return false
         }
         guard let ip = ipForSelected() else { return false }
         let bridge = AdbBridge(path: adb, ip: ip)
         guard await bridge.connect() else {
-            say("The bar's launcher needs a restart (\(reason)), but the bar refuses ADB — Settings → Debug bridge to turn Wi-Fi ADB on, or restart the bar."); return false
+            say("The bar's launcher needs a restart (\(reason)), but the bar does not accept the debug bridge. Turn on WiFi ADB (Settings → Debug Bridge), or restart the bar."); return false
         }
         say("Restarting the bar's launcher — \(reason). The bar's screen reloads; back in about 20 s.")
         WireLog.shared.event("adb: restarting the launcher (\(reason))")
@@ -176,7 +176,7 @@ extension AppModel {
             let tc = await session.checkToken(timeout: 6)
             if tc.accepted { add("CoreBar", "Connected", .ok, "\(bar.name) at \(ip) accepts this Mac.") }
             else if tc.mismatch { add("CoreBar", "Certificate changed", .fail, "The bar presents a different certificate than when you paired. If you reset or replaced it, pair again.", DoctorAction(title: "Forget & pair again") { [weak self] in self?.unpair(bar); self?.scan() }) }
-            else { add("CoreBar", "Not reachable", .fail, "No answer from \(ip). Is the bar on and on the same Wi-Fi?", DoctorAction(title: "Check again") { [weak self] in self?.runDoctor(settings: settings) }) }
+            else { add("CoreBar", "Not reachable", .fail, "No answer from \(ip). Is the bar on and on the same Wi-Fi?", DoctorAction(title: "Refresh") { [weak self] in self?.runDoctor(settings: settings) }) }
             let age = lastPushAt.map { Int(Date().timeIntervalSince($0)) }
             if link.isConnected {
                 add("CoreBar", "Answering the bar", .ok, "\(pushCount) requests answered" + (age.map { " · last \($0) s ago" } ?? " · none yet (the bar only asks while a page with Mac cards is on screen)"))
@@ -189,8 +189,8 @@ extension AppModel {
                 let hasDeck = pages.contains { $0.id == Self.deckhandPageId }
                 let names = pages.map(\.name).joined(separator: ", ")
                 if hasDeck { add("CoreBar", "Pages", .ok, names + (currentPageId.map { id in " · showing \(pages.first { $0.id == id }?.name ?? id) (as set by Deckhand)" } ?? "")) }
-                else if settings.deckhandPagePublished { add("CoreBar", "Deckhand page missing", .warn, "The bar has: \(names). Did the official app deploy since?", DoctorAction(title: "Publish page") { [weak self] in self?.publishDeckhandPage(settings: settings) }) }
-                else { add("CoreBar", "Pages", .info, names + " · the Deckhand page has not been published yet", DoctorAction(title: "Publish page") { [weak self] in self?.nav = .coreBarPage }) }
+                else if settings.deckhandPagePublished { add("CoreBar", "Deckhand page missing", .warn, "The bar has: \(names). Did the official app deploy since?", DoctorAction(title: "Publish") { [weak self] in self?.publishDeckhandPage(settings: settings) }) }
+                else { add("CoreBar", "Pages", .info, names + " · the Deckhand page has not been published yet", DoctorAction(title: "Publish") { [weak self] in self?.nav = .coreBarPage }) }
                 if !foreignPages.isEmpty { add("CoreBar", "Pages from the official app", .info, foreignPages.map(\.name).joined(separator: ", ") + " — these would be removed by a publish.") }
             } else { add("CoreBar", "Pages", .fail, "The bar did not answer when asked for its pages.") }
             if settings.coreCards.contains("WEATHER") {
@@ -238,8 +238,8 @@ extension AppModel {
                 let vAge = lastVolumePushAt.map { Int(Date().timeIntervalSince($0)) }
                 add("KnobKey", "Volume link", vAge == nil ? .info : .ok,
                     vAge.map { "The bar asked or set the volume \($0) s ago · \(MacAudio.shared.name) \(Self.macVolume().map { "\($0) %" } ?? "has no volume control")" }
-                    ?? (settings.deckhandPagePublished ? "No volume requests yet — the bar polls only while the Deckhand page is on screen." : "Publish the CoreBar page once to bind the knob to the Mac's volume."),
-                    settings.deckhandPagePublished ? nil : DoctorAction(title: "Publish page") { [weak self] in self?.nav = .coreBarPage })
+                    ?? (settings.deckhandPagePublished ? "No volume requests yet — the bar polls only while the Deckhand page is on screen." : "Publish the Deckhand page once to bind the knob to the Mac's volume."),
+                    settings.deckhandPagePublished ? nil : DoctorAction(title: "Publish") { [weak self] in self?.nav = .coreBarPage })
             }
             // Modules
             let known = Store.shared.knownModules(corebar: bar.serialNo)
@@ -249,7 +249,7 @@ extension AppModel {
             // Mac
             if let now = try? await resolveWeather(settings: settings, metric: settings.units == .metric) {
                 add("Mac", "Weather (Open-Meteo)", .ok, "\(Int(now.temperature.rounded()))\(now.unitSuffix) \(now.sky.label) in \(now.place)")
-            } else { add("Mac", "Weather (Open-Meteo)", .fail, "No location or forecast. Set a city under Widgets → Weather.", DoctorAction(title: "Open Widgets") { [weak self] in self?.nav = .widgets; self?.selectedAddon = .weather }) }
+            } else { add("Mac", "Weather (Open-Meteo)", .fail, "No location or forecast. Set a city in Settings → Location & Units.", DoctorAction(title: "Location Settings…") { SettingsWindow.open(.location) }) }
             if let e = barDataError { add("Mac", "Data for the bar apps", .fail, "Not served: \(e). Monitor, Claude, Music, Calendar and Tasks wait for this Mac; is another Deckhand running?") }
             else if let base = barDataURL { add("Mac", "Data for the bar apps", .ok, "Served at \(base) to the selected bar only.") }
             if settings.deckhandPagePublished {
@@ -261,7 +261,8 @@ extension AppModel {
         }
     }
 
-    /// Plain-text report for pasting into a chat or an issue.
+    /// Plain-text report for pasting into a chat or an issue (GitHub issues are public): it never holds a key, and
+    /// `WireLog.forReport` masks IP addresses, the bars' serials, coordinates, place names and SSIDs.
     func doctorReportText(settings: AppSettings) -> String {
         var s = "Deckhand status report — \(Date().formatted(date: .abbreviated, time: .standard))\n"
         s += "CoreBar \(selectedCoreBar?.name ?? "-") \(selectedCoreBar?.serialNo ?? "") @ \(ipForSelected() ?? "-")\n"
@@ -274,6 +275,6 @@ extension AppModel {
         }
         s += "\nRecent activity:\n" + log.prefix(12).map { "  \($0.time.formatted(date: .omitted, time: .standard)) \($0.text)" }.joined(separator: "\n")
         s += "\n\nLast wire-log lines:\n" + WireLog.shared.recent().suffix(30).map { "  " + $0 }.joined(separator: "\n")
-        return s
+        return WireLog.forReport(s, serials: paired.map(\.serialNo) + modules.map(\.serial))
     }
 }

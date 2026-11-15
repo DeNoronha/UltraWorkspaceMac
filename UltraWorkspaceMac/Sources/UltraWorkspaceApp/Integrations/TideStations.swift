@@ -40,11 +40,12 @@ enum TideStations {
         let valid = f.stations.filter { $0.code.range(of: "^[a-z0-9._-]{2,80}$", options: .regularExpression) != nil }
         return valid.isEmpty ? defaults : Array(valid.prefix(maxStations))
     }
-    /// Writes the choice from Apps → Tide; the config feed sends it to the bar within 10 s.
+    /// Writes the choice from Apps → Tide; the config feed sends it to the bar at once (`configFilesChanged`).
     nonisolated static func save(_ stations: [TideStation]) throws {
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try enc.encode(File(stations: Array(stations.prefix(maxStations)))).write(to: fileURL, options: .atomic)
+        NotificationCenter.default.post(name: BarPages.configFilesChanged, object: nil)
     }
     /// The `apps.tide` section of the bar config.
     nonisolated static func configSection() -> [String: Any] {

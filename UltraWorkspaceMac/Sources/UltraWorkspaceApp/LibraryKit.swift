@@ -1,181 +1,204 @@
 import SwiftUI
 import UltraBarKit
 
-/// Pieces the four library pages (Installed, Widgets, Apps, Screensavers) share, so they look alike.
+/// Pieces the library pages (Apps, Cube Cards, Screensavers) share, so they look and behave alike.
 
-/// App icon from the bar (or the catalogue), with a symbol while it loads or when there is none.
-struct AppIcon: View {
-    let url: URL?; let fallback: String; var size: CGFloat = 32
-    var body: some View {
-        AsyncImage(url: url) { img in img.resizable() } placeholder: { Image(systemName: fallback).font(.system(size: size * 0.55)).foregroundStyle(.secondary) }
-            .frame(width: size, height: size).clipShape(RoundedRectangle(cornerRadius: size * 0.22))
+/// The list filter of Apps and Screensavers, in their filter bar (it replaced the Installed page).
+enum LibraryFilter: String, CaseIterable, Identifiable {
+    case all, onBar, updates
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all: return "All"
+        case .onBar: return "On the Bar"
+        case .updates: return "Updates"
+        }
     }
 }
 
-/// Small capsule: "up to date", "update 1.3", "not installed", "built in"…
-struct Tag: View {
-    let text: String; let color: Color
-    init(_ text: String, _ color: Color) { self.text = text; self.color = color }
-    var body: some View { Text(text).font(.caption2).padding(.horizontal, 6).padding(.vertical, 1).background(color.opacity(0.2)).clipShape(Capsule()) }
+/// A library page: the list on the left, the chosen item's detail (a grouped Form) on the right. A plain list column
+/// with a divider, not a nested split view; the window keeps one sidebar and one inspector.
+struct LibraryLayout<Bar: View, ListContent: View, Detail: View>: View {
+    @ViewBuilder let bar: Bar
+    @ViewBuilder let list: ListContent
+    @ViewBuilder let detail: Detail
+    init(@ViewBuilder bar: () -> Bar, @ViewBuilder list: () -> ListContent, @ViewBuilder detail: () -> Detail) {
+        self.bar = bar(); self.list = list(); self.detail = detail()
+    }
+    var body: some View {
+        HStack(spacing: 0) {
+            VStack(spacing: 0) { bar; list }.frame(width: 240)
+            Divider()
+            detail.frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
 }
 
-/// The one control every library item has: is it installed (on the bar) / in use (on a screen).
-/// Switching it on installs or adds; switching it off asks first, then removes.
-struct InstalledToggle: View {
-    let title: String
+extension LibraryLayout where Bar == EmptyView {
+    /// A library page without filters (Cube Cards).
+    init(@ViewBuilder list: () -> ListContent, @ViewBuilder detail: () -> Detail) {
+        self.init(bar: { EmptyView() }, list: list, detail: detail)
+    }
+}
+
+/// The filter bar of Apps and Screensavers: All / On the Bar / Updates, a name filter, and Refresh.
+struct LibraryFilterBar: View {
+    @EnvironmentObject var model: AppModel
+    @Binding var filter: LibraryFilter
+    @Binding var search: String
+    var body: some View {
+        FilterBar(scopes: LibraryFilter.allCases, scopeTitle: { $0.title }, scope: $filter, search: $search, searchPrompt: "Filter",
+                  refresh: { model.refreshAppStore() }, refreshDisabled: !model.link.isConnected,
+                  refreshHelp: model.link.isConnected ? "Read the apps on the bar and the marketplace catalogue again (⌘R)" : "Connect to the bar first.")
+    }
+}
+
+/// A row in a library list: icon, name, a caption, and the state as a symbol with words for VoiceOver.
+struct LibraryRow<Icon: View>: View {
+    let title: String; var caption: String? = nil; var installed = false; var busy = false; var updateAvailable = false
+    @ViewBuilder let icon: Icon
+    var body: some View {
+        HStack(spacing: 8) {
+            icon.frame(width: 22, height: 22)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).lineLimit(1)
+                if let caption { Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+            }
+            Spacer(minLength: 4)
+            if busy { ProgressView().controlSize(.mini) }
+            else if updateAvailable { Image(systemName: StatusKind.update.symbol).foregroundStyle(StatusKind.update.color).help("Update available") }
+            else if installed { Image(systemName: "checkmark.circle").foregroundStyle(.secondary).help("On the bar") }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel([title, caption, busy ? "working" : updateAvailable ? "on the bar, update available" : installed ? "on the bar" : nil].compactMap { $0 }.joined(separator: ", "))
+    }
+}
+
+/// Title block of a detail pane: icon, name, version and a state tag. Package names are not shown here (Details).
+struct DetailTitle<Icon: View>: View {
+    let title: String; var version: String? = nil; var tag: (String, StatusKind)? = nil
+    @ViewBuilder let icon: Icon
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            icon
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.title2).bold()
+                HStack(spacing: 8) {
+                    if let version, !version.isEmpty { Text(version).foregroundStyle(.secondary) }
+                    if let tag { Tag(tag.0, tag.1) }
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+/// Install / Update / Remove… for an app or screensaver on the bar. Buttons, not a switch: installing takes ten
+/// seconds or more and is watched, removing asks first (a switch flipped before the work was done; review P6).
+struct InstallControls: View {
+    let name: String
+    let installed: Bool
+    var updateTo: String? = nil
+    var busy = false
+    var canInstall = true
+    var canRemove = true
+    /// Why Install or Remove is not offered, shown under the buttons.
+    var note: String? = nil
+    let install: () -> Void
+    let remove: () -> Void
+    @State private var confirm = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                if busy {
+                    BusyLabel("Working on the bar…")
+                } else {
+                    if !installed { Button("Install", action: install).primaryInline().disabled(!canInstall) }
+                    if installed, let updateTo { Button("Update to \(updateTo)", action: install).primaryInline().disabled(!canInstall) }
+                    if installed, canRemove { Button("Remove…") { confirm = true } }
+                }
+            }
+            if let note { StatusLabel(note, .info) }
+        }
+        .confirmationDialog("Remove \(name) from the bar?", isPresented: $confirm, titleVisibility: .visible) {
+            Button("Remove", role: .destructive, action: remove)
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("The app is uninstalled from the bar. You can install it again later.") }
+    }
+}
+
+/// Turn Off… / Turn On for an app that is part of the bar's firmware (Android's own switch, over the debug bridge).
+struct FirmwareControls: View {
+    let name: String
     let isOn: Bool
     var busy = false
     var disabled = false
     var note: String? = nil
-    var confirmOff: String? = nil      // nil = no confirmation when switching off
-    let onChange: (Bool) -> Void
+    let set: (Bool) -> Void
     @State private var confirm = false
-    var body: some View {
-        HStack(spacing: 10) {
-            Toggle(title, isOn: Binding(get: { isOn }, set: { on in
-                if on { onChange(true) } else if confirmOff != nil { confirm = true } else { onChange(false) }
-            }))
-            .toggleStyle(.switch).disabled(disabled || busy)
-            if busy { ProgressView().controlSize(.small) }
-            if let note { Text(note).font(.caption).foregroundStyle(.secondary) }
-        }
-        .alert(confirmOff ?? "", isPresented: $confirm) {
-            Button("Remove", role: .destructive) { onChange(false) }
-            Button("Cancel", role: .cancel) {}
-        }
-    }
-}
 
-// MARK: Taking things off
-//
-// Rule (2026-11-04) — two looks for "take this off", chosen by what the click does:
-//  • `RemoveButton`: a red, bordered "Remove" that asks first. For every row where removing acts on a device
-//    at once (an uninstall over ADB or the bar's installer) or sits out of sight of the button that makes a
-//    list change real — that is the whole Installed page, card rows included.
-//  • `RemoveMark`: a borderless ✕, no question. Only in the drag-to-reorder card lists on the CoreBar and
-//    VivoCube pages: the click takes a row out of a list edited in place next to "Add a card…", and nothing
-//    reaches a device until Publish page / Send to cube. A labelled red button on every row of a reorderable
-//    list would outweigh the names. The ✕ has the same hit area (32 × 24), help and accessibility label
-//    everywhere; do not hand-roll it.
-
-/// Red, bordered "Remove" that asks first. `confirm` is the question ("Remove Sonos from the bar?").
-struct RemoveButton: View {
-    let confirm: String
-    var help: String? = nil
-    var disabled = false
-    let action: () -> Void
-    @State private var asking = false
     var body: some View {
-        Button { asking = true } label: { Label("Remove", systemImage: "trash") }
-            .buttonStyle(.bordered).tint(.red).disabled(disabled)
-            .help(help ?? confirm)
-            .alert(confirm, isPresented: $asking) {
-                Button("Remove", role: .destructive) { action() }
-                Button("Cancel", role: .cancel) {}
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                if busy { BusyLabel("Working on the bar…") }
+                else if isOn { Button("Turn Off…") { confirm = true }.disabled(disabled) }
+                else { Button("Turn On") { set(true) }.disabled(disabled) }
             }
+            if let note { StatusLabel(note, .info) }
+        }
+        .confirmationDialog("Turn off \(name)?", isPresented: $confirm, titleVisibility: .visible) {
+            Button("Turn Off", role: .destructive) { set(false) }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("It disappears from the bar and does not run until you turn it on again here.") }
     }
 }
 
-/// Borderless ✕ at the end of a reorderable card row — see the rule above.
-struct RemoveMark: View {
-    let title: String
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) { Image(systemName: "xmark.circle").frame(width: 32, height: 24).contentShape(Rectangle()) }
-            .buttonStyle(.borderless)
-            .help("Remove \(title) from the list").accessibilityLabel("Remove \(title)")
-    }
-}
-
-/// Non-scrolling strip under the Header of the Installed, Apps and Screensavers pages (like DeviceStrip): a
-/// catalogue or install/remove error stays in view however far down the list the row that caused it is.
-struct LibraryErrorStrip: View {
+/// A catalogue or install error at the top of a library detail, so it is seen whichever row caused it.
+struct LibraryErrorSection: View {
     @EnvironmentObject var model: AppModel
     var includeBarApps = true     // Screensavers has no Deckhand apps, so no barAppError
     var body: some View {
         let errors = [model.appStoreError, includeBarApps ? model.barAppError : nil].compactMap { $0 }
         if !errors.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(errors, id: \.self) { e in
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                        // No fixedSize(vertical:) here, as in DeviceStrip: a flexible frame wraps the text instead.
-                        Text(e).font(.callout).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
-                    }
-                    .padding(8).background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
+            Section {
+                ForEach(errors, id: \.self) { e in StatusLabel(e, .failed).textSelection(.enabled) }
+            }
+        }
+    }
+}
+
+/// "Package", "Web UI": the technical details of an app, folded away.
+struct AppDetailsSection: View {
+    let package: String
+    var inMarketplace = true
+    var webUI: URL? = nil
+    var body: some View {
+        Section {
+            DisclosureGroup("Details") {
+                LabeledContent("Package") { Text(package).textSelection(.enabled) }
+                if !inMarketplace { LabeledContent("Marketplace", value: "Not listed") }
+                if let webUI {
+                    LabeledContent("Web page on the bar") { Link("Open in Browser", destination: webUI) }
                 }
             }
-            .padding(.horizontal, 20).padding(.vertical, 8)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .accessibilityElement(children: .contain).accessibilityLabel("Errors")
         }
     }
 }
 
-/// Title row of a detail pane: icon, name, version and status tag.
-struct DetailTitle<Icon: View>: View {
-    let title: String; var version: String? = nil; var tag: (String, Color)? = nil; var subtitle: String? = nil
-    @ViewBuilder let icon: Icon
-    var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            icon
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(title).font(.title3).bold()
-                    if let version { Text(version).foregroundStyle(.secondary) }
-                    if let tag { Tag(tag.0, tag.1) }
-                }
-                if let subtitle { Text(subtitle).font(.caption).foregroundStyle(.tertiary).textSelection(.enabled) }
-            }
-        }
-    }
-}
-
-/// A row in one of the left-hand lists: name, optional version, and a mark when installed / in use.
-struct LibraryRow<Icon: View>: View {
-    let title: String; var caption: String? = nil; var inUse = false; var busy = false; var updateAvailable = false
-    @ViewBuilder let icon: Icon
-    var body: some View {
-        HStack(spacing: 8) {
-            icon.frame(width: 18, height: 18)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                if let caption { Text(caption).font(.caption2).foregroundStyle(.secondary) }
-            }
-            Spacer()
-            if busy { ProgressView().controlSize(.mini) }
-            else if updateAvailable { Image(systemName: "arrow.down.circle.fill").font(.caption).foregroundStyle(.orange).help("Update available") }
-            else if inUse { Image(systemName: "checkmark.circle.fill").font(.caption).foregroundStyle(.green).help("Installed") }
-        }
-    }
-}
-
-/// "Refresh" (⌘R) — the same button on the Installed, Apps and Screensavers pages.
-struct RefreshButton: View {
-    @EnvironmentObject var model: AppModel
-    var body: some View {
-        Button { model.refreshAppStore() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-            .keyboardShortcut("r", modifiers: .command)
-            .disabled(!model.link.isConnected)
-            .help(model.link.isConnected ? "Read the apps on the bar and the marketplace catalogue again (⌘R)" : "Connect to the bar first.")
-    }
-}
-
-/// "Update all (n)" — the same button on the Installed, Apps and Screensavers pages.
+/// "Update All (n)": counts only what its page lists (apps on Apps, screensavers on Screensavers; review S6).
 struct UpdateAllButton: View {
     @EnvironmentObject var model: AppModel
+    let screensavers: Bool
     var body: some View {
-        let n = model.updatesAvailable
-        let busyName: String? = model.barAppBusy.flatMap { p in AppModel.barAppPages.first { $0.page == p }?.label }
-            ?? model.appBusy.map { pkg in (model.barApps.first { $0.packageName == pkg }?.appName) ?? (model.storeApps + model.storeScreensavers).first { $0.package == pkg }?.name ?? pkg }
-        HStack(spacing: 8) {
-            if let busyName {
-                ProgressView().controlSize(.small)
-                Text("Installing \(busyName)…").font(.caption).foregroundStyle(.secondary)
-            }
-            Button { model.updateEverything() } label: { Label(n == 0 ? "Update all" : "Update all (\(n))", systemImage: "arrow.down.circle") }
-                .buttonStyle(.borderedProminent).disabled(n == 0 || busyName != nil)
-                .help(busyName.map { "Waiting for \($0) to finish installing." } ?? model.updateAllHelp)
+        let n = screensavers ? model.screensaverUpdates.count : model.appUpdateCount
+        let busy = model.barAppBusy != nil || model.appBusy != nil
+        Button { screensavers ? model.updateScreensavers() : model.updateApps() } label: {
+            Label(n == 0 ? "Update All" : "Update All (\(n))", systemImage: "arrow.down.circle")
         }
+        .labelStyle(.titleAndIcon)
+        .prominentAction()
+        .disabled(n == 0 || busy)
+        .help(busy ? "Waiting for the current install to finish." : n == 0 ? "Everything is up to date." : "Install the newer versions one after another.")
     }
 }

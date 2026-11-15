@@ -114,7 +114,10 @@ final class SchipholFeed {
     /// older app_id/app_key headers. nil until a call succeeded.
     private var legacy: Bool?
     private var places: [String: String] = SchipholFeed.loadPlaces()
-    private var credentialsChanged = false
+    private var credentialsChanged = false { didSet { if credentialsChanged { wake.signal() } } }
+    /// Wakes the loops: a bar request (`BarPages.poke`) or new credentials.
+    private let wake = WakeSignal()
+    func poke() { wake.signal() }
 
     nonisolated static let secretID = "schiphol-id", secretKey = "schiphol-key"
     nonisolated static var hasCredentials: Bool { !(Store.shared.loadSecret(name: secretID) ?? "").isEmpty && !(Store.shared.loadSecret(name: secretKey) ?? "").isEmpty }
@@ -128,17 +131,22 @@ final class SchipholFeed {
         return URLSession(configuration: c)
     }()
 
-    /// `open()`: the page asked within the last two minutes; `installed()`: the app is on the bar.
-    /// ADS-B: every 10 s while the page is open, every 30 s while it is only installed (so the 15-minute counts are
-    /// right the moment it is opened), not at all otherwise. Timetable: every 3 minutes while open, every 15 otherwise.
-    func start(open: @escaping @MainActor () -> Bool, installed: @escaping @MainActor () -> Bool) {
+    /// `open()`: the page asked within the last two minutes; `home()`: Deckhand Home (which shows the runways in use)
+    /// asked within the last two minutes; `installed()`: the app is on the bar and someone can see the bar.
+    /// ADS-B: every 10 s while the page is open, every 30 s while Home is on screen (so the 15-minute counts are right
+    /// the moment the page is opened), every 5 minutes while it is only installed, not at all otherwise (until
+    /// 2026-11-15 every 30 s whenever it was installed: 2,880 requests a day). Timetable: every 3 minutes while open,
+    /// every 15 otherwise. The loops sleep until then; a bar request or new credentials wake them.
+    func start(open: @escaping @MainActor () -> Bool, home: @escaping @MainActor () -> Bool, installed: @escaping @MainActor () -> Bool) {
         stop()
         loops.append(Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                let o = open()
-                if o || installed() { await self.pollTraffic(); await self.resolveRoutes() }
-                for _ in 0..<(o ? 2 : 6) { try? await Task.sleep(nanoseconds: 5_000_000_000); if !o && open() { break } }
+                let o = open(), h = home(), on = o || installed()
+                if on { await self.pollTraffic(); await self.resolveRoutes() }
+                let every: Double = !on ? 600 : o ? 10 : h ? 30 : 300
+                // Woken early when the page opens, or (from the 5-minute pace) when Home comes on screen.
+                await self.wake.wait(every) { (!o && open()) || (!o && !h && home() && installed()) || (!on && installed()) }
             }
         })
         loops.append(Task { [weak self] in
@@ -146,11 +154,15 @@ final class SchipholFeed {
             while !Task.isCancelled {
                 guard let self else { return }
                 let o = open(), every: TimeInterval = o ? 180 : 900
-                if (o || installed()) && Self.hasCredentials && (self.credentialsChanged || Date().timeIntervalSince(last) >= every) {
+                let on = (o || installed()) && Self.hasCredentials
+                if on && (self.credentialsChanged || Date().timeIntervalSince(last) >= every) {
                     self.credentialsChanged = false; last = Date()
                     await self.pollBoard()
                 }
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                let left = on ? max(5, every - Date().timeIntervalSince(last)) : 600
+                await self.wake.wait(left) {
+                    self.credentialsChanged || ((open() || installed()) && Self.hasCredentials && Date().timeIntervalSince(last) >= (open() ? 180 : 900))
+                }
             }
         })
     }

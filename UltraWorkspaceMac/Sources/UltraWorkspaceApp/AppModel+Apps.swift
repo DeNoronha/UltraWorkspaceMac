@@ -60,14 +60,18 @@ extension AppModel {
     }
     /// Deckhand apps on the bar older than the APKs shipped with this build.
     var deckhandUpdates: [String] { Self.barAppPages.map(\.page).filter { barAppNeedsUpdate($0) } }
-    var updatesAvailable: Int { marketUpdates.count + deckhandUpdates.count }
-    /// Names of everything Update all would touch, marketplace first.
-    var updateNames: [String] { marketUpdates.map(\.name) + deckhandUpdates.map { p in Self.barAppPages.first { $0.page == p }?.label ?? p } }
-    var updateAllHelp: String {
-        updatesAvailable == 0 ? "Everything is up to date." : "Updates one after another: " + (marketUpdates.map(\.name) + deckhandUpdates.map { p in Self.barAppPages.first { $0.page == p }?.label ?? p }).joined(separator: ", ")
+    /// Marketplace updates split by page: apps (with Deckhand's own) on Apps, screensavers on Screensavers, so each
+    /// page's Update All counts and updates only what it lists.
+    var appMarketUpdates: [(package: String, name: String)] {
+        marketUpdates.filter { u in !(barApps.first { $0.packageName == u.package }?.isScreensaver ?? false) }
     }
-    /// Marketplace updates (the bar does them) and Deckhand's own (over ADB), one after another.
-    func updateEverything() { updateAll(marketUpdates); updateBarApps(deckhandUpdates) }
+    var screensaverUpdates: [(package: String, name: String)] {
+        marketUpdates.filter { u in barApps.first { $0.packageName == u.package }?.isScreensaver ?? false }
+    }
+    var appUpdateCount: Int { appMarketUpdates.count + deckhandUpdates.count }
+    /// Marketplace app updates (the bar does them) and Deckhand's own (over ADB), one after another.
+    func updateApps() { updateAll(appMarketUpdates); updateBarApps(deckhandUpdates) }
+    func updateScreensavers() { updateAll(screensaverUpdates) }
 
     /// One install/update; polls the status for up to a minute. Returns true when the bar reports it installed.
     @discardableResult
@@ -189,7 +193,7 @@ extension AppModel {
         Task {
             defer { appBusy = nil }
             let bridge = AdbBridge(path: adb, ip: ip)
-            guard await bridge.connect() else { say("The bar refuses ADB on \(ip):5555 — Settings → Debug bridge."); return }
+            guard await bridge.connect() else { say("The bar does not accept the debug bridge. See Settings → Debug Bridge."); return }
             let out = await bridge.shell(on ? "pm enable \(package)" : "pm disable-user --user 0 \(package)")
             var names = (UserDefaults.standard.dictionary(forKey: Self.turnedOffNamesKey) as? [String: String]) ?? [:]
             if on { names[package] = nil } else { names[package] = name }

@@ -11,7 +11,8 @@ import UltraBarKit
 /// page in the browser (scope `read,activity:read`); Strava sends the browser back to
 /// `http://localhost:<port>/strava/callback`, which `StravaCallback` answers — a one-shot listener on the loopback
 /// interface only, for this one connection, that takes the code only with the `state` this Mac made. Deckhand trades
-/// the code for tokens and keeps them, with the client id and secret, in user-only secret files (`Store.saveSecret`).
+/// the code for tokens and keeps them, with the client id and secret, in the secret store (Keychain `oauth:strava`,
+/// `api:strava-client-id`, `api:strava-client-secret`; `Store.saveSecret`).
 /// The access token (six hours) is refreshed before it runs out; every refresh stores the new refresh token.
 /// **Disconnect** revokes the tokens at Strava and forgets them.
 ///
@@ -22,10 +23,10 @@ import UltraBarKit
 @MainActor
 final class StravaFeed: ObservableObject {
     @Published var clientID: String = Store.shared.loadSecret(name: "strava-client-id") ?? "" {
-        didSet { Store.shared.saveSecret(clientID.trimmingCharacters(in: .whitespacesAndNewlines), name: "strava-client-id") }
+        didSet { Store.shared.saveSecret(clientID.trimmingCharacters(in: .whitespacesAndNewlines), name: "strava-client-id", debounce: true) }
     }
     @Published var clientSecret: String = Store.shared.loadSecret(name: "strava-client-secret") ?? "" {
-        didSet { Store.shared.saveSecret(clientSecret.trimmingCharacters(in: .whitespacesAndNewlines), name: "strava-client-secret") }
+        didSet { Store.shared.saveSecret(clientSecret.trimmingCharacters(in: .whitespacesAndNewlines), name: "strava-client-secret", debounce: true) }
     }
     @Published private(set) var tokens: StravaTokens? = StravaFeed.loadTokens()
     @Published private(set) var connecting = false
@@ -68,23 +69,31 @@ final class StravaFeed: ObservableObject {
     // MARK: the poll
 
     /// Runs while `wanted()` says so (the Training app is on the bar, or asked for data in the last ten minutes).
+    /// Sleeps until the next fetch is due, woken early by `refreshSoon` or a bar request (`poke`), instead of
+    /// checking every 5 s.
     func start(wanted: @escaping @MainActor () -> Bool) {
         loop?.cancel()
         loop = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                if self.connected, self.hasClient, wanted() || self.kick, Date() >= self.pausedUntil,
-                   self.kick || Date().timeIntervalSince(self.fetchedAt) >= Self.interval {
+                let due = { Date() >= self.pausedUntil && Date().timeIntervalSince(self.fetchedAt) >= Self.interval }
+                if self.connected, self.hasClient, wanted() || self.kick, Date() >= self.pausedUntil, self.kick || due() {
                     self.kick = false
                     await self.refresh()
                 }
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                // Until the next fetch is due; not connected or not wanted, until something changes (at most 10 min).
+                let next = max(self.fetchedAt.addingTimeInterval(Self.interval), self.pausedUntil).timeIntervalSinceNow
+                let active = self.connected && self.hasClient && wanted()
+                await self.wake.wait(active ? min(Self.interval, max(5, next)) : 600) { self.kick || (self.connected && self.hasClient && wanted() && due()) }
             }
         }
     }
     func stop() { loop?.cancel(); loop = nil }
-    /// Fetch at the next tick, whatever the interval (after connecting).
-    func refreshSoon() { kick = true }
+    private let wake = WakeSignal()
+    /// A bar request: a fetch that is due while nobody asked runs now.
+    func poke() { wake.signal() }
+    /// Fetch at once, whatever the interval (after connecting).
+    func refreshSoon() { kick = true; wake.signal() }
 
     private enum Failure: Error { case http(Int, String?), revoked, network(String) }
 

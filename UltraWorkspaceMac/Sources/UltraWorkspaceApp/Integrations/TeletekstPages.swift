@@ -42,11 +42,12 @@ enum TeletekstPages {
         let interval = min(max(f.interval ?? defaultInterval, intervalRange.lowerBound), intervalRange.upperBound)
         return (valid.isEmpty ? defaults : Array(valid.prefix(maxEntries)), interval)
     }
-    /// Writes the choice from Apps → Teletekst; the config feed sends it to the bar within 10 s.
+    /// Writes the choice from Apps → Teletekst; the config feed sends it to the bar at once (`configFilesChanged`).
     nonisolated static func save(_ entries: [TeletekstEntry], interval: Int) throws {
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try enc.encode(File(pages: Array(entries.prefix(maxEntries)), interval: interval)).write(to: fileURL, options: .atomic)
+        NotificationCenter.default.post(name: BarPages.configFilesChanged, object: nil)
     }
     /// The `apps.teletekst` section of the bar config.
     nonisolated static func configSection() -> [String: Any] {

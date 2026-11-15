@@ -14,23 +14,26 @@ struct CaskSettings: View {
 
     struct EditTarget: Identifiable { let id = UUID(); let bottle: CaskBottle?; }
 
+    @State private var pendingRemove: CaskBottle?
+
     var body: some View {
-        Panel("Whisky Portfolio settings", footer: "A Whiskystats membership with Data API credits; the key is under your account settings on whiskystats.com. It is kept in a user-only file on this Mac and only sent to data.api.whiskystats.com; the bar asks Deckhand for the prices.") {
-            HStack {
-                SecureField("Whiskystats API key", text: $model.whiskystatsKey).frame(width: 320)
-                    .onSubmit { Task { await feed.checkCredits() } }
-                if let e = feed.lastError { Text(e).font(.caption).foregroundStyle(.orange).lineLimit(2) }
-                else if model.whiskystatsKey.isEmpty { Text("No key yet.").font(.caption).foregroundStyle(.secondary) }
-                else if let b = feed.busy { Text("Fetching \(b)…").font(.caption).foregroundStyle(.secondary) }
-                else { Text("Saved.").font(.caption).foregroundStyle(.secondary) }
-            }
+        Section {
+            SecureField("Whiskystats key", text: $model.whiskystatsKey)
+                .onSubmit { Task { await feed.checkCredits() } }
+            if let e = feed.lastError { StatusLabel(e, .failed) }
+            else if model.whiskystatsKey.isEmpty { StatusLabel("No key yet.", .info) }
+            else if let b = feed.busy { BusyLabel("Fetching \(b)…") }
+        } header: {
+            Text("Whiskystats")
+        } footer: {
+            Footnote("Needs a Whiskystats membership with Data API credits. Kept in this Mac's Keychain.")
         }
         .task(id: model.whiskystatsKey) {   // free; after typing stops, not per keystroke
             try? await Task.sleep(nanoseconds: 800_000_000)
             if !Task.isCancelled { await feed.checkCredits() }
         }
-        creditsPanel
-        bottlesPanel
+        creditsSection
+        bottlesSection
             .sheet(item: $editing) { t in
                 CaskBottleEditor(feed: feed, bottle: t.bottle) { saved in
                     var next = feed.bottles
@@ -41,65 +44,88 @@ struct CaskSettings: View {
             }
     }
 
-    private var creditsPanel: some View {
+    private var creditsSection: some View {
         let n = Set(feed.bottles.map(\.whiskyId)).count, days = feed.refreshDays()
         let per = WhiskyStats.Cost.pricing + (feed.lotsOn ? WhiskyStats.Cost.lots : 0)
         let month = Int((Double(n * per) * 30 / Double(days)).rounded())
-        return Panel("Credits", footer: "Whiskystats charges per call: auction prices 10 credits, the lots coming up at auction 7, a search 1, the balance nothing. Deckhand caches everything on this Mac, refreshes one bottle at a time while Whisky Portfolio is on the bar, and spreads the refreshes over the month, so the monthly credits last until the next cycle; all of them may be used.") {
+        return Section {
             if let c = feed.cache.credits {
                 let left = max(0, c.limit - c.usage)
-                HStack(spacing: 10) {
-                    ProgressView(value: Double(min(c.usage, c.limit)), total: Double(max(1, c.limit))).frame(width: 180)
-                    Text("\(c.usage) of \(c.limit) used · \(left) left").monospacedDigit()
-                    if let cy = c.cycle { Text("until \(CaskFeed.shortDate(cy))").font(.caption).foregroundStyle(.secondary) }
+                LabeledContent("Used") {
+                    HStack(spacing: 10) {
+                        ProgressView(value: Double(min(c.usage, c.limit)), total: Double(max(1, c.limit))).frame(maxWidth: 160)
+                        Text("\(c.usage) of \(c.limit) · \(left) left" + (c.cycle.map { " until \(CaskFeed.shortDate($0))" } ?? "")).monospacedDigit().foregroundStyle(.secondary)
+                    }
                 }
             } else {
-                Text(model.whiskystatsKey.isEmpty ? "Add the key to see your credits." : "Credits not read yet.").font(.caption).foregroundStyle(.secondary)
+                StatusLabel(model.whiskystatsKey.isEmpty ? "Add the key to see your credits." : "Credits not read yet.", .info)
             }
             Text(n == 0 ? "No bottles yet: nothing is spent." : "Each bottle is refreshed every \(days) days: about \(month) credits a month for \(n) bottle\(n == 1 ? "" : "s").")
-                .font(.callout)
-            Toggle("Also fetch the lots coming up at auction (7 credits per bottle per refresh)", isOn: Binding(get: { feed.lotsOn }, set: { feed.setLots($0) }))
-            if let note = feed.note { Text(note).font(.caption).foregroundStyle(.secondary) }
+                .font(.callout).foregroundStyle(.secondary)
+            Toggle("Also fetch upcoming auction lots (\(WhiskyStats.Cost.lots) credits a bottle)", isOn: Binding(get: { feed.lotsOn }, set: { feed.setLots($0) }))
+            if let note = feed.note { StatusLabel(note, .info) }
+        } header: {
+            Text("Credits")
+        } footer: {
+            Footnote("Prices cost \(WhiskyStats.Cost.pricing) credits, a search 1. Refreshes are spread over the month so the credits last.")
         }
     }
 
-    private var bottlesPanel: some View {
-        Panel("Bottles", footer: "Market value is Whiskystats' 90-day average of auction buyer prices (hammer plus fees), worldwide, in euros; a bottle without trades of its own uses its bottle group's. What you paid and when is optional and stays on this Mac. The list is cask.json in Deckhand's Application Support folder; a hand edit is picked up within a minute.") {
-            if let e = feed.fileError { Text(e).font(.caption).foregroundStyle(.orange) }
-            if feed.bottles.isEmpty { Text("No bottles yet. Add one by searching Whiskystats or with its Whiskybase ID.").font(.caption).foregroundStyle(.secondary) }
+    private var bottlesSection: some View {
+        Section {
+            if let e = feed.fileError { StatusLabel(e, .failed) }
+            if feed.bottles.isEmpty { Text("No bottles yet. Add one by searching Whiskystats or with its Whiskybase ID.").foregroundStyle(.secondary) }
             ForEach(feed.bottles) { b in
                 let e = feed.cache.entries[b.whiskyId]
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(b.name).lineLimit(1)
-                        Text(Self.summary(b, e)).font(.caption).foregroundStyle(e?.error != nil ? .orange : .secondary).lineLimit(1)
+                        Text(Self.summary(b, e)).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer()
                     if feed.busy == b.whiskyId { ProgressView().controlSize(.small) }
-                    Button { feed.refreshNow(b.whiskyId) } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.borderless)
-                        .disabled(feed.busy != nil || model.whiskystatsKey.isEmpty)
-                        .help("Fetch this bottle's prices now (\(WhiskyStats.Cost.pricing + (feed.lotsOn ? WhiskyStats.Cost.lots : 0)) credits)")
-                    Button("Edit…") { editing = EditTarget(bottle: b) }
-                    Button { save(feed.bottles.filter { $0.id != b.id }) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).help("Remove this bottle")
+                    if e?.error != nil { Image(systemName: StatusKind.failed.symbol).foregroundStyle(.red).accessibilityLabel("Price fetch failed") }
+                    Menu {
+                        Button("Fetch Prices Now (\(WhiskyStats.Cost.pricing + (feed.lotsOn ? WhiskyStats.Cost.lots : 0)) credits)") { feed.refreshNow(b.whiskyId) }
+                            .disabled(feed.busy != nil || model.whiskystatsKey.isEmpty)
+                        Button("Edit…") { editing = EditTarget(bottle: b) }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .accessibilityLabel("Actions for \(b.name)")
+                    RemoveMark(title: b.name) { pendingRemove = b }
                 }
             }
             HStack {
-                Button { editing = EditTarget(bottle: nil) } label: { Label("Add bottle", systemImage: "plus") }.disabled(model.whiskystatsKey.isEmpty)
-                let todo = feed.unpriced.count
-                if let b = feed.batch {
-                    ProgressView(value: Double(b.done), total: Double(max(1, b.total))).frame(width: 100)
-                    Text("\(b.done) of \(b.total)").font(.caption).monospacedDigit()
-                } else if todo > 0 {
-                    Button { feed.fetchUnpriced() } label: { Label("Fetch prices for \(todo) without (\(todo * (WhiskyStats.Cost.pricing + (feed.lotsOn ? WhiskyStats.Cost.lots : 0))) credits)", systemImage: "arrow.down.circle") }
-                        .disabled(model.whiskystatsKey.isEmpty || feed.busy != nil)
-                }
-                Button { importing = true } label: { Label("Import Whiskystats export…", systemImage: "square.and.arrow.down") }
-                Button { NSWorkspace.shared.activateFileViewerSelecting([CaskFeed.bottlesURL]) } label: { Label("Show cask.json", systemImage: "doc.text") }
-                    .buttonStyle(.borderless).disabled(!FileManager.default.fileExists(atPath: CaskFeed.bottlesURL.path))
-                if let saveError { Text(saveError).font(.caption).foregroundStyle(.orange) }
+                Button("Add Bottle…") { editing = EditTarget(bottle: nil) }.disabled(model.whiskystatsKey.isEmpty)
+                Button("Import Whiskystats Export…") { importing = true }
+                Spacer()
+                Button("Show cask.json") { NSWorkspace.shared.activateFileViewerSelecting([CaskFeed.bottlesURL]) }
+                    .disabled(!FileManager.default.fileExists(atPath: CaskFeed.bottlesURL.path))
             }
-            if let importNote { Text(importNote).font(.caption).foregroundStyle(.secondary) }
+            let todo = feed.unpriced.count
+            if let b = feed.batch {
+                LabeledContent("Fetching prices") {
+                    HStack {
+                        ProgressView(value: Double(b.done), total: Double(max(1, b.total))).frame(maxWidth: 120)
+                        Text("\(b.done) of \(b.total)").monospacedDigit()
+                    }
+                }
+            } else if todo > 0 {
+                Button("Fetch Prices for \(todo) Without (\(todo * (WhiskyStats.Cost.pricing + (feed.lotsOn ? WhiskyStats.Cost.lots : 0))) credits)") { feed.fetchUnpriced() }
+                    .disabled(model.whiskystatsKey.isEmpty || feed.busy != nil)
+            }
+            if let saveError { StatusLabel(saveError, .failed) }
+            if let importNote { StatusLabel(importNote, .info) }
+            DetailsDisclosure(text: "Market value is Whiskystats' 90-day average of auction buyer prices (hammer plus fees), worldwide, in euros; a bottle without trades of its own uses its bottle group's. What you paid and when is optional; it stays on this Mac and is shown only on your own bar. The list is cask.json in Deckhand's Application Support folder; a hand edit is picked up within a minute.")
+        } header: {
+            Text("Bottles")
+        } footer: {
+            Footnote("What you paid stays on this Mac. Whiskystats only sees the bottle IDs.")
         }
+        .confirmationDialog("Remove \(pendingRemove?.name ?? "this bottle")?", isPresented: Binding(get: { pendingRemove != nil }, set: { if !$0 { pendingRemove = nil } }), titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { if let b = pendingRemove { save(feed.bottles.filter { $0.id != b.id }) }; pendingRemove = nil }
+            Button("Cancel", role: .cancel) { pendingRemove = nil }
+        } message: { Text("The bottle, with what you paid and when, is deleted from Whisky Portfolio.") }
         .fileImporter(isPresented: $importing, allowedContentTypes: [UTType(filenameExtension: "xlsx") ?? .data, .commaSeparatedText]) { r in
             guard case .success(let url) = r else { return }
             let scoped = url.startAccessingSecurityScopedResource()
@@ -107,11 +133,11 @@ struct CaskSettings: View {
             do { pendingImport = try CaskImport.read(url); importNote = nil } catch { importNote = error.localizedDescription }
         }
         .confirmationDialog(importTitle, isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } }), titleVisibility: .visible) {
-            Button("Replace the list") {
+            Button("Replace the List") {
                 guard let r = pendingImport else { return }
                 save(CaskImport.merge(r.bottles, into: feed.bottles))
                 let n = Set(r.bottles.map(\.whiskyId)).subtracting(feed.cache.entries.compactMap { $0.value.pricing == nil ? nil : $0.key }).count
-                importNote = "Imported \(r.bottles.count) bottles (\(r.total) in total)" + (r.skipped > 0 ? ", \(r.skipped) rows without a Whiskybase ID skipped" : "") + (n > 0 ? ". \(n) still need prices: press Fetch prices, or they come one by one while Whisky Portfolio is on the bar, \(WhiskyStats.Cost.pricing) credits each." : ".")
+                importNote = "Imported \(r.bottles.count) bottles (\(r.total) in total)" + (r.skipped > 0 ? ", \(r.skipped) rows without a Whiskybase ID skipped" : "") + (n > 0 ? ". \(n) still need prices: press Fetch Prices, or they come one by one while Whisky Portfolio is on the bar, \(WhiskyStats.Cost.pricing) credits each." : ".")
                 pendingImport = nil
             }
             Button("Cancel", role: .cancel) { pendingImport = nil }
@@ -167,13 +193,13 @@ private struct CaskBottleEditor: View {
         VStack(alignment: .leading, spacing: 14) {
             Text(isNew ? "Add a bottle" : "Edit \(bottle.name)").font(.title3.bold())
             VStack(alignment: .leading, spacing: 4) {
-                Text("Find on Whiskystats").font(.caption).foregroundStyle(.secondary)
+                Text("Find on Whiskystats").font(.callout).foregroundStyle(.secondary)
                 HStack {
-                    TextField("Name, e.g. Lagavulin 16 — or a Whiskybase ID or link", text: $query).onSubmit(search)
+                    TextField("Search", text: $query, prompt: Text("Name, e.g. Lagavulin 16, or a Whiskybase ID or link")).onSubmit(search)
                     Button(WhiskyStats.whiskyID(from: query) != nil ? "Look up (1 credit)" : "Search (1 credit)", action: search)
                         .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty || searching)
                 }
-                if let searchNote { Text(searchNote).font(.caption).foregroundStyle(.secondary) }
+                if let searchNote { Text(searchNote).font(.callout).foregroundStyle(.secondary) }
                 if !hits.isEmpty {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 2) {
@@ -182,7 +208,7 @@ private struct CaskBottleEditor: View {
                                     HStack(spacing: 8) {
                                         Text(h.whiskyId).font(.caption.monospaced()).foregroundStyle(.secondary).frame(width: 74, alignment: .leading)
                                         Text(h.name).lineLimit(1)
-                                        if h.whiskyId.hasPrefix("BG") { Text("group").font(.caption2).foregroundStyle(.secondary) }
+                                        if h.whiskyId.hasPrefix("BG") { Text("Group").font(.caption).foregroundStyle(.secondary) }
                                         Spacer()
                                     }.contentShape(Rectangle()).padding(.vertical, 2)
                                         .background(bottle.whiskyId == h.whiskyId ? Color.accentColor.opacity(0.2) : .clear)
@@ -191,19 +217,19 @@ private struct CaskBottleEditor: View {
                         }
                     }.frame(height: 180)
                     Text("Same name, different ID: different bottlings or labels. A group (BG) covers bottlings that only differ in details; pick one from Whiskybase if you know it, else the group.")
-                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Divider()
             Form {
-                TextField("Whisky ID", text: $bottle.whiskyId)
+                TextField("Whisky ID", text: $bottle.whiskyId, prompt: Text("WB12345 or BG…"))
                 TextField("Name on the bar", text: $bottle.name)
                 Stepper("Bottles: \(bottle.quantity)", value: $bottle.quantity, in: 1...999)
-                TextField("Paid per bottle (€, optional)", value: $bottle.price, format: .number)
+                TextField("Paid per bottle (€)", value: $bottle.price, format: .number, prompt: Text("Optional"))
                 Toggle("Bought on", isOn: $hasDate)
                 if hasDate { DatePicker("Date", selection: $date, in: ...Date(), displayedComponents: .date) }
             }
-            if isNew { Text("Adding fetches the bottle's prices once (\(WhiskyStats.Cost.pricing + (feed.lotsOn ? WhiskyStats.Cost.lots : 0)) credits).").font(.caption).foregroundStyle(.secondary) }
+            if isNew { Text("Adding fetches the bottle's prices once (\(WhiskyStats.Cost.pricing + (feed.lotsOn ? WhiskyStats.Cost.lots : 0)) credits).").font(.callout).foregroundStyle(.secondary) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)

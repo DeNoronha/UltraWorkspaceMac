@@ -29,17 +29,19 @@ import java.util.concurrent.TimeUnit
  *  - `/<page>/data.json`          [Feeds], fetched by the bar itself and cached ([Feed])
  *  - `/flights/tile/z/x/y.png`    OpenStreetMap tiles, toned down like the Mac's `MapTiles`, cached 30 days
  *
- * Mac pages (monitor, claude, music, calendar, tasks, haven, strava, cask, schiphol, zeekr) show what only the Mac knows, so their data requests are
+ * Mac pages (monitor, claude, music, calendar, tasks, haven, strava, cask, schiphol) show what only the Mac knows, so their data requests are
  * passed on to Deckhand's data API at the address its beacon names ([macBase]): `/monitor/stats.json`,
- * `/<page>/data.json`, `/music/art.jpg`, `/zeekr/car/<normal|charging|trunk>.png` (the owner's own car picture), and the two actions (POST `/music/cmd/…`, `/tasks/done/…`, with the
- * `X-Deckhand: action` header the Mac requires). Nothing else is forwarded. While no Mac is known the answer is
- * 503 and the page shows "Waiting for the Mac…".
+ * `/<page>/data.json`, `/music/art.jpg`, and the two actions (POST `/music/cmd/…`, `/tasks/done/…`, with the
+ * `X-Deckhand: action` header the Mac requires), each with the per-bar `X-Deckhand-Key` Deckhand pushed ([MacLink]).
+ * Nothing else is forwarded. While no Mac is known the answer is 503 and the page shows "Waiting for the Mac…".
  */
 internal class LocalSite(private val ctx: Context, private val page: String, private val title: String) {
     companion object {
         const val HOST = "deckhand.invalid"
         const val ORIGIN = "https://$HOST"
         private const val TILE_MAX_AGE_MS = 30L * 86_400_000
+        /** A forwarded answer larger than this is cut off and refused (the Mac's data is a few kB). */
+        private const val MAX_FORWARD_BYTES = 2_000_000
     }
 
     private val feed: Feed? = when (page) {
@@ -58,13 +60,18 @@ internal class LocalSite(private val ctx: Context, private val page: String, pri
     @Volatile var macBase: String? = null
 
     @Volatile private var config: BarConfig? = null
+    /** A `/config.json` fetched from the Mac over HTTP: used in memory only, never stored (2.4), and only until the
+     *  stored (pushed) document changes. First: the stored document when it was fetched; second: the fetched one. */
+    @Volatile var liveConfig: Pair<String, String>? = null
     /** Drop the parsed config; the next data request reads the stored document again. */
     fun reloadConfig() { config = null }
-    /** The parsed config, read again whenever the stored document changed (a push or a beacon fetch). */
+    /** The parsed config, read again whenever the document in use changed (a push, or a fetch from the Mac). */
     private fun cfg(): BarConfig {
+        val stored = BarConfig.stored(ctx)
+        val raw = liveConfig?.takeIf { it.first == stored }?.second ?: stored
         val c = config
-        if (c != null && c.raw == BarConfig.stored(ctx)) return c
-        return BarConfig.load(ctx, page).also { config = it }
+        if (c != null && c.raw == raw) return c
+        return BarConfig.load(ctx, page, raw).also { config = it }
     }
 
     private val tileDir = File(ctx.cacheDir, "tiles-v3").apply { mkdirs() }
@@ -95,7 +102,6 @@ internal class LocalSite(private val ctx: Context, private val page: String, pri
             method == "GET" && parts == listOf(page, "data.json") && page != "monitor" -> true
             method == "GET" && page == "monitor" && parts == listOf("monitor", "stats.json") -> true
             method == "GET" && page == "music" && parts == listOf("music", "art.jpg") -> true
-            method == "GET" && page == "zeekr" && parts.size == 3 && parts[1] == "car" && parts[2] in setOf("normal.png", "charging.png", "trunk.png") -> true
             method == "POST" && page == "music" && parts.size == 3 && parts[1] == "cmd" && parts[2] in setOf("play", "next", "previous") -> true
             method == "POST" && page == "tasks" && parts.size == 3 && parts[1] == "done" && parts[2].matches(Regex("^[0-9a-fA-F-]{36}$")) -> true
             else -> false
@@ -107,9 +113,14 @@ internal class LocalSite(private val ctx: Context, private val page: String, pri
             val c = URL(target).openConnection() as HttpURLConnection
             c.connectTimeout = 4_000; c.readTimeout = 6_000; c.requestMethod = method
             c.setRequestProperty("User-Agent", USER_AGENT)
+            MacLink.key(ctx)?.let { c.setRequestProperty(MacLink.HEADER, it) }
             if (method == "POST") { c.setRequestProperty("X-Deckhand", "action"); c.doOutput = true; c.setFixedLengthStreamingMode(0); c.outputStream.close() }
             val code = c.responseCode
-            val body = (if (code in 200..299) c.inputStream else c.errorStream)?.use { it.readBytes() } ?: ByteArray(0)
+            val body = (if (code in 200..299) c.inputStream else c.errorStream)?.use { input ->
+                val out = ByteArrayOutputStream(); val buf = ByteArray(16_384)
+                while (true) { val n = input.read(buf); if (n < 0) break; out.write(buf, 0, n); if (out.size() > MAX_FORWARD_BYTES) { c.disconnect(); return status(502, "Bad Gateway") } }
+                out.toByteArray()
+            } ?: ByteArray(0)
             val type = (c.contentType ?: "application/octet-stream").substringBefore(';').trim()
             c.disconnect()
             WebResourceResponse(type, "utf-8", code, if (code in 200..299) "OK" else "Error", mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(body))

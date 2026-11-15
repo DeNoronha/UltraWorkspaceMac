@@ -7,36 +7,50 @@ struct TideSettings: View {
     @State private var adding = false
     @State private var saveError: String?
 
+    @State private var pendingRemove: TideStation?
+
     var body: some View {
-        Panel("Gauges", footer: "Up to four, from Rijkswaterstaat's open water data (no key). The bar fetches the levels itself every 10 minutes while Tide is open, and the astronomical tide once a day. A gauge with a tide shows its next high and low water; a river gauge shows its level and trend.") {
-            ForEach(Array(stations.enumerated()), id: \.element.id) { i, s in
+        Section {
+            ReorderableRows(items: stations, id: \.id, move: move) { _, s in
                 HStack(spacing: 10) {
                     Image(systemName: s.tide ? "water.waves" : "arrow.up.and.down").foregroundStyle(.secondary).frame(width: 18)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(s.name)
-                        Text(s.tide ? "tide · \(s.code)" : "river gauge · \(s.code)").font(.caption).foregroundStyle(.secondary)
+                        Text(s.tide ? "Tide gauge" : "River gauge").font(.callout).foregroundStyle(.secondary).help(s.code)
                     }
                     Spacer()
-                    Button { move(i, -1) } label: { Image(systemName: "chevron.up") }.buttonStyle(.borderless).disabled(i == 0).help("Move left on the bar")
-                    Button { move(i, 1) } label: { Image(systemName: "chevron.down") }.buttonStyle(.borderless).disabled(i == stations.count - 1).help("Move right on the bar")
-                    Button { var next = stations; next.remove(at: i); save(next) } label: { Image(systemName: "trash") }
-                        .buttonStyle(.borderless).disabled(stations.count == 1).help("Remove this gauge")
+                    RemoveMark(title: s.name) { pendingRemove = s }.disabled(stations.count == 1)
                 }
             }
             HStack {
-                Button { adding = true } label: { Label("Add gauge…", systemImage: "plus") }.disabled(stations.count >= TideStations.maxStations)
-                Button("Default set") { save(TideStations.defaults) }.buttonStyle(.borderless).disabled(stations == TideStations.defaults)
-                if let saveError { Text(saveError).font(.caption).foregroundStyle(.orange) }
+                Button("Add Gauge…") { adding = true }.disabled(stations.count >= TideStations.maxStations)
+                Spacer()
+                Button("Default Set") { save(TideStations.defaults) }.disabled(stations == TideStations.defaults)
             }
+            if let saveError { StatusLabel(saveError, .failed) }
+        } header: {
+            Text("Gauges")
+        } footer: {
+            Footnote("Up to four, left to right on the bar. Drag to reorder. Rijkswaterstaat's open data, no key.")
         }
         .sheet(isPresented: $adding) {
             TideStationPicker(taken: Set(stations.map(\.code))) { s in save(stations + [s]) }
         }
-        LocationPanel()
-        Text("Sunrise, sunset, day length and the moon are computed on the bar for this location.").font(.caption).foregroundStyle(.secondary)
+        .confirmationDialog("Remove \(pendingRemove?.name ?? "this gauge")?", isPresented: Binding(get: { pendingRemove != nil }, set: { if !$0 { pendingRemove = nil } }), titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { if let s = pendingRemove { save(stations.filter { $0.id != s.id }) }; pendingRemove = nil }
+            Button("Cancel", role: .cancel) { pendingRemove = nil }
+        } message: { Text("The bar stops showing it within a few seconds.") }
+        Section {
+            LocationSummaryRow()
+        } header: {
+            Text("Almanac")
+        } footer: {
+            Footnote("Sunrise, sunset and the moon are computed on the bar for this location.")
+        }
     }
 
-    private func move(_ i: Int, _ d: Int) { var next = stations; next.swapAt(i, i + d); save(next) }
+    private func move(_ from: IndexSet, _ to: Int) { var next = stations; next.move(fromOffsets: from, toOffset: to); save(next) }
+
     private func save(_ next: [TideStation]) {
         do { try TideStations.save(next); stations = TideStations.load(); saveError = nil }
         catch { saveError = "Could not save: \(error.localizedDescription)" }
@@ -66,12 +80,12 @@ private struct TideStationPicker: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Add a gauge").font(.title3.bold())
             HStack {
-                TextField("Search, e.g. Vlissingen, Lobith, IJmuiden", text: $query).textFieldStyle(.roundedBorder)
+                TextField("Search", text: $query, prompt: Text("Search, e.g. Vlissingen, Lobith, IJmuiden")).textFieldStyle(.roundedBorder)
                 Toggle("With tide only", isOn: $tideOnly).toggleStyle(.checkbox)
             }
             Group {
                 if loading { ProgressView("Loading the gauges from Rijkswaterstaat…").frame(maxWidth: .infinity, maxHeight: .infinity) }
-                else if let error { Text(error).foregroundStyle(.orange).frame(maxWidth: .infinity, maxHeight: .infinity) }
+                else if let error { StatusLabel(error, .failed).frame(maxWidth: .infinity, maxHeight: .infinity) }
                 else {
                     List(shown) { e in
                         Button { onPick(e.station); dismiss() } label: {
@@ -79,18 +93,18 @@ private struct TideStationPicker: View {
                                 Image(systemName: e.tide ? "water.waves" : "arrow.up.and.down").foregroundStyle(.secondary).frame(width: 18)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(e.name)
-                                    Text(e.code).font(.caption).foregroundStyle(.secondary)
+                                    Text(e.code).font(.callout).foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 if let v = e.level { Text("\(v > 0 ? "+" : "")\(v) cm NAP").monospacedDigit().foregroundStyle(.secondary) }
-                                if let t = e.at { Text(t.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.tertiary) }
+                                if let t = e.at { Text(t.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary) }
                             }.contentShape(Rectangle())
                         }.buttonStyle(.plain)
                     }
                 }
             }.frame(minHeight: 340)
             HStack {
-                Text(loading ? "" : "\(shown.count) of \(all.count) gauges that reported in the last two days").font(.caption).foregroundStyle(.secondary)
+                Text(loading ? "" : "\(shown.count) of \(all.count) gauges that reported in the last two days").font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
             }

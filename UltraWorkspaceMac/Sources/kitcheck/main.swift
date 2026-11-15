@@ -271,6 +271,64 @@ do {
     check(ok.contains("\"result\":3"), "redact: leaves other properties alone")
 }
 
+// WireLog (security review 2026-11-15): wider denylist, coordinates to one decimal, SSID mask, report masking,
+// retention (7 days, dated lines only), the 2 MB cap keeps the newest part, off by default, Clear.
+do {
+    for name in ["access_token", "refresh_token", "accessToken", "psk", "pwd", "secret", "client_secret", "Authorization", "key"] {
+        let r = WireLog.redact("{\"\(name)\":\"VALUE123\"}")
+        check(!r.contains("VALUE123"), "redact: \"\(name)\" value", r)
+    }
+    check(!WireLog.redact("GET /x?sessionToken=abc123&y=1").contains("abc123"), "redact: sessionToken= in a URL")
+    check(!WireLog.redact("X-Deckhand-Key: 00ff00ff").contains("00ff00ff"), "redact: X-Deckhand-Key header")
+    let c = WireLog.redact("weather GET forecast lat=52.3676 lon=4.9041")
+    check(c == "weather GET forecast lat=52.3 lon=4.9", "redact: coordinates rounded to one decimal", c)
+    let pair = WireLog.redact("weather: IP geolocation → Amsterdam (52.3676,4.9041)")
+    check(pair.hasSuffix("(52.3,4.9)"), "redact: coordinate pair rounded", pair)
+    check(WireLog.redact(#"{"lat":52.37612,"lon":4.9}"#) == #"{"lat":52.3,"lon":4.9}"#, "redact: JSON coordinates rounded")
+    check(WireLog.maskSSID("HomeNetwork") == "Ho…(11)" && WireLog.maskSSID("ab") == "…(2)", "maskSSID: two characters and the length")
+    let rep = WireLog.forReport("CoreBar ultrabar ABCD12345678 @ 192.168.50.207\nlocation: using Mac location → Haarlem\nlat=52.3 lon=4.6 {\"ssid\":\"Home\"}", serials: ["ABCD12345678"])
+    check(!rep.contains("ABCD12345678") && rep.contains("…5678"), "report: serial reduced to its last four", rep)
+    check(!rep.contains("50.207") && rep.contains("192.168.x.x"), "report: IP addresses masked")
+    check(!rep.contains("Haarlem") && !rep.contains("52.3") && !rep.contains("\"Home\""), "report: place, coordinates and SSID dropped", rep)
+
+    let now = Date()
+    let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+    let old = f.string(from: now.addingTimeInterval(-8 * 86_400)), recent = f.string(from: now.addingTimeInterval(-86_400))
+    let pruned = String(decoding: WireLog.pruned(Data("\(old) -- old\n12:00:00.000 -- undated\n\(recent) -- new\n".utf8), now: now), as: UTF8.self)
+    check(pruned == "\(recent) -- new\n", "log retention: lines older than 7 days and undated lines dropped", pruned)
+    var big = Data()
+    for i in 0..<30_000 { big.append(Data("\(recent) -- line \(i) padding padding padding padding\n".utf8)) }
+    let capped = WireLog.capped(big)
+    let cappedText = String(decoding: capped, as: UTF8.self)
+    check(big.count > WireLog.maxBytes && capped.count <= WireLog.keepBytes && capped.count > WireLog.keepBytes - 200, "log cap: over 2 MB keeps about the newest 1 MB", "\(big.count) → \(capped.count)")
+    check(cappedText.hasSuffix("line 29999 padding padding padding padding\n") && cappedText.hasPrefix(recent), "log cap: the newest lines are kept, cut at a line start")
+
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kitcheck-wirelog-\(UUID().uuidString.prefix(8))", isDirectory: true)
+    let suite = "kitcheck.wirelog.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { try? FileManager.default.removeItem(at: dir); defaults.removePersistentDomain(forName: suite) }
+    let log = WireLog(directory: dir, defaults: defaults)
+    log.event("before switching on")
+    log.flush()
+    check(!log.enabled && log.recent().isEmpty && log.fileSize == 0, "wire log: off by default, nothing kept")
+    log.enabled = true
+    log.sent(#"{"act":100,"data":"TOKEN-XYZ"}"#)
+    log.flush()
+    let onDisk = (try? String(contentsOf: log.fileURL, encoding: .utf8)) ?? ""
+    let mode = ((try? FileManager.default.attributesOfItem(atPath: log.fileURL.path))?[.posixPermissions] as? Int) ?? -1
+    check(log.enabled && onDisk.contains(">> ") && !onDisk.contains("TOKEN-XYZ") && mode == 0o600, "wire log: on → redacted lines in a 0600 file", String(mode, radix: 8))
+    check(defaults.bool(forKey: WireLog.enabledKey) && log.enabledSince != nil, "wire log: the switch and its date are remembered")
+    // Rotation on a real file keeps the newest part (the old write-only handle emptied the file).
+    for i in 0..<25_000 { log.event("rotation line \(i) padding padding padding padding padding") }
+    log.flush()
+    let rotated = (try? String(contentsOf: log.fileURL, encoding: .utf8)) ?? ""
+    check(log.fileSize <= WireLog.maxBytes && log.fileSize > WireLog.keepBytes / 2 && rotated.contains("rotation line 24999") && rotated.contains("log rotated"), "wire log: rotation keeps the newest lines", "\(log.fileSize) B")
+    log.clear()
+    check(log.recent().isEmpty && log.fileSize == 0, "wire log: Clear empties the ring and the file")
+    log.event("after clear"); log.enabled = false; log.event("while off"); log.flush()
+    check(log.recent().isEmpty && !((try? String(contentsOf: log.fileURL, encoding: .utf8)) ?? "").contains("while off"), "wire log: off → nothing written")
+}
+
 // DeviceImage opaque header
 do {
     let w = 4, h = 2
@@ -357,13 +415,13 @@ do {
 
 // Discovery reply parsing: tcpPort may be a number or a string, ip falls back to the sender.
 do {
-    let a = Discovery.parse(Data(#"{"serialNo":"S1","ver":"1.0.9(9)","ip":"192.168.1.9","name":"ultrabar","tcpPort":7431}"#.utf8), from: "10.0.0.1")
-    check(a?.ip == "192.168.1.9" && a?.tcpPort == 7431 && a?.serialNo == "S1", "discovery: full reply")
-    let b = Discovery.parse(Data(#"{"serialNo":"S2","tcpPort":"7431"}"#.utf8), from: "10.0.0.2")
+    let a = Discovery.parse(Data(#"{"serialNo":"SN0001","ver":"1.0.9(9)","ip":"192.168.1.9","name":"ultrabar","tcpPort":7431}"#.utf8), from: "10.0.0.1")
+    check(a?.ip == "192.168.1.9" && a?.tcpPort == 7431 && a?.serialNo == "SN0001", "discovery: full reply")
+    let b = Discovery.parse(Data(#"{"serialNo":"SN0002","tcpPort":"7431"}"#.utf8), from: "10.0.0.2")
     check(b?.ip == "10.0.0.2" && b?.tcpPort == 7431, "discovery: string tcpPort, ip from sender")
-    check(Discovery.parse(Data(#"{"serialNo":"S3"}"#.utf8), from: "10.0.0.3") == nil, "discovery: no tcpPort → ignored")
+    check(Discovery.parse(Data(#"{"serialNo":"SN0003"}"#.utf8), from: "10.0.0.3") == nil, "discovery: no tcpPort → ignored")
     check(Discovery.parse(Data("not json".utf8), from: "10.0.0.3") == nil, "discovery: garbage → ignored")
-    check(Discovery.parse(Data(#"{"serialNo":"S4","tcpPort":0}"#.utf8), from: "10.0.0.4")?.tcpPort == 7431, "discovery: tcpPort 0 → default 7431")
+    check(Discovery.parse(Data(#"{"serialNo":"SN0004","tcpPort":0}"#.utf8), from: "10.0.0.4")?.tcpPort == 7431, "discovery: tcpPort 0 → default 7431")
 }
 
 // Request parsing used by the LAN servers (security review 2026-11-04).
@@ -384,12 +442,26 @@ do {
     check(MonitorServer.peerIsAllowed("10.0.0.5", peers: ["10.0.0.5"]) && MonitorServer.peerIsAllowed("::ffff:10.0.0.5", peers: ["10.0.0.5"]), "allowed peers: the listed bar is (also IPv4-mapped)")
     check(!MonitorServer.peerIsAllowed("10.0.0.6", peers: ["10.0.0.5"]) && !MonitorServer.peerIsAllowed(nil, peers: ["10.0.0.5"]), "allowed peers: another host is not; an unknown peer is not")
     check(!MonitorServer.peerIsAllowed("10.0.0.6", peers: []), "allowed peers: nobody but loopback when no bar is selected")
+    // M3: the per-bar key (constant-time compare), loopback without it for development.
+    let k = String(repeating: "0f", count: 32)
+    check(MonitorServer.requestIsAllowed(peer: "127.0.0.1", head: "GET / HTTP/1.1\r\n", peers: [], key: nil), "data key: loopback needs none")
+    check(MonitorServer.requestIsAllowed(peer: "10.0.0.5", head: "GET / HTTP/1.1\r\nX-Deckhand-Key: \(k)\r\n", peers: ["10.0.0.5"], key: k), "data key: the bar with the key is answered")
+    check(!MonitorServer.requestIsAllowed(peer: "10.0.0.5", head: "GET / HTTP/1.1\r\n", peers: ["10.0.0.5"], key: k), "data key: the bar without the key is not")
+    check(!MonitorServer.requestIsAllowed(peer: "10.0.0.5", head: "GET / HTTP/1.1\r\nx-deckhand-key: \(k.dropLast())0\r\n", peers: ["10.0.0.5"], key: k), "data key: a wrong key is not")
+    check(!MonitorServer.requestIsAllowed(peer: "10.0.0.5", head: "GET / HTTP/1.1\r\nX-Deckhand-Key: x\r\n", peers: ["10.0.0.5"], key: nil), "data key: no key set → no peer is answered")
+    check(!MonitorServer.requestIsAllowed(peer: "10.0.0.6", head: "GET / HTTP/1.1\r\nX-Deckhand-Key: \(k)\r\n", peers: ["10.0.0.5"], key: k), "data key: the key from another address is not enough")
+    // M2: the beacon's signature, the same HMAC the bar apps check (MacLink.verify in the APKs).
+    let p = MonitorBeacon.payload(base: "http://192.168.1.2:7432", key: k, now: Date(timeIntervalSince1970: 1_700_000_000))
+    check(p["ts"] as? Int == 1_700_000_000 && (p["sig"] as? String)?.count == 64 && p["v"] as? Int == 3, "beacon: v3 with ts and sig")
+    // Reference value from `printf 'deckhand-beacon|http://192.168.1.2:7432|1700000000' | openssl dgst -sha256 -mac HMAC -macopt hexkey:0f0f…`.
+    check(MonitorBeacon.signature(base: "http://192.168.1.2:7432", ts: 1_700_000_000, keyHex: k) == "905199ce96cdce34f64e5f19d57dc9559929bb5687607e30b480b83cf0efb732", "beacon: HMAC-SHA256 matches openssl")
+    check(MonitorBeacon.payload(base: "http://192.168.1.2:7432", key: nil)["sig"] == nil && MonitorBeacon.signature(base: "x", ts: 1, keyHex: "zz") == nil, "beacon: unsigned without a key; a bad key signs nothing")
     // Discovery replies are unauthenticated LAN data.
-    let spoof = Discovery.parse(Data(#"{"serialNo":"S9","tcpPort":7431,"ip":"evil.example"}"#.utf8), from: "10.0.0.9")
+    let spoof = Discovery.parse(Data(#"{"serialNo":"SN0009","tcpPort":7431,"ip":"evil.example"}"#.utf8), from: "10.0.0.9")
     check(spoof?.ip == "10.0.0.9", "discovery: an ip that is not an IPv4 literal → sender address", spoof?.ip ?? "nil")
-    check(Discovery.parse(Data(#"{"serialNo":"S9","tcpPort":70000}"#.utf8), from: "10.0.0.9") == nil, "discovery: tcpPort out of range → ignored")
+    check(Discovery.parse(Data(#"{"serialNo":"SN0009","tcpPort":70000}"#.utf8), from: "10.0.0.9") == nil, "discovery: tcpPort out of range → ignored")
     check(Discovery.parse(Data(#"{"tcpPort":7431}"#.utf8), from: "10.0.0.9") == nil, "discovery: no serial → ignored")
-    let ctl = Discovery.parse(Data("{\"serialNo\":\"S9\",\"tcpPort\":7431,\"name\":\"bar\\r\\nfake\"}".utf8), from: "10.0.0.9")
+    let ctl = Discovery.parse(Data("{\"serialNo\":\"SN0009\",\"tcpPort\":7431,\"name\":\"bar\\r\\nfake\"}".utf8), from: "10.0.0.9")
     check(ctl?.name == "barfake", "discovery: control characters stripped from strings", ctl?.name ?? "nil")
     let long = Discovery.parse(Data(("{\"serialNo\":\"" + String(repeating: "A", count: 500) + "\",\"tcpPort\":7431}").utf8), from: "10.0.0.9")
     check(long?.serialNo.count == 64, "discovery: serial capped at 64 characters", "\(long?.serialNo.count ?? -1)")
@@ -464,16 +536,24 @@ do {
         check(own.0 == 200, "monitor server: loopback reads whatever the allowed peers", "\(own.0)")
         // From this Mac's LAN address the peer is not loopback: 403 unless that address is the bar's.
         if let lan = LocalIP.address(reaching: "192.168.255.254"), !lan.hasPrefix("127.") {
-            func lanGet(_ path: String) async -> Int {
+            func lanGet(_ path: String, key: String? = nil) async -> Int {
                 var r = URLRequest(url: URL(string: "http://\(lan):\(MonitorServer.shared.port)\(path)")!); r.timeoutInterval = 5
+                if let key { r.setValue(key, forHTTPHeaderField: "X-Deckhand-Key") }
                 guard let (_, resp) = try? await URLSession.shared.data(for: r) else { return -1 }
                 return (resp as? HTTPURLResponse)?.statusCode ?? -1
             }
             let other = await lanGet("/j")
             check(other == 403, "monitor server: another address gets 403", "\(other) via \(lan)")
             MonitorServer.shared.setAllowedPeers([lan])
-            let bar = await lanGet("/j")
-            check(bar == 200, "monitor server: the bar's address reads", "\(bar) via \(lan)")
+            let noKey = await lanGet("/j")
+            check(noKey == 403, "monitor server: the bar's address without the key gets 403 (M3)", "\(noKey) via \(lan)")
+            let barKey = String(repeating: "ab", count: 32)
+            MonitorServer.shared.setPeerKey(barKey)
+            let wrongKey = await lanGet("/j", key: String(repeating: "cd", count: 32))
+            check(wrongKey == 403, "monitor server: a wrong key gets 403", "\(wrongKey)")
+            let bar = await lanGet("/j", key: barKey)
+            check(bar == 200, "monitor server: the bar's address with the key reads", "\(bar) via \(lan)")
+            MonitorServer.shared.setPeerKey(nil)
         } else {
             print("  (skipped the LAN-address checks: no LAN address on this Mac)")
         }
@@ -544,40 +624,131 @@ do {
     check(inflate(DeployPackager.gzip([]), expect: 0).isEmpty && DeployPackager.gzip([]).count == 23, "gzip: empty input is a valid 23-byte gzip")
 }
 
-// Store: secrets land in files that are 0600 from the moment they exist (created by open(2) with that
-// mode, then renamed into place), and forgetting a bar removes its endpoint caches too.
+// Store + secret store: file fallback (dev builds, kitcheck) is 0600 in a 0700 folder with hex file names, so a
+// serial can never name an API key (L1); forgetting a bar removes its token, key, Wi-Fi passwords and caches.
 do {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kitcheck-store-\(UUID().uuidString.prefix(8))", isDirectory: true)
     defer { try? FileManager.default.removeItem(at: dir) }
     let store = Store(directory: dir)
     func mode(_ url: URL) -> Int { ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.posixPermissions] as? Int) ?? -1 }
     func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path) }
-    let serial = "KC-STORE-1"
+    let files = store.secrets as! FileSecretStore
+    let serial = "KCSTORE1"
     store.upsert(serial: serial, name: "check", ip: "10.0.0.9", certSHA256: "AB")
     store.setHotspot(serial: serial, ssid: "cube", password: "hunter2")
     let corebars = dir.appendingPathComponent("corebars.json")
+    let corebarsText = (try? String(contentsOf: corebars, encoding: .utf8)) ?? ""
     check(exists(corebars) && mode(corebars) == 0o600, "store: corebars.json is 0600", String(mode(corebars), radix: 8))
+    check(!corebarsText.contains("hunter2") && store.hotspot(serial: serial)?.password == "hunter2", "store: hotspot password in the secret store, not corebars.json")
+    store.rememberNetwork(serial: serial, ssid: "Home", password: "wifi-pw")
+    check(store.savedNetworks(serial: serial).first?.password == "wifi-pw" && !((try? String(contentsOf: corebars, encoding: .utf8)) ?? "").contains("wifi-pw"), "store: saved Wi-Fi passwords in the secret store")
     store.saveToken("tok", serial: serial)
-    let token = dir.appendingPathComponent("tokens/KCSTORE1.token")
+    let token = files.url(.barToken(serial: serial))
     check(mode(token) == 0o600 && store.loadToken(serial: serial) == "tok", "store: token file is 0600 and reads back", String(mode(token), radix: 8))
-    check(mode(dir.appendingPathComponent("tokens")) == 0o700, "store: tokens directory is 0700")
+    check(mode(files.directory) == 0o700, "store: secrets directory is 0700")
     store.saveSecret("key-1", name: "linear")
-    let secret = dir.appendingPathComponent("tokens/secretlinear.token")
-    check(mode(secret) == 0o600 && store.loadSecret(name: "linear") == "key-1", "store: secret file is 0600 and reads back")
-    store.saveToken("tok-2", serial: serial)   // overwrite keeps the mode and the new content
+    check(store.loadSecret(name: "linear") == "key-1" && files.get(.api("linear")) == "key-1", "store: API key reads back")
+    // L1: a "bar" whose serial imitates a secret name gets its own account.
+    store.saveToken("evil", serial: "secret-linear")
+    check(store.loadSecret(name: "linear") == "key-1", "store: a bar serial cannot overwrite an API key (L1)")
+    store.deleteToken(serial: "secret-linear")
+    check(store.loadSecret(name: "linear") == "key-1", "store: forgetting that bar leaves the API key alone (L1)")
+    check(SecretAccount.isValidSerial("ABCD1234") && !SecretAccount.isValidSerial("secret-linear") && !SecretAccount.isValidSerial("abc") && !SecretAccount.isValidSerial(String(repeating: "a", count: 65)), "serial rule ^[A-Za-z0-9]{4,64}$")
+    check(Discovery.parse(Data(#"{"serialNo":"secret-zeekr","tcpPort":7431}"#.utf8), from: "10.0.0.5") == nil, "discovery: a serial outside ^[A-Za-z0-9]{4,64}$ is ignored (L1)")
+    store.saveToken("tok-2", serial: serial)
     check(mode(token) == 0o600 && store.loadToken(serial: serial) == "tok-2", "store: overwriting a token keeps 0600")
-    let leftovers = (try? FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("tokens").path))?.filter { $0.hasSuffix(".tmp") } ?? []
+    let key = store.barKey(serial: serial)
+    check(key.count == 64 && key.allSatisfy(\.isHexDigit) && store.barKey(serial: serial) == key, "store: per-bar data key is 32 random bytes, stable")
+    let leftovers = (try? FileManager.default.contentsOfDirectory(atPath: files.directory.path))?.filter { $0.hasSuffix(".tmp") } ?? []
     check(leftovers.isEmpty, "store: no temporary files left behind", leftovers.joined(separator: ","))
+    store.saveSecret("debounced", name: "aisstream", debounce: true)
+    check(store.loadSecret(name: "aisstream") == "debounced" && files.get(.api("aisstream")) == nil, "store: a debounced secret reads back at once, written later")
+    store.flushPendingSecrets()
+    check(files.get(.api("aisstream")) == "debounced", "store: flush writes the debounced secret")
     store.saveEndpoints(Data("[]".utf8), serial: serial)
     store.rememberModules([["serialNumber": "M1", "ip": "10.0.0.2"]], corebar: serial)
     let ep = dir.appendingPathComponent("endpoints/KCSTORE1.json"), known = dir.appendingPathComponent("endpoints/KCSTORE1.known.json")
     check(exists(ep) && exists(known), "store: endpoint caches written")
     store.remove(serial: serial)
     check(!exists(token) && !exists(ep) && !exists(known) && store.pairedCoreBars.isEmpty, "store: remove(serial:) deletes the token and both endpoint caches")
+    check(files.get(.barKey(serial: serial)) == nil && files.get(.hotspot(serial: serial)) == nil && files.get(.wifi(serial: serial, ssid: "Home")) == nil, "store: remove(serial:) deletes the data key, hotspot and Wi-Fi passwords")
     store.saveSecret("", name: "linear")
-    check(!exists(secret), "store: an empty secret deletes the file")
+    check(files.get(.api("linear")) == nil, "store: an empty secret deletes it")
     // Write into a directory that does not exist: must fail quietly, not crash.
     check(!Store.writePrivate(Data("x".utf8), to: dir.appendingPathComponent("missing/dir/file")), "store: writePrivate reports failure instead of crashing")
+}
+
+// Secret migration (never against the real files): a temporary folder laid out like 0.4's, into a file store, a
+// store that fails, and (when the login Keychain is reachable) a Keychain store under a throw-away service name.
+do {
+    final class FailingStore: SecretStore, @unchecked Sendable {
+        var kind: String { "failing" }
+        var items: [String: String] = [:]
+        func get(_ a: SecretAccount) -> String? { items[a.account] }
+        func set(_ v: String?, for a: SecretAccount) -> OSStatus {
+            if a.account == "api:linear" { return -25308 }   // errSecInteractionNotAllowed
+            items[a.account] = v; return 0
+        }
+    }
+    func legacyFolder() -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kitcheck-migrate-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        let tokens = dir.appendingPathComponent("tokens", isDirectory: true)
+        try? FileManager.default.createDirectory(at: tokens, withIntermediateDirectories: true)
+        for (f, v) in [("ABCD1234.token", "bar-tok"), ("secretlinear.token", "lin_api_x\n"), ("secretstravatokens.token", #"{"access":"a"}"#),
+                       ("secretschipholkey.token", "sk"), ("secretwhiskystats.token", "ws")] {
+            Store.writePrivate(Data(v.utf8), to: tokens.appendingPathComponent(f))
+        }
+        Store.writePrivate(Data(#"{"accuWeatherKey":"accu-1","clock24h":true}"#.utf8), to: dir.appendingPathComponent("settings.json"))
+        Store.writePrivate(Data(#"{"coreBars":[{"serialNo":"ABCD1234","name":"bar","lastIp":"10.0.0.2","hotspotSSID":"hs","hotspotPassword":"hs-pw","savedNetworks":{"Home":"home-pw"}}]}"#.utf8),
+                           to: dir.appendingPathComponent("corebars.json"))
+        return dir
+    }
+    func text(_ u: URL) -> String { (try? String(contentsOf: u, encoding: .utf8)) ?? "" }
+
+    let suite = "kitcheck.migrate.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    // 1. All succeed: values in the store, old files gone, JSON fields stripped, flag set; Store reads them.
+    let dir = legacyFolder()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let target = FileSecretStore(directory: dir)
+    let store = Store(directory: dir, secrets: target, migrate: defaults)
+    let r = store.migrationReport
+    check(r?.ok == true && r?.moved.count == 8, "migrate: every legacy secret moved", "\(r?.moved.count ?? -1) moved, \(r?.failed.count ?? -1) failed")
+    check(store.loadToken(serial: "ABCD1234") == "bar-tok" && store.loadSecret(name: "linear") == "lin_api_x" && store.loadSecret(name: "strava-tokens") == #"{"access":"a"}"#
+          && store.loadSecret(name: "schiphol-key") == "sk" && target.get(.api("accuweather")) == "accu-1", "migrate: values read back through the Store")
+    check(store.hotspot(serial: "ABCD1234")?.password == "hs-pw" && store.savedNetworks(serial: "ABCD1234").first?.password == "home-pw", "migrate: hotspot and saved Wi-Fi passwords moved")
+    check(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("tokens").path), "migrate: tokens/ folder deleted")
+    check(!text(dir.appendingPathComponent("settings.json")).contains("accu-1") && text(dir.appendingPathComponent("settings.json")).contains("clock24h"), "migrate: accuWeatherKey stripped from settings.json, the rest kept")
+    let cb = text(dir.appendingPathComponent("corebars.json"))
+    check(!cb.contains("hs-pw") && !cb.contains("home-pw") && cb.contains("savedSSIDs") && cb.contains("10.0.0.2"), "migrate: passwords stripped from corebars.json, SSIDs and metadata kept")
+    check(defaults.bool(forKey: Store.migrationFlag("files")), "migrate: flag set after full success")
+    check(Store(directory: dir, secrets: target, migrate: defaults).migrationReport?.skipped == true, "migrate: runs once (flag)")
+
+    // 2. One item fails: its old copy stays, the others move, no flag.
+    let dir2 = legacyFolder()
+    defer { try? FileManager.default.removeItem(at: dir2) }
+    let failing = FailingStore()
+    let r2 = Store(directory: dir2, secrets: failing, migrate: defaults).migrationReport
+    check(r2?.ok == false && r2?.failed.map(\.account) == ["api:linear"] && r2?.failed.first?.status == -25308, "migrate: a failed write is reported by account and OSStatus")
+    check(FileManager.default.fileExists(atPath: dir2.appendingPathComponent("tokens/secretlinear.token").path)
+          && !FileManager.default.fileExists(atPath: dir2.appendingPathComponent("tokens/ABCD1234.token").path), "migrate: the failed item's file is kept, the moved ones deleted")
+    check(!defaults.bool(forKey: Store.migrationFlag("failing")), "migrate: no flag while an item failed")
+
+    // 3. The real Keychain under a throw-away service (only items this run created; deleted at the end).
+    let kc = KeychainSecretStore(service: "com.denoronha.ultraworkspacemac.kitcheck.\(UUID().uuidString)")
+    let probe = kc.set("probe", for: .api("probe"))
+    if probe == 0 {
+        let dir3 = legacyFolder()
+        defer { try? FileManager.default.removeItem(at: dir3) }
+        let kStore = Store(directory: dir3, secrets: kc, migrate: defaults)
+        check(kStore.migrationReport?.ok == true && kc.get(.barToken(serial: "ABCD1234")) == "bar-tok" && kc.get(.wifi(serial: "ABCD1234", ssid: "Home")) == "home-pw", "keychain: migration into a test service reads back")
+        check(kc.set("v2", for: .api("probe")) == 0 && kc.get(.api("probe")) == "v2", "keychain: update in place")
+        for a in [SecretAccount.api("probe"), .barToken(serial: "ABCD1234"), .api("linear"), .oauth("strava"), .api("schiphol-secret"), .api("whiskystats"),
+                  .api("accuweather"), .hotspot(serial: "ABCD1234"), .wifi(serial: "ABCD1234", ssid: "Home")] { kc.set(nil, for: a) }
+        check(kc.read(.barToken(serial: "ABCD1234")).status == errSecItemNotFound, "keychain: delete")
+    } else { print("skip  keychain: not reachable here (OSStatus \(probe))") }
 }
 
 // Linear: HTTP 400 is the query, 401 is the key.
@@ -602,7 +773,7 @@ do {
 do {
     let sample = """
     {"tag_name":"v1.0.1.0","published_at":"2026-10-21T02:44:03Z","assets":[
-      {"name":"bridge.1.0.4.4.apk","size":22006908,"browser_download_url":"https://github.com/Qinkunex/UltraWorkspace/releases/download/v1.0.1.0/bridge.1.0.4.4.apk"},
+      {"name":"bridge.1.0.4.4.apk","size":22006908,"digest":"sha256:9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08","browser_download_url":"https://github.com/Qinkunex/UltraWorkspace/releases/download/v1.0.1.0/bridge.1.0.4.4.apk"},
       {"name":"LineOS.V1.0.9.9.apk","size":72371659,"browser_download_url":"https://github.com/Qinkunex/UltraWorkspace/releases/download/v1.0.1.0/LineOS.V1.0.9.9.apk"},
       {"name":"Sence.Cube_V2_ota.bin","size":38884,"browser_download_url":"https://github.com/Qinkunex/UltraWorkspace/releases/download/v1.0.1.0/Sence.Cube_V2_ota.bin"},
       {"name":"evil.apk","size":1,"browser_download_url":"http://example.com/LineOS.V9.9.9.9.apk"},
@@ -617,6 +788,14 @@ do {
     check(VendorRelease.split("1.0.9").code == 0 && VendorRelease.split("1.0.9").name == "1.0.9", "vendor release: three-part version has no code", "")
     let st = BarSoftwareProbe(launcher: ("1.0.3", 3), bridge: ("1.0.4", 4), release: r)
     check(st.launcherNewer && !st.bridgeNewer, "vendor release: 1.0.3(3) → launcher update, bridge 1.0.4(4) → none", "")
+    // L2: GitHub's digest is parsed (lowercased) and a file must hash to exactly it; no digest, no match.
+    check(r.bridge?.sha256 == "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" && r.launcher?.sha256 == nil, "vendor release: asset digest parsed")
+    let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("kitcheck-digest-\(UUID().uuidString.prefix(8))")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    try Data("test".utf8).write(to: tmp)   // sha256("test") = 9f86d081…
+    check(VendorRelease.matches(tmp, r.bridge!), "vendor release: a file with the listed SHA-256 matches")
+    try Data("tesT".utf8).write(to: tmp)
+    check(!VendorRelease.matches(tmp, r.bridge!) && !VendorRelease.matches(tmp, r.launcher!), "vendor release: another file, or an asset without a digest, never matches")
 } catch { check(false, "vendor release: parse", "\(error)") }
 
 // APK manifests: package and version read from the binary XML of a Deckhand bar app when a build is present.
@@ -624,10 +803,18 @@ do {
     let apk = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("dist/bar-apps/DeckhandMonitor.apk")
     if FileManager.default.fileExists(atPath: apk.path) {
         let info = try ApkInfo.read(apk: apk)
-        check(info.package == "nl.denoronha.deckhand.monitor" && info.versionCode == 14 && info.versionName == "2.3", "apk: DeckhandMonitor.apk manifest = nl.denoronha.deckhand.monitor 2.3 (14)", "\(info)")
+        check(info.package == "nl.denoronha.deckhand.monitor" && info.versionCode == 16 && info.versionName == "2.5", "apk: DeckhandMonitor.apk manifest = nl.denoronha.deckhand.monitor 2.4 (15)", "\(info)")
     } else { print("skip  apk: no dist/bar-apps/DeckhandMonitor.apk here") }
     do { _ = try ApkInfo.parseManifest(Data("<xml/>".utf8)); check(false, "apk: text XML rejected", "") }
     catch { check(true, "apk: text XML rejected", "") }
+    // L3: a string pool whose count and offsets point far outside the file must not crash or loop for ever.
+    var evil: [UInt8] = [0x03, 0x00, 0x08, 0x00, 0, 0, 0, 0]                        // XML header
+    evil += [0x01, 0x00, 0x1c, 0x00, 0x40, 0, 0, 0]                                   // string pool chunk, 64 bytes
+    evil += [0xff, 0xff, 0xff, 0x7f, 0, 0, 0, 0, 0x00, 0x01, 0, 0, 0xf0, 0xff, 0xff, 0x0f, 0, 0, 0, 0]   // n = 2^31-1, UTF-8, start far out
+    evil += [UInt8](repeating: 0xff, count: 64 - 28)
+    let t0 = Date()
+    do { _ = try ApkInfo.parseManifest(Data(evil)); check(false, "apk: hostile string pool rejected", "") }
+    catch { check(Date().timeIntervalSince(t0) < 1, "apk: hostile string pool rejected quickly, no crash", "\(error)") }
 } catch { check(false, "apk: read", "\(error)") }
 
 print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")

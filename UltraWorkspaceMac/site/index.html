@@ -57,7 +57,6 @@
               <img src="assets/img/screens/bar-haven.png" alt="Haven app: Rotterdam, Antwerpen, Hamburg and Duisburg, ships on their way in and alongside" data-page="haven" hidden>
               <img src="assets/img/screens/bar-tide.png" alt="Tide app: water levels at Hoek van Holland, Rotterdam and Nijmegen against the predicted tide, with sun and moon" data-page="tide" hidden>
               <img src="assets/img/screens/bar-schiphol.png" alt="Schiphol app: the runways in use for landing and take-off, aircraft around the field and the next arrivals and departures" data-page="schiphol" hidden>
-              <img src="assets/img/screens/bar-zeekr.png" alt="Zeekr app: 64 % charged, DC charging at 214 kW, locked, tyre pressures and odometer" data-page="zeekr" hidden>
               <img src="assets/img/screens/bar-strava.png" alt="Training app: the latest run with its route, recent activities, this week against last week and the year so far" data-page="strava" hidden>
               <img src="assets/img/screens/bar-cask.png" alt="Whisky Portfolio app: a whisky collection at auction prices, each bottle with its trend" data-page="cask" hidden>
               <img src="assets/img/screens/bar-claude.png" alt="Claude app: one terminal needs you, four session cards" data-page="claude" hidden>
@@ -72,7 +71,6 @@
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="haven">Haven</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="tide">Tide</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="schiphol">Schiphol</button>
-            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="zeekr">Zeekr</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="strava">Training</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="cask">Whisky Portfolio</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="claude">Claude</button>
@@ -118,12 +116,12 @@
         <article class="card">
           <p class="eyebrow">Apps</p>
           <h3>Install and update from the Mac</h3>
-          <p>The Apps page lists Deckhand's own apps, the vendor marketplace and what is built into the firmware, each with the version on the bar and a switch that installs or removes it; the Installed page shows everything in use on the bar and the screens, with Update all. Screensavers get the same treatment.</p>
+          <p>The Apps page lists Deckhand's own apps, the vendor marketplace and what is built into the firmware, each with the version on the bar and Install, Update and Remove buttons; one filter shows what is on the bar or has an update, and Update All takes care of the rest. Screensavers get the same treatment.</p>
         </article>
         <article class="card card-ink">
           <p class="eyebrow">Privacy</p>
           <h3>Nothing leaves your network</h3>
-          <p>Deckhand talks to the bar on your LAN and to the Mac. No account, no telemetry. Weather comes from Open-Meteo and prices from CoinGecko, both without a key; the bar apps that use only public data (Flights, Crypto, Weather, Sun & Moon, Headlines, Verse, Tide) fetch it on the bar itself, so they run with the Mac off; the ones that show what is on your Mac or need a key or sign-in it keeps (Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Whisky Portfolio, Schiphol, Zeekr) ask the Mac for it over your LAN, and the keys never reach the bar; and the vendor's catalogue is read only when you open the Apps or Screensavers page. The complete list is on the Deckhand page; the code is on GitHub for anyone to read.</p>
+          <p>Deckhand talks to the bar on your LAN and to the Mac. No account, no telemetry. Weather comes from Open-Meteo and prices from CoinGecko, both without a key; the bar apps that use only public data (Flights, Crypto, Weather, Sun & Moon, Headlines, Verse, Tide) fetch it on the bar itself, so they run with the Mac off; the ones that show what is on your Mac or need a key or sign-in it keeps (Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Whisky Portfolio, Schiphol) ask the Mac for it over your LAN, and the keys never reach the bar; and the vendor's catalogue is read only when you open the Apps or Screensavers page. The complete list is on the Deckhand page; the code is on GitHub for anyone to read.</p>
         </article>
       </div>
     </div>
@@ -168,14 +166,6 @@
             <p>Amsterdam Schiphol as the tower sees it: which runways are in use for landing and take-off, worked out live from open ADS-B data, the aircraft around them and the last 15 minutes' movements. With a free Schiphol key, the next arrivals and departures too.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-schiphol.png" alt="Schiphol app on the bar" loading="lazy"></div>
-        </article>
-        <article class="app">
-          <div class="icon"><img src="assets/img/icons/zeekr.png" alt=""></div>
-          <div class="body">
-            <div class="title"><h3>Zeekr</h3><span class="badge">2.3</span></div>
-            <p>Your Zeekr at a glance: charge and range, charging power and when it is done, locked or not, climate, tyres, odometer and where it is. Read-only; the sign-in stays on the Mac.</p>
-          </div>
-          <div class="shot"><img src="assets/img/screens/bar-zeekr.png" alt="Zeekr app on the bar" loading="lazy"></div>
         </article>
         <article class="app">
           <div class="icon"><img src="assets/img/icons/strava.png" alt=""></div>
@@ -234,7 +224,7 @@
           <div class="shot"><img src="assets/img/screens/bar-calendar.png" alt="Calendar app on the bar" loading="lazy"></div>
         </article>
       </div>
-      <p class="meta" style="margin-top:1.5rem">Installed from Deckhand's Apps page over Wi-Fi ADB. Each app carries its own page. Flights, Crypto, Weather, Sun &amp; Moon, Headlines, Verse and Tide fetch their data on the bar and keep working with the Mac off; Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Whisky Portfolio, Schiphol and Zeekr ask Deckhand on your LAN (port 7432) for what only the Mac knows. Deckhand pushes your settings to the bar: location, units, coins, news source, flight radius, water gauges.</p>
+      <p class="meta" style="margin-top:1.5rem">Installed from Deckhand's Apps page over Wi-Fi ADB. Each app carries its own page. Flights, Crypto, Weather, Sun &amp; Moon, Headlines, Verse and Tide fetch their data on the bar and keep working with the Mac off; Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Whisky Portfolio and Schiphol ask Deckhand on your LAN (port 7432) for what only the Mac knows. Deckhand pushes your settings to the bar: location, units, coins, news source, flight radius, water gauges.</p>
       <div class="hero-actions" style="margin-top:1.5rem">
         <a class="btn" href="bar-apps/">How they work, install, build your own <span class="arrow">→</span></a>
       </div>
@@ -292,7 +282,7 @@
       <div class="section-head">
         <p class="eyebrow">OpenBarX marketplace</p>
         <h2>Apps and cards for the bar, from anyone.</h2>
-        <p class="lede">The marketplace starts small and public: an index on GitHub that Deckhand reads, curated through pull requests. Today it lists seventeen of Deckhand's bar apps and seven cube cards. Next: install straight from Deckhand, version checks, and community submissions.</p>
+        <p class="lede">The marketplace starts small and public: an index on GitHub that Deckhand reads, curated through pull requests. Today it lists sixteen of Deckhand's bar apps and seven cube cards. Next: install straight from Deckhand, version checks, and community submissions.</p>
       </div>
       <div class="hero-actions" style="margin-top:0">
         <a class="btn btn-primary" href="marketplace/">Browse the marketplace <span class="arrow">→</span></a>
@@ -314,15 +304,15 @@
         </details>
         <details>
           <summary>The VivoCube stops taking new cards.</summary>
-          <p>Usually the bar's launcher, not the cube: after many uploads, or after a long time running, it stops passing cards on, saying it is out of upload slots or that the cube is offline. With Wi-Fi ADB on, Deckhand checks that the cube still answers and restarts the launcher by itself; the bar's screen reloads for a few seconds and the cards are sent again. Without ADB, use <b>Restart bar launcher</b> under VivoCube → Maintenance, re-seat the cube, or restart the bar.</p>
+          <p>Usually the bar's launcher, not the cube: after many uploads, or after a long time running, it stops passing cards on, saying it is out of upload slots or that the cube is offline. With Wi-Fi ADB on, Deckhand checks that the cube still answers and restarts the launcher by itself; the bar's screen reloads for a few seconds and the cards are sent again. Without ADB, use <b>Restart Bar Launcher…</b> in Bar System, re-seat the cube, or restart the bar.</p>
         </details>
         <details>
           <summary>Installing a bar app fails after the bar restarted.</summary>
-          <p>Android turns Wi-Fi ADB off at every restart. In Deckhand, Settings → Debug bridge → <b>Keep on after reboots</b> keeps it on. See <a href="manual/">the manual</a> for the steps on the bar.</p>
+          <p>Android turns Wi-Fi ADB off at every restart. In Deckhand, Settings → Debug Bridge → <b>Keep On After Reboots</b> keeps it on. See <a href="manual/">the manual</a> for the steps on the bar.</p>
         </details>
         <details>
           <summary>A bar app says "Waiting for the Mac…".</summary>
-          <p>Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Whisky Portfolio, Schiphol and Zeekr show things only your Mac has, so Deckhand has to be running and on the same network as the bar. The other apps work without the Mac.</p>
+          <p>Monitor, Claude, Music, Calendar, Tasks, Haven, Training, Whisky Portfolio and Schiphol show things only your Mac has, so Deckhand has to be running and on the same network as the bar. The other apps work without the Mac.</p>
         </details>
       </div>
     </div>

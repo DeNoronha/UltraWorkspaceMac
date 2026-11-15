@@ -28,50 +28,64 @@ struct SenseCubeView: View {
     let module: AttachedModule
     @StateObject private var reader = SenseReader()
 
+    private static let cardIDs = ["SENSE_TEMP", "SENSE_HUM", "SENSE_LUX", "SENSE_PRESENCE", "SENSE_SOUND"]
+
     var body: some View {
-        VStack(spacing: 0) {
-            Header("SenseCube", "Temperature, humidity and light at your desk.") {
-                Button { reader.start(model: model, serial: module.serial) } label: { Label("Read now", systemImage: "arrow.clockwise") }.disabled(reader.busy)
-                    .keyboardShortcut("r", modifiers: .command).help("Ask the SenseCube for a fresh reading (⌘R)")
+        Form {
+            Section {
+                HStack(spacing: 14) {
+                    tile("Temperature", reader.reading?.temperatureC.map { String(format: "%.1f °C", $0) } ?? "—", "thermometer.medium")
+                    tile("Humidity", reader.reading?.humidity.map { String(format: "%.0f %%", $0) } ?? "—", "humidity")
+                    tile("Light", reader.reading?.lux.map { "\($0) lux" } ?? "—", "sun.max")
+                }
+                .frame(maxWidth: .infinity)
+                if let u = reader.updated { StatusLabel("Read at \(u.formatted(date: .omitted, time: .standard)), every 5 s while this page is open.", .info) }
+                else if reader.reading == nil, !reader.busy { StatusLabel("No reply yet. Tap the bar's screen to wake the sensor.", .attention) }
+            } header: {
+                Text("At your desk")
             }
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack(spacing: 14) {
-                        tile("Temperature", reader.reading?.temperatureC.map { String(format: "%.1f °C", $0) } ?? "—", "thermometer.medium", .orange)
-                        tile("Humidity", reader.reading?.humidity.map { String(format: "%.0f %%", $0) } ?? "—", "humidity.fill", .teal)
-                        tile("Light", reader.reading?.lux.map { "\($0) lux" } ?? "—", "sun.max.fill", .yellow)
+            Section {
+                let onPage = Self.cardIDs.filter { settings.coreCards.contains($0) }
+                ForEach(Self.cardIDs, id: \.self) { id in
+                    LabeledContent(AppSettings.coreCard(id)?.title ?? id) {
+                        Text(settings.coreCards.contains(id) ? "On the Deckhand page" : "Not on the page").foregroundStyle(.secondary)
                     }
-                    if let u = reader.updated { Text("Read \(u, style: .time) · every 5 s while this page is open").font(.caption).foregroundStyle(.secondary) }
-                    else if reader.reading == nil, !reader.busy { Text("No reply yet — tap the bar's screen to wake the sensor.").font(.caption).foregroundStyle(.orange) }
-                    Panel("On the bar", footer: "Presence and sound level are push-only: the bar can show them as cards, this Mac cannot read them. Vibration (shock) is only an event on the bar.") {
-                        let ids = ["SENSE_TEMP", "SENSE_HUM", "SENSE_LUX", "SENSE_PRESENCE", "SENSE_SOUND"]
-                        let onPage = ids.filter { settings.coreCards.contains($0) }
-                        HStack {
-                            Text(onPage.isEmpty ? "Show these on the bar: Temperature, Humidity and Light, plus Presence and Sound level (bar only)."
-                                 : "\(onPage.compactMap { AppSettings.coreCard($0)?.title }.joined(separator: ", ")) on the CoreBar page.")
-                            Spacer()
-                            Button(onPage.count == ids.count ? "Open CoreBar page" : "Add all five") {
-                                for id in ids where !settings.coreCards.contains(id) { settings.coreCards.append(id) }
-                                model.nav = .coreBarPage
-                            }
+                }
+                HStack {
+                    if onPage.count < Self.cardIDs.count {
+                        Button("Add All to the Deckhand Page") {
+                            for id in Self.cardIDs where !settings.coreCards.contains(id) { settings.coreCards.append(id) }
                         }
                     }
-                }.padding(20)
+                    Button("Open CoreBar") { model.nav = .coreBarPage }
+                }
+            } header: {
+                Text("Cards on the bar")
+            } footer: {
+                Footnote("Presence and sound level are shown by the bar only; this Mac cannot read them.")
+            }
+        }
+        .formStyle(.grouped)
+        .navigationSubtitle("Temperature, humidity and light")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { reader.start(model: model, serial: module.serial) } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                    .disabled(reader.busy)
+                    .keyboardShortcut("r", modifiers: .command).help("Ask the SenseCube for a fresh reading (⌘R)")
             }
         }
         .onAppear { reader.start(model: model, serial: module.serial) }
         .onDisappear { reader.stop() }
     }
 
-    private func tile(_ label: String, _ value: String, _ icon: String, _ color: Color) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon).font(.system(size: 26)).foregroundStyle(color)
+    private func tile(_ label: String, _ value: String, _ icon: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon).font(.title2).foregroundStyle(Color.accentColor)
             Text(value).font(.title3).bold().monospacedDigit()
-            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(label).font(.callout).foregroundStyle(.secondary)
         }
-        .frame(width: 120, height: 110)
-        .background(RoundedRectangle(cornerRadius: 12).fill(.quaternary.opacity(0.4)))
+        .frame(minWidth: 110)
+        .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
     }
 }

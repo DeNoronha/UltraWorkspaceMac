@@ -37,6 +37,7 @@ extension AppModel {
             return pages.route(path, model: self)
         }
         MonitorServer.shared.setAllowedPeers(Set([ipForSelected()].compactMap { $0 }))
+        MonitorServer.shared.setPeerKey(selectedSerial.map { Store.shared.barKey(serial: $0) })
         do { try MonitorServer.shared.start() } catch { barDataError = "\(error)"; say("The bar apps' data could not be served: \(error)"); return }
         barDataError = nil
         barDataTask = Task { [weak self] in
@@ -44,10 +45,14 @@ extension AppModel {
                 guard let self else { return }
                 // Data and actions go to the selected bar only (and this Mac); picking another bar moves them within 5 s.
                 let peer = self.ipForSelected()
+                // The selected bar's data key (pushed to its apps over ADB by BarPages): required on every request
+                // and used to sign the beacon, so another host on the LAN can neither read the data nor pose as this Mac.
+                let key = self.selectedSerial.map { Store.shared.barKey(serial: $0) }
                 MonitorServer.shared.setAllowedPeers(Set([peer].compactMap { $0 }))
+                MonitorServer.shared.setPeerKey(key)
                 let base = MonitorServer.shared.baseURL(reachableFrom: peer ?? "192.168.255.255")
                 if base != self.barDataURL { self.barDataURL = base }
-                if let base { MonitorBeacon.send(base: base, to: peer) }
+                if let base { MonitorBeacon.send(base: base, to: peer, key: key) }
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
@@ -63,7 +68,6 @@ extension AppModel {
         ("strava", "Training", "DeckhandTraining"),
         ("cask", "Whisky Portfolio", "DeckhandCask"),
         ("schiphol", "Schiphol", "DeckhandSchiphol"),
-        ("zeekr", "Zeekr", "DeckhandZeekr"),
         ("teletekst", "Teletekst", "DeckhandTeletekst")]
 
     /// APKs shipped inside Deckhand.app (packaging/make-app.sh copies dist/bar-apps) or next to the dev build.
@@ -75,7 +79,7 @@ extension AppModel {
 
     func barAppVersion(_ page: String) -> String? { barApps.first { $0.packageName == BarPages.package(for: page) }?.versionName }
     /// Version of the APKs shipped with this build — keep in step with android/DeckhandMonitor/app/build.gradle.kts.
-    nonisolated static let barAppsVersion = "2.3"
+    nonisolated static let barAppsVersion = "2.5"
     /// The bar's copy is older than the one shipped with Deckhand.
     func barAppNeedsUpdate(_ page: String) -> Bool {
         guard let v = barAppVersion(page) else { return false }
@@ -102,14 +106,14 @@ extension AppModel {
         barAppBusy = page; defer { barAppBusy = nil }
         let bridge = AdbBridge(path: adb, ip: ip)
         guard await bridge.connect() else {
-            return fail("The bar refuses ADB on \(ip):5555 — Wi-Fi ADB is off (after a reboot unless made persistent, or after PC-LINK was plugged into a computer). Switch WiFi ADB on in the bar's Developer options, then Settings → Debug bridge: Keep on after reboots.")
+            return fail("The bar does not accept the debug bridge: WiFi ADB is off, after a reboot or after PC‑LINK was plugged into a computer. Switch WiFi ADB on in the bar's Developer options, then press Keep On After Reboots in Settings → Debug Bridge.")
         }
         let out = await bridge.install(apkPath: apk.path)
         let ok = out.contains("Success")
         if ok {
             barAppError = nil
             barPages.repushConfig()   // a freshly installed on-bar app gets its settings within 10 s
-            say("\(entry.label) \(Self.barAppsVersion) is on the bar — publish the CoreBar page to show its icon there.")
+            say("\(entry.label) \(Self.barAppsVersion) is on the bar — publish the Deckhand page on CoreBar to show its card there.")
         } else {
             _ = fail("Install of \(entry.label) failed: \(out.trimmingCharacters(in: .whitespacesAndNewlines))")
         }
@@ -125,7 +129,7 @@ extension AppModel {
         Task {
             defer { barAppBusy = nil }
             let bridge = AdbBridge(path: adb, ip: ip)
-            guard await bridge.connect() else { barAppError = "The bar refuses ADB on \(ip):5555 — Settings → Debug bridge."; say(barAppError!); return }
+            guard await bridge.connect() else { barAppError = "The bar does not accept the debug bridge. See Settings → Debug Bridge."; say(barAppError!); return }
             let out = await bridge.uninstall(package: BarPages.package(for: page))
             if out.contains("Success") { barAppError = nil; say("\(entry.label) removed from the bar.") }
             else { barAppError = "Could not remove \(entry.label): \(out.trimmingCharacters(in: .whitespacesAndNewlines))"; say(barAppError!) }

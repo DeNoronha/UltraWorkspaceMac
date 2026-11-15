@@ -76,6 +76,8 @@ public enum ClaudeUsage {
         var active = 0
         var tokens = 0
         var anyFile = false
+        var waiting = 0
+        var bytesRead: UInt64 = 0
 
         let box = Self.box
         box.lock.lock(); defer { box.lock.unlock() }
@@ -86,19 +88,26 @@ public enum ClaudeUsage {
             let vals = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
             let mod = vals?.contentModificationDate ?? .distantPast
             // Sub-agent transcripts count towards today's tokens (real usage) but are not sessions.
-            if !url.path.contains("/subagents/"), now.timeIntervalSince(mod) <= activeWindow { active += 1 }
+            if !url.path.contains("/subagents/") {
+                if now.timeIntervalSince(mod) <= activeWindow { active += 1 }
+                // The same test as `waitingSessions`, in this walk instead of a second one over the whole tree.
+                if now.timeIntervalSince(mod) <= 900, isWaiting(url) { waiting += 1 }
+            }
             guard mod >= startOfDay else { continue }
             let size = UInt64(vals?.fileSize ?? 0)
             var t = box.tallies[url.path] ?? Tally(offset: 0, tokens: 0)
             if size < t.offset { t = Tally(offset: 0, tokens: 0) }   // rewritten or truncated: start over
             if size > t.offset {
                 let (consumed, added) = tallyTokens(url, from: t.offset, since: startOfDay)
-                t.offset += consumed; t.tokens += added
+                t.offset += consumed; t.tokens += added; bytesRead += consumed
             }
             box.tallies[url.path] = t
             tokens += t.tokens
         }
-        return Snapshot(activeSessions: active, todayTokens: tokens, hasData: anyFile, waitingForInput: waitingSessions())
+        // The first pass of a day reads every transcript touched today (hundreds of MB): hand the freed memory back
+        // to the system at once instead of keeping it as the app's footprint (848 MB peak, 157 MB held, 2026-11-15).
+        if bytesRead > 50_000_000 { malloc_zone_pressure_relief(nil, 0) }
+        return Snapshot(activeSessions: active, todayTokens: tokens, hasData: anyFile, waitingForInput: waiting)
     }
 
     /// Read `url` from `offset` in chunks, line by line; sum the usage of lines stamped on or after
@@ -115,20 +124,24 @@ public enum ClaudeUsage {
         let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let isoPlain = ISO8601DateFormatter(); isoPlain.formatOptions = [.withInternetDateTime]
         while let chunk = try? h.read(upToCount: 4_000_000), !chunk.isEmpty {
-            rest.append(chunk)
-            var lineStart = rest.startIndex
-            while let nl = rest[lineStart...].firstIndex(of: 10) {
-                let line = rest[lineStart..<nl]
-                consumed += UInt64(nl - lineStart + 1)
-                lineStart = nl + 1
-                guard line.range(of: needle) != nil,
-                      let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-                      let u = findUsage(obj) else { continue }
-                if let ts = obj["timestamp"] as? String, let d = iso.date(from: ts) ?? isoPlain.date(from: ts), d < since { continue }
-                // Exclude cache_read (cheap, counted every turn — would dwarf the rest).
-                tokens += (u["input_tokens"] as? Int ?? 0) + (u["output_tokens"] as? Int ?? 0) + (u["cache_creation_input_tokens"] as? Int ?? 0)
+            // Only the unfinished last line is carried over; a chunk that starts clean is used as it is (no 4 MB copy).
+            let buf = rest.isEmpty ? chunk : rest + chunk
+            var lineStart = buf.startIndex
+            // The parsed lines are autoreleased Foundation objects: drain them per chunk, not at the end of the pass.
+            autoreleasepool {
+                while let nl = buf[lineStart...].firstIndex(of: 10) {
+                    let line = buf[lineStart..<nl]
+                    consumed += UInt64(nl - lineStart + 1)
+                    lineStart = nl + 1
+                    guard line.range(of: needle) != nil,
+                          let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                          let u = findUsage(obj) else { continue }
+                    if let ts = obj["timestamp"] as? String, let d = iso.date(from: ts) ?? isoPlain.date(from: ts), d < since { continue }
+                    // Exclude cache_read (cheap, counted every turn — would dwarf the rest).
+                    tokens += (u["input_tokens"] as? Int ?? 0) + (u["output_tokens"] as? Int ?? 0) + (u["cache_creation_input_tokens"] as? Int ?? 0)
+                }
             }
-            rest = Data(rest[lineStart...])
+            rest = Data(buf[lineStart...])
         }
         return (consumed, tokens)
     }

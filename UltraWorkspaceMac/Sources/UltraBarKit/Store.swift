@@ -1,25 +1,40 @@
 import Foundation
 import Security
 
-/// Persists pairing tokens (user-only 0600 files, not the Keychain — see below) and per-CoreBar metadata (cert pin, last
-/// known IP, friendly name) in Application Support.
+/// Per-CoreBar metadata (cert pin, last known IP, friendly name, hotspot SSID) in `corebars.json`, and every secret
+/// through a `SecretStore`: the login Keychain in a Developer-ID build, user-only files in a development build and in
+/// `kitcheck` (see SecretStore.swift). Secrets are read once and then served from memory.
 public final class Store: @unchecked Sendable {
     public static let shared = Store()
 
-    private let service = "com.denoronha.ultraworkspacemac.token"
     private let fileURL: URL
     private let queue = DispatchQueue(label: "ultrabar.store")
+    /// Where the secrets live.
+    public let secrets: SecretStore
+    /// Secrets read so far (nil = looked up, none there), so the Keychain is not asked on every poll.
+    private var cache: [SecretAccount: String?] = [:]
+    /// Debounced writes (a key typed into a field is written once typing stops, not per keystroke).
+    private var pending: [SecretAccount: DispatchWorkItem] = [:]
+    private let writeQueue = DispatchQueue(label: "ultrabar.store.secrets")
+    /// What the move of the old plain-file secrets did at launch (nil when it did not run in this process).
+    public private(set) var migrationReport: SecretMigration.Report?
+    /// UserDefaults flag set once every legacy secret is in the store (one per kind of store).
+    public static func migrationFlag(_ kind: String) -> String { "secretsMigratedV1.\(kind)" }
 
     public struct PairedCoreBar: Codable, Identifiable, Sendable {
         public var serialNo: String
         public var name: String
         public var lastIp: String
         public var certSHA256: String?
-        /// The bar's own hotspot as last reported by a module (property 7). Differs per unit.
+        /// The bar's own hotspot as last reported by a module (property 7). Differs per unit. Its password is in
+        /// the secret store (`bar-hotspot:<serial>`).
         public var hotspotSSID: String?
+        /// Before 0.5 the hotspot password and the saved networks were kept here; read only by the migration.
         public var hotspotPassword: String?
-        /// Every Wi-Fi the cube has been joined to from this Mac (ssid → password), so switching back is one click.
         public var savedNetworks: [String: String]?
+        /// Every Wi-Fi the cube has been joined to from this Mac; the passwords are in the secret store
+        /// (`wifi:<serial>:<ssid>`), so switching back is one click.
+        public var savedSSIDs: [String]?
         public var id: String { serialNo }
     }
 
@@ -27,17 +42,85 @@ public final class Store: @unchecked Sendable {
     private var state = Persisted()
 
     private convenience init() {
-        self.init(directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("UltraWorkspaceMac", isDirectory: true))
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("UltraWorkspaceMac", isDirectory: true)
+        // Only the app itself moves the old files (never kitcheck or another tool linking this library).
+        let isApp = Bundle.main.bundleIdentifier == SecretStores.service || ProcessInfo.processInfo.processName == "UltraWorkspaceApp"
+        self.init(directory: base, secrets: SecretStores.makeDefault(fileDirectory: base), migrate: isApp ? .standard : nil)
     }
 
     /// A store rooted at `directory` (the app uses `shared`, in Application Support; checks use a temporary folder).
-    public init(directory base: URL) {
+    /// `secrets` defaults to user-only files under `directory`. With `migrate`, the plain-file secrets of older
+    /// versions are moved into `secrets` first (flag kept in that UserDefaults).
+    public init(directory base: URL, secrets: SecretStore? = nil, migrate defaults: UserDefaults? = nil) {
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         fileURL = base.appendingPathComponent("corebars.json")
+        let store = secrets ?? FileSecretStore(directory: base)
+        self.secrets = store
+        if let defaults {
+            let extra = store is FileSecretStore ? nil : FileSecretStore(directory: base)
+            let r = SecretMigration.run(directory: base, into: store, defaults: defaults,
+                                        flagKey: Self.migrationFlag(store.kind), extraSource: extra)
+            migrationReport = r
+            // Only the app's own store writes to the app's log (a check's temporary store must not touch it).
+            if defaults === UserDefaults.standard {
+                for f in r.failed { WireLog.shared.event("secret \(f.account) not migrated: OSStatus \(f.status)") }
+                if !r.moved.isEmpty { WireLog.shared.event("secrets: \(r.moved.count) moved to the \(store.kind)") }
+            }
+        }
         if let data = try? Data(contentsOf: fileURL),
            let p = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = p
+        }
+    }
+
+    // MARK: Secrets (cached)
+
+    public func secret(_ a: SecretAccount) -> String? {
+        if let hit = queue.sync(execute: { cache[a] }) { return hit }
+        let v = secrets.get(a)
+        queue.sync { cache[a] = .some(v) }
+        return v
+    }
+
+    /// Store a secret (nil/empty deletes it). `debounce`: written 0.8 s after the last call for the same account.
+    @discardableResult
+    public func setSecret(_ value: String?, for a: SecretAccount, debounce: Bool = false) -> OSStatus {
+        let v = (value?.isEmpty ?? true) ? nil : value
+        queue.sync { cache[a] = .some(v); pending[a]?.cancel(); pending[a] = nil }
+        guard debounce else { return writeQueue.sync { secrets.set(v, for: a) } }
+        let item = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let st = self.secrets.set(v, for: a)
+            if st != errSecSuccess { WireLog.shared.event("secret \(a) not saved: OSStatus \(st)") }
+        }
+        queue.sync { pending[a] = item }
+        writeQueue.asyncAfter(deadline: .now() + 0.8, execute: item)
+        return errSecSuccess
+    }
+
+    /// Write every debounced secret now (at quit).
+    public func flushPendingSecrets() {
+        let items = queue.sync { () -> [DispatchWorkItem] in let v = Array(pending.values); pending.removeAll(); return v }
+        for i in items where !i.isCancelled { writeQueue.sync { i.perform() } }
+    }
+
+    /// The random key the bar's Deckhand apps send with every data request (64 hex characters), made on first use.
+    public func barKey(serial: String) -> String {
+        if let k = secret(.barKey(serial: serial)), k.count == 64 { return k }
+        var bytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { return "" }
+        let k = bytes.map { String(format: "%02x", $0) }.joined()
+        setSecret(k, for: .barKey(serial: serial))
+        return k
+    }
+
+    /// The secret-store account a legacy secret name maps to (`saveSecret(name:)`).
+    public static func account(forSecret name: String) -> SecretAccount {
+        switch name {
+        case "strava-tokens": return .oauth("strava")
+        case "schiphol-key": return .api("schiphol-secret")
+        default: return .api(name)
         }
     }
 
@@ -66,52 +149,62 @@ public final class Store: @unchecked Sendable {
 
     /// Remember a CoreBar's hotspot credentials (learned from a cube that reports them, or typed by the user).
     public func setHotspot(serial: String, ssid: String, password: String) {
-        queue.sync {
-            guard let idx = state.coreBars.firstIndex(where: { $0.serialNo == serial }) else { return }
+        let known = queue.sync { () -> Bool in
+            guard let idx = state.coreBars.firstIndex(where: { $0.serialNo == serial }) else { return false }
             state.coreBars[idx].hotspotSSID = ssid
-            state.coreBars[idx].hotspotPassword = password
+            state.coreBars[idx].hotspotPassword = nil
             persist()
+            return true
         }
+        if known { setSecret(password, for: .hotspot(serial: serial)) }
     }
     public func rememberNetwork(serial: String, ssid: String, password: String) {
-        queue.sync {
-            guard let idx = state.coreBars.firstIndex(where: { $0.serialNo == serial }), !ssid.isEmpty else { return }
-            var n = state.coreBars[idx].savedNetworks ?? [:]
-            n[ssid] = password
-            state.coreBars[idx].savedNetworks = n
+        let known = queue.sync { () -> Bool in
+            guard let idx = state.coreBars.firstIndex(where: { $0.serialNo == serial }), !ssid.isEmpty else { return false }
+            var n = Set(state.coreBars[idx].savedSSIDs ?? [])
+            n.insert(ssid)
+            state.coreBars[idx].savedSSIDs = n.sorted()
             persist()
+            return true
         }
+        if known { setSecret(password, for: .wifi(serial: serial, ssid: ssid)) }
     }
     public func forgetNetwork(serial: String, ssid: String) {
         queue.sync {
             guard let idx = state.coreBars.firstIndex(where: { $0.serialNo == serial }) else { return }
-            state.coreBars[idx].savedNetworks?[ssid] = nil
+            state.coreBars[idx].savedSSIDs?.removeAll { $0 == ssid }
             persist()
         }
+        setSecret(nil, for: .wifi(serial: serial, ssid: ssid))
     }
     public func savedNetworks(serial: String) -> [(ssid: String, password: String)] {
-        queue.sync { (state.coreBars.first { $0.serialNo == serial }?.savedNetworks ?? [:]).sorted { $0.key < $1.key }.map { ($0.key, $0.value) } }
+        let ssids = queue.sync { state.coreBars.first { $0.serialNo == serial }?.savedSSIDs ?? [] }
+        return ssids.sorted().compactMap { s in secret(.wifi(serial: serial, ssid: s)).map { (s, $0) } }
     }
     public func hotspot(serial: String) -> (ssid: String, password: String)? {
-        queue.sync {
-            guard let b = state.coreBars.first(where: { $0.serialNo == serial }), let s = b.hotspotSSID, let p = b.hotspotPassword, !s.isEmpty else { return nil }
-            return (s, p)
-        }
+        guard let s = queue.sync(execute: { state.coreBars.first(where: { $0.serialNo == serial })?.hotspotSSID }), !s.isEmpty,
+              let p = secret(.hotspot(serial: serial)) else { return nil }
+        return (s, p)
     }
 
-    /// Forgets a CoreBar: its entry, its token and the per-serial endpoint caches.
+    /// Forgets a CoreBar: its entry, its token, data key, hotspot and Wi-Fi passwords, and the per-serial endpoint caches.
     public func remove(serial: String) {
-        queue.sync {
+        let ssids = queue.sync { () -> [String] in
+            let s = state.coreBars.first { $0.serialNo == serial }?.savedSSIDs ?? []
             state.coreBars.removeAll { $0.serialNo == serial }
             persist()
+            return s
         }
         deleteToken(serial: serial)
+        setSecret(nil, for: .barKey(serial: serial))
+        setSecret(nil, for: .hotspot(serial: serial))
+        for s in ssids { setSecret(nil, for: .wifi(serial: serial, ssid: s)) }
         try? FileManager.default.removeItem(at: endpointsURL(serial))
         try? FileManager.default.removeItem(at: knownURL(serial))
     }
 
     private func persist() {
-        // Holds hotspot passwords since 2026-11-03: user-only.
+        // No secrets since 0.5 (they are in the secret store), still user-only: it holds the cert pins.
         if let data = try? JSONEncoder().encode(state) { Self.writePrivate(data, to: fileURL) }
     }
 
@@ -139,46 +232,19 @@ public final class Store: @unchecked Sendable {
         return ok
     }
 
-    // MARK: Tokens
-    //
-    // Stored as user-only files in Application Support rather than the Keychain.
-    // An ad-hoc-signed app gets a new code signature on every rebuild, which
-    // makes the Keychain re-prompt for the login password every launch. A file
-    // (0600, in the user's own app-support dir) avoids that friction. For a
-    // notarized/Developer-ID release this can move back to the Keychain.
+    // MARK: Tokens and other secrets (API keys for the bar apps), in the secret store.
 
-    private func tokenURL(_ serial: String) -> URL {
-        let dir = fileURL.deletingLastPathComponent().appendingPathComponent("tokens", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
-                                                 attributes: [.posixPermissions: 0o700])
-        let safe = serial.filter { $0.isLetter || $0.isNumber }
-        return dir.appendingPathComponent("\(safe).token")
-    }
+    public func saveToken(_ token: String, serial: String) { setSecret(token, for: .barToken(serial: serial)) }
+    public func loadToken(serial: String) -> String? { secret(.barToken(serial: serial)) }
+    public func deleteToken(serial: String) { setSecret(nil, for: .barToken(serial: serial)) }
 
-    public func saveToken(_ token: String, serial: String) {
-        Self.writePrivate(Data(token.utf8), to: tokenURL(serial))
-    }
-
-    public func loadToken(serial: String) -> String? {
-        guard let data = try? Data(contentsOf: tokenURL(serial)) else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    // MARK: Other secrets (API keys for the bar apps), same user-only files.
-
-    public func saveSecret(_ value: String, name: String) {
-        let url = tokenURL("secret-\(name)")
-        if value.isEmpty { try? FileManager.default.removeItem(at: url); return }
-        Self.writePrivate(Data(value.utf8), to: url)
+    /// `debounce` for a field bound to a text box (see `setSecret`).
+    public func saveSecret(_ value: String, name: String, debounce: Bool = false) {
+        setSecret(value, for: Self.account(forSecret: name), debounce: debounce)
     }
 
     public func loadSecret(name: String) -> String? {
-        guard let data = try? Data(contentsOf: tokenURL("secret-\(name)")) else { return nil }
-        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    public func deleteToken(serial: String) {
-        try? FileManager.default.removeItem(at: tokenURL(serial))
+        secret(Self.account(forSecret: name))?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: Gateway endpoint cache

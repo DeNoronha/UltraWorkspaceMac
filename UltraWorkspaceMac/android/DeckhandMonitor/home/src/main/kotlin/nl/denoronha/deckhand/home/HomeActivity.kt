@@ -65,7 +65,7 @@ class HomeActivity : Activity() {
         private const val SETTINGS_PACKAGE = "com.android.settings"
         /** Always the last two tiles of the row, so they are left out of the sorted part. */
         private val LAST = setOf(SETTINGS_PACKAGE, VENDOR_LAUNCHER)
-        private val OUR_ORDER = listOf("monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks", "haven", "tide", "teletekst", "schiphol", "zeekr", "strava", "cask")
+        private val OUR_ORDER = listOf("monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks", "haven", "tide", "teletekst", "schiphol", "strava", "cask")
 
         private const val BG = 0xFF000000.toInt()
         private const val TILE = 0xFF15171C.toInt()
@@ -83,7 +83,7 @@ class HomeActivity : Activity() {
 
     /** The parts of a Deckhand app's tile that the live data changes. */
     private class Live(val icon: ImageView, val line: TextView, val badge: TextView, val temp: TextView)
-    private val live = HashMap<String, Live>()          // by page id ("cask", "zeekr", …)
+    private val live = HashMap<String, Live>()          // by page id ("cask", "haven", …)
     private var glance: JSONObject? = null
     private var glanceAt = 0L
     private var deckhandBase: String? = null
@@ -346,7 +346,11 @@ class HomeActivity : Activity() {
             val json = try {
                 val conn = URL("$base/home/glance.json").openConnection() as HttpURLConnection
                 conn.connectTimeout = 3_000; conn.readTimeout = 3_000; conn.useCaches = false
-                try { if (conn.responseCode == 200) JSONObject(conn.inputStream.bufferedReader().readText()) else null } finally { conn.disconnect() }
+                MacLink.key(applicationContext)?.let { conn.setRequestProperty(MacLink.HEADER, it) }
+                try {
+                    if (conn.responseCode != 200 || conn.contentLength > 262_144) null
+                    else JSONObject(String(conn.inputStream.use { it.readNBytesCompat(262_144) }, Charsets.UTF_8))
+                } finally { conn.disconnect() }
             } catch (e: Exception) { Log.d(TAG, "glance: ${e.message}"); null }
             main.post {
                 if (isFinishing || isDestroyed) return@post
@@ -422,8 +426,16 @@ class HomeActivity : Activity() {
 
     private fun stopBeaconListener() { beacon?.stop(); beacon = null }
 
+    /** At most [max] bytes of the stream (the glance is a few hundred bytes). */
+    private fun java.io.InputStream.readNBytesCompat(max: Int): ByteArray {
+        val out = java.io.ByteArrayOutputStream(); val buf = ByteArray(8192)
+        while (out.size() < max) { val n = read(buf, 0, minOf(buf.size, max - out.size())); if (n < 0) break; out.write(buf, 0, n) }
+        return out.toByteArray()
+    }
+
     /** The beacon's `base` URL, only when it is plain http to the very address that sent it and that address is on the
-     *  local network: a packet from elsewhere cannot point Home at another server. */
+     *  local network: a packet from elsewhere cannot point Home at another server. Since 1.6 the beacon must also be
+     *  signed with the key Deckhand pushed over adb ([MacLink]), checked before this. */
     private fun safeBase(base: String, from: InetAddress): String? {
         if (!(from.isSiteLocalAddress || from.isLoopbackAddress || from.isLinkLocalAddress)) return null
         val u = try { URL(base) } catch (_: Exception) { return null }
@@ -447,10 +459,12 @@ class HomeActivity : Activity() {
                     try { socket.receive(packet) } catch (_: SocketTimeoutException) { continue }
                     val text = String(packet.data, packet.offset, packet.length, Charsets.UTF_8)
                     val obj = try { JSONObject(text.trim()) } catch (_: Exception) { null }
-                    val ok = obj?.optString("deckhand") == "monitor"
                     val from = packet.address
-                    if (ok && from != null) {
-                        val base = safeBase(obj?.optString("base").orEmpty(), from)
+                    // Only a beacon signed with the pushed key counts (no key pushed yet: none does).
+                    val signed = obj?.takeIf { it.optString("deckhand") == "monitor" }
+                        ?.let { MacLink.verify(it, MacLink.key(applicationContext), MacLink.base(applicationContext)) }
+                    if (signed != null && from != null) {
+                        val base = safeBase(signed, from) ?: continue
                         main.post { if (!isFinishing && !isDestroyed) setDeckhand(from.hostAddress, base) }
                     }
                 }

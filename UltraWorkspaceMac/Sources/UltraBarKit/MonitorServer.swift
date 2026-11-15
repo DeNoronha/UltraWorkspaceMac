@@ -1,12 +1,14 @@
 import Foundation
 import Network
+import CryptoKit
 #if canImport(Darwin)
 import Darwin
 #endif
 
 /// The small HTTP server behind the bar apps' data API: a fixed port on every interface, GET/HEAD for data, POST
 /// with a marker header for the few actions, routes answered by closures. It serves JSON and images only, never a
-/// page and never anything on disk, and answers only the allowed peers (the selected bar) and loopback (see SECURITY.md).
+/// page and never anything on disk, and answers only the allowed peers (the selected bar) that send the per-bar key in
+/// `X-Deckhand-Key` (pushed to the bar apps over ADB), and loopback for development (see SECURITY.md).
 public final class MonitorServer: @unchecked Sendable {
     public static let shared = MonitorServer()
     public static let defaultPort: UInt16 = 7432
@@ -32,6 +34,9 @@ public final class MonitorServer: @unchecked Sendable {
     /// Addresses that are answered at all (the paired bar); loopback always is. The data carries calendar titles,
     /// Claude transcripts and what is playing, which not every LAN should be able to read. Empty: loopback only.
     private var allowedPeers: Set<String> = []
+    /// The per-bar key the bar apps send as `X-Deckhand-Key` (bar apps 2.4). A peer request without it is refused;
+    /// nil: no peer is answered at all (loopback still is).
+    private var peerKey: String?
     public private(set) var port: UInt16 = 0
     public var isRunning: Bool { lock.lock(); defer { lock.unlock() }; return listener?.state == .ready }
 
@@ -46,6 +51,8 @@ public final class MonitorServer: @unchecked Sendable {
     /// Only these peer addresses (plus loopback) get an answer; everyone else gets 403. The app sets it to the
     /// selected bar's address, so another host on the LAN can neither read the data nor drive Music or close issues.
     public func setAllowedPeers(_ peers: Set<String>) { lock.lock(); allowedPeers = peers; lock.unlock() }
+    /// The key every non-loopback request must carry in `X-Deckhand-Key`.
+    public func setPeerKey(_ key: String?) { lock.lock(); peerKey = key.flatMap { $0.isEmpty ? nil : $0 }; lock.unlock() }
 
     /// Start on `port` (idempotent). Throws when the port is taken.
     public func start(port requested: UInt16 = MonitorServer.defaultPort) throws {
@@ -169,8 +176,25 @@ public final class MonitorServer: @unchecked Sendable {
     /// Loopback (any form) or one of the listed peers (also IPv4-mapped).
     public static func peerIsAllowed(_ address: String?, peers: Set<String>) -> Bool {
         guard let address else { return false }
-        if address.hasPrefix("127.") || address == "::1" || address.hasPrefix("::ffff:127.") { return true }
+        if isLoopback(address) { return true }
         return peers.contains(address) || (address.hasPrefix("::ffff:") && peers.contains(String(address.dropFirst(7))))
+    }
+    public static func isLoopback(_ address: String) -> Bool { address.hasPrefix("127.") || address == "::1" || address.hasPrefix("::ffff:127.") }
+
+    /// Whether a request may be answered: loopback always (development: curl, the preview), any other allowed peer
+    /// only with `X-Deckhand-Key` equal to `key` (compared in constant time).
+    public static func requestIsAllowed(peer: String?, head: String, peers: Set<String>, key: String?) -> Bool {
+        guard peerIsAllowed(peer, peers: peers), let peer else { return false }
+        if isLoopback(peer) { return true }
+        guard let key, let sent = header("x-deckhand-key", in: head) else { return false }
+        return constantTimeEqual(Array(sent.utf8), Array(key.utf8))
+    }
+
+    static func constantTimeEqual(_ a: [UInt8], _ b: [UInt8]) -> Bool {
+        guard a.count == b.count else { return false }
+        var diff: UInt8 = 0
+        for i in 0..<a.count { diff |= a[i] ^ b[i] }
+        return diff == 0
     }
 
     private func readRequest(_ conn: NWConnection, buffer: Data) {
@@ -202,10 +226,10 @@ public final class MonitorServer: @unchecked Sendable {
         guard method == "POST" || method == "GET" || method == "HEAD" else { send(conn, header("405 Method Not Allowed", "text/plain", 0)); return }
         let path = target.removingPercentEncoding ?? target
         let notFound = Response("404 Not Found", type: "text/plain", body: Data("not found".utf8))
-        lock.lock(); let r = route, a = actionRoute, peers = allowedPeers; lock.unlock()
+        lock.lock(); let r = route, a = actionRoute, peers = allowedPeers, key = peerKey; lock.unlock()
         let resp: Response
-        if !Self.peerIsAllowed(Self.peerAddress(conn), peers: peers) {
-            resp = Response("403 Forbidden", type: "text/plain", body: Data("answered for the paired bar only".utf8))
+        if !Self.requestIsAllowed(peer: Self.peerAddress(conn), head: requestHead, peers: peers, key: key) {
+            resp = Response("403 Forbidden", type: "text/plain", body: Data("answered for the paired bar's Deckhand apps only".utf8))
         } else if method == "POST" {
             // Actions: POST + a custom header, so a page on another origin cannot trigger them (no CORS preflight passes).
             resp = Self.hasActionMarker(requestHead) ? (a(path) ?? notFound)
@@ -224,16 +248,40 @@ public final class MonitorServer: @unchecked Sendable {
     }
 }
 
-/// UDP beacon the bar apps listen for: `{"deckhand":"monitor","v":2,"base":"http://<mac>:7432","url":"<base>/monitor"}`
-/// to 255.255.255.255:5320. The apps use `base`; `url` is the v1 field, kept so the wire format stays as documented.
+/// UDP beacon the bar apps listen for: `{"deckhand":"monitor","v":3,"base":"http://<mac>:7432","url":"<base>/monitor",
+/// "ts":<unix s>,"sig":"<hex>"}` to 255.255.255.255:5320 and to the bar. `sig` is HMAC-SHA256 over
+/// `deckhand-beacon|<base>|<ts>` with the per-bar key (the 32 bytes of its hex), which the apps got over ADB: since
+/// bar apps 2.4 / Home 1.6 they ignore a beacon without a valid signature. `url` is the v1 field.
 public enum MonitorBeacon {
     public static let port: UInt16 = 5320
+
+    /// The signature the bar apps check (hex, lowercase).
+    public static func signature(base: String, ts: Int, keyHex: String) -> String? {
+        var bytes: [UInt8] = []
+        var i = keyHex.startIndex
+        while i < keyHex.endIndex {
+            let j = keyHex.index(i, offsetBy: 2, limitedBy: keyHex.endIndex) ?? keyHex.endIndex
+            guard let b = UInt8(keyHex[i..<j], radix: 16) else { return nil }
+            bytes.append(b); i = j
+        }
+        guard bytes.count == 32 else { return nil }
+        let mac = HMAC<SHA256>.authenticationCode(for: Data("deckhand-beacon|\(base)|\(ts)".utf8), using: SymmetricKey(data: bytes))
+        return mac.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// The beacon's JSON object (signed when `key` is a 64-hex key).
+    public static func payload(base: String, key: String?, now: Date = Date()) -> [String: Any] {
+        var obj: [String: Any] = ["deckhand": "monitor", "v": 3, "base": base, "url": base + "/monitor"]
+        let ts = Int(now.timeIntervalSince1970)
+        if let key, let sig = signature(base: base, ts: ts, keyHex: key) { obj["ts"] = ts; obj["sig"] = sig }
+        return obj
+    }
 
     /// One beacon: broadcast plus a unicast copy to `host` (the bar's IP) — the bar's Wi-Fi does not pass
     /// 255.255.255.255 broadcasts to it (checked 2026-11-04), the unicast always arrives.
     @discardableResult
-    public static func send(base: String, to host: String? = nil) -> Bool {
-        let obj: [String: Any] = ["deckhand": "monitor", "v": 2, "base": base, "url": base + "/monitor"]
+    public static func send(base: String, to host: String? = nil, key: String? = nil) -> Bool {
+        let obj = payload(base: base, key: key)
         guard let payload = try? JSONSerialization.data(withJSONObject: obj) else { return false }
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else { return false }

@@ -4,7 +4,7 @@ import Foundation
 // decoding and the snapshot can be checked against Strava's documented sample responses on their own
 // (see the scratch decode test in the app's notes). The network side, OAuth and the tokens are in StravaFeed.swift.
 
-/// What Deckhand keeps after the athlete connected: a user-only secret file (`Store.saveSecret(name: "strava-tokens")`),
+/// What Deckhand keeps after the athlete connected: one secret-store item (Keychain `oauth:strava`, `Store.saveSecret(name: "strava-tokens")`),
 /// never settings.json, never logged.
 struct StravaTokens: Codable, Equatable, Sendable {
     var access: String

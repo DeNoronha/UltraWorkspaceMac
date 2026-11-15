@@ -25,6 +25,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import nl.denoronha.deckhand.monitor.onbar.BarConfig
 import nl.denoronha.deckhand.monitor.onbar.LocalSite
+import nl.denoronha.deckhand.monitor.onbar.MacLink
 import nl.denoronha.deckhand.monitor.onbar.httpJson
 import nl.denoronha.deckhand.monitor.onbar.pool
 import org.json.JSONObject
@@ -44,13 +45,15 @@ import kotlin.math.abs
  * - On-bar flavors (flights, crypto, weather, sky, news, verse, tide, teletekst; `BuildConfig.ON_BAR`) fetch their own data and
  *   work with the Mac off. Deckhand only gives them their settings: pushed over adb (see `onbar/ConfigReceiver`),
  *   or fetched here as `/config.json` when the beacon is heard.
- * - Mac flavors (monitor, claude, music, calendar, tasks, haven, zeekr) show what only the Mac knows; [LocalSite] passes their
+ * - Mac flavors (monitor, claude, music, calendar, tasks, haven) show what only the Mac knows; [LocalSite] passes their
  *   data requests to Deckhand's data API at the address the beacon names. Without a Mac the page says
  *   "Waiting for the Mac…" by itself and fills in as soon as a beacon arrives.
  *
- * The beacon (UDP 5320, every 5 s from Deckhand) is only accepted when it names its own sender on a private LAN
- * address. The last address is remembered, so a Mac page works straight after a restart of the app. The `url`
- * intent extra sets the address by hand (adb testing), under the same rule.
+ * Since 2.4 Deckhand pushes its address and a per-bar key over adb ([MacLink]); the beacon (UDP 5320, every 5 s from
+ * Deckhand) is only accepted when it is signed with that key and names its own sender on a private LAN address, and
+ * every request to the Mac carries the key. A settings document fetched over HTTP is used in memory only. The last
+ * address is remembered, so a Mac page works straight after a restart of the app. The `url` intent extra sets the
+ * address by hand (adb testing), under the same LAN rule.
  */
 class MainActivity : Activity() {
 
@@ -58,7 +61,9 @@ class MainActivity : Activity() {
         private const val TAG = "DeckhandMonitor"
         private const val BEACON_PORT = 5320
         private const val PREFS = "monitor"
-        private const val PREF_BASE = "macBase"
+        /** 2.4: only addresses from a signed beacon, adb or the push are remembered (the key is sent there); the
+         *  unsigned "macBase" of older versions is ignored. */
+        private const val PREF_BASE = "macBaseSigned"
         private const val RETRY_DELAY_MS = 5_000L
         private const val LONG_PRESS_MS = 700L
         private const val CONFIG_EVERY_MS = 300_000L    // on-bar flavors: config.json from the Mac at most every 5 min
@@ -105,7 +110,8 @@ class MainActivity : Activity() {
         }
         setContentView(web)
 
-        site.macBase = prefs().getString(PREF_BASE, null)?.takeIf { isLanHttpUrl(it) }
+        site.macBase = (MacLink.base(this) ?: prefs().getString(PREF_BASE, null))?.takeIf { isLanHttpUrl(it) }
+        prefs().edit().remove("macBase").apply()
         baseFromIntent(intent)
         web.loadUrl(pageUrl)
     }
@@ -183,15 +189,22 @@ class MainActivity : Activity() {
         if (BuildConfig.ON_BAR) fetchConfig(base)
     }
 
-    /** On-bar flavors: Deckhand's settings document, at most every 5 min (the adb push is the fast path). */
+    /** On-bar flavors: Deckhand's settings document, at most every 5 min (the adb push is the fast path). Used in
+     *  memory only and never stored: plain HTTP on the LAN does not get to change the settings for good (2.4). */
     private fun fetchConfig(base: String) {
         val now = System.currentTimeMillis()
         if (now - configAt < CONFIG_EVERY_MS) return
         configAt = now
+        val ctx = applicationContext
         pool.execute {
-            val cfg = httpJson("$base/config.json", 5_000) ?: return@execute
-            if (cfg.optInt("v", 0) >= 2 && BarConfig.save(applicationContext, cfg)) {
-                Log.i(TAG, "New settings from Deckhand at $base")
+            val cfg = httpJson("$base/config.json", 5_000, MacLink.headers(ctx)) ?: return@execute
+            if (cfg.optInt("v", 0) < 2) return@execute
+            cfg.remove("mac")
+            val raw = cfg.toString()
+            val stored = BarConfig.stored(ctx)
+            if (site.liveConfig?.second != raw && raw != stored) {
+                Log.i(TAG, "Settings from Deckhand at $base (this session only)")
+                site.liveConfig = stored to raw
                 site.reloadConfig()
             }
         }
@@ -316,18 +329,21 @@ class MainActivity : Activity() {
     }
 
     /**
-     * `{"deckhand":"monitor","v":2,"base":"http://<mac>:7432","url":…}` → Deckhand's address. The address must be
-     * a LAN http(s) URL whose host is the beacon's sender: Deckhand always names itself, so anything else is a
-     * forged beacon and is dropped.
+     * `{"deckhand":"monitor","v":3,"base":"http://<mac>:7432","ts":…,"sig":…}` → Deckhand's address. The beacon must
+     * be signed with the key Deckhand pushed over adb ([MacLink.verify]), and the address must be a LAN http(s) URL
+     * whose host is the beacon's sender. Anything else (no key pushed yet, a forged or old beacon) is dropped.
      */
+    private var warnedNoKey = false
     private fun parseBeacon(text: String, from: InetAddress?): String? = try {
         val json = JSONObject(text.trim())
         if (json.optString("deckhand") != "monitor") null
         else {
-            val base = json.optString("base").trimEnd('/').ifEmpty { json.optString("url") }
+            val key = MacLink.key(applicationContext)
+            if (key == null && !warnedNoKey) { warnedNoKey = true; Log.w(TAG, "Ignoring beacons until Deckhand has pushed its key") }
+            val base = MacLink.verify(json, key, MacLink.base(applicationContext))
             val sender = from?.hostAddress
-            base.takeIf { isLanHttpUrl(it) && sender != null && Uri.parse(it).host == sender }.also {
-                if (it == null) Log.w(TAG, "Ignoring beacon from $from: not a LAN url of the sender")
+            base.takeIf { it != null && isLanHttpUrl(it) && sender != null && Uri.parse(it).host == sender }.also {
+                if (it == null && key != null) Log.w(TAG, "Ignoring beacon from $from: not signed with Deckhand's key, or not a LAN url of the sender")
             }
         }
     } catch (_: Exception) {
