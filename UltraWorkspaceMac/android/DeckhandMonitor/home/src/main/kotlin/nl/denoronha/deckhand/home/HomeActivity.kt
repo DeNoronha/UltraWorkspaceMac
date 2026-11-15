@@ -66,7 +66,7 @@ class HomeActivity : Activity() {
         /** Always the last two tiles of the row, so they are left out of the sorted part. */
         private val LAST = setOf(SETTINGS_PACKAGE, VENDOR_LAUNCHER)
         /** Deckhand's apps in the order of Deckhand's Apps list (AppModel.barAppPages); used until the Mac sends its order. */
-        private val OUR_ORDER = listOf("monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks", "haven", "tide", "strava", "cask", "schiphol", "teletekst", "earth", "seo", "portfolio", "status")
+        private val OUR_ORDER = listOf("monitor", "claude", "crypto", "weather", "music", "calendar", "flights", "sky", "news", "verse", "tasks", "haven", "tide", "strava", "cask", "schiphol", "teletekst", "earth", "seo", "portfolio", "status", "actions")
         private const val PREFS = "home"
         private const val PREF_ORDER = "order"
 

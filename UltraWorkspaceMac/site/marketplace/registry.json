@@ -402,6 +402,25 @@
       "distribution": "bundled",
       "publisher": "De Noronha Consulting",
       "license": "MIT"
+    },
+    {
+      "id": "actions",
+      "name": "GitHub Actions",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.actions",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "Your GitHub workflow runs from the last days, newest first: which passed, failed or are still running, on which branch and how long they took; tap a run for its details. Needs a fine-grained token that may only read Actions.",
+      "icon": "../assets/img/icons/actions.png",
+      "screenshot": "../assets/img/screens/bar-actions.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
     }
   ],
   "cards": [

@@ -821,6 +821,41 @@ check(CloudStatus.toggled(["aws", "m365"], "github", on: true) == ["m365", "aws"
 check(CloudStatus.toggled(["aws"], "aws", on: false) == ["aws"], "status: the last service stays on")
 check(CloudStatus.toggled(CloudStatus.defaults, "npm", on: true) == CloudStatus.defaults, "status: no thirteenth service")
 
+// GitHub Actions: a runs answer (the fields Deckhand reads, as GitHub sends them), newest first, latest per workflow.
+do {
+    let fixture = """
+    {"total_count": 2, "workflow_runs": [
+      {"name": "CI", "workflow_id": 11, "display_title": "Fix the build\\nwith details", "status": "completed", "conclusion": "success",
+       "head_branch": "main", "event": "push", "run_started_at": "2026-11-15T10:00:00Z", "created_at": "2026-11-15T09:59:58Z",
+       "updated_at": "2026-11-15T10:02:14Z", "run_attempt": 2, "html_url": "https://github.com/me/app/actions/runs/1"},
+      {"name": "Deploy", "workflow_id": 12, "display_title": "Release", "status": "in_progress", "conclusion": null,
+       "head_branch": "main", "event": "workflow_dispatch", "run_started_at": "2026-11-15T11:00:00Z", "created_at": "2026-11-15T11:00:00Z",
+       "updated_at": "2026-11-15T11:01:00Z", "run_attempt": 1, "html_url": "https://github.com/me/app/actions/runs/2"}]}
+    """
+    let j = (try? JSONSerialization.jsonObject(with: Data(fixture.utf8))) as? [String: Any] ?? [:]
+    let runs = ActionsRuns.parse(j, repo: "me/app")
+    check(runs.count == 2 && runs[0].workflow == "CI" && runs[0].title == "Fix the build" && runs[0].attempt == 2 && runs[0].branch == "main", "actions: parse reads name, first title line, attempt, branch")
+    check(runs[0].state == .passing && runs[1].state == .running && runs[1].conclusion == nil, "actions: success is passing, in_progress is running")
+    check(runs[0].duration == 134 && runs[1].duration == nil, "actions: duration is updated − started for a completed run, none while running")
+    let t = ISO8601DateFormatter().date(from: "2026-11-15T12:00:00Z")!
+    func run(_ repo: String, _ wf: String, _ status: String, _ concl: String?, _ minutes: Double) -> ActionsRuns.Run {
+        ActionsRuns.Run(repo: repo, workflow: wf, title: "t", status: status, conclusion: concl, branch: "main", event: "push",
+                        started: t.addingTimeInterval(minutes * 60), updated: t.addingTimeInterval(minutes * 60 + 30))
+    }
+    let other = [run("me/lib", "Test", "completed", "failure", -50), run("me/lib", "Test", "completed", "success", -10),
+                 run("me/lib", "Lint", "completed", "timed_out", -20), run("me/site", "Pages", "queued", nil, -5),
+                 run("me/site", "Pages", "completed", "skipped", -1), run("me/site", "Old", "completed", "cancelled", -90)]
+    let merged = ActionsRuns.merge(runs + other)
+    check(merged.map(\.started) == merged.map(\.started).sorted(by: >) && merged.first?.repo == "me/site", "actions: merge puts the newest start first")
+    check(ActionsRuns.summary(runs + other) == ActionsRuns.Counts(passing: 2, failing: 1, running: 2, cancelled: 1), "actions: counts each workflow's newest run; a fixed failure no longer counts, a skipped run does not hide a queued one")
+    check(ActionsRuns.repoStates(other).map(\.repo) == ["me/lib", "me/site"] && ActionsRuns.repoStates(other).first?.state == .failing, "actions: a repository shows its worst newest state")
+    check(["failure", "timed_out", "startup_failure", "action_required"].allSatisfy { run("a", "b", "completed", $0, 0).state == .failing }
+          && ["queued", "waiting", "requested", "pending"].allSatisfy { run("a", "b", $0, nil, 0).state == .running }, "actions: failing and running conclusions and statuses")
+    check(ActionsRuns.since(days: 7, now: t) == "2026-11-08", "actions: created>= date is days before now in UTC")
+    check(ActionsRuns.nextLink("<https://api.github.com/user/repos?page=2>; rel=\"next\", <https://api.github.com/user/repos?page=4>; rel=\"last\"")?.absoluteString == "https://api.github.com/user/repos?page=2"
+          && ActionsRuns.nextLink("<https://x/?page=1>; rel=\"prev\"") == nil, "actions: Link header rel=next")
+}
+
 // APK manifests: package and version read from the binary XML of a Deckhand bar app when a build is present.
 do {
     let apk = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("dist/bar-apps/DeckhandMonitor.apk")
