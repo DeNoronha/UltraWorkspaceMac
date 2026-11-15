@@ -256,6 +256,19 @@ do {
 
 // CRC32 known vector
 check(DeployPackager.crc32(Array("123456789".utf8)) == 0xCBF4_3926, "crc32('123456789') == 0xCBF43926")
+// Kraken's documented example for a private call's signature (docs.kraken.com, "Authentication").
+check(KrakenSign.sign(path: "/0/private/AddOrder", nonce: "1616492376594",
+                      postData: "nonce=1616492376594&ordertype=limit&pair=XBTUSD&price=37500&type=buy&volume=1.25",
+                      secretBase64: "kQH5HW/8p1uGOVjbgWA7FunAmGO8lsSUXNsu3eow76sz84Q18fWxnyRzBHCd3pd5nE9qa99HAZtuZuj6F1huXg==")
+      == "4/dpxb3iT4tp/ZCVEwSnEsLxx0bqyhLpdfOpc6fn7OR8+UClSV5n9E6aSS8MPtnRfp32bAb0nmbRn6H8ndwLUQ==", "kraken: API-Sign matches Kraken's documented example")
+check(KrakenSign.sign(path: "/0/private/Balance", nonce: "1", postData: "nonce=1", secretBase64: "not base64!") == nil, "kraken: a secret that is not base64 gives no signature")
+check(KrakenPortfolio.normalize("XXBT") == ("BTC", false) && KrakenPortfolio.normalize("ZEUR") == ("EUR", false), "kraken: legacy codes XXBT → BTC, ZEUR → EUR")
+check(KrakenPortfolio.normalize("ETH2.S") == ("ETH", true) && KrakenPortfolio.normalize("DOT.S") == ("DOT", true) && KrakenPortfolio.normalize("XBT.M") == ("BTC", true), "kraken: Earn balances count as the coin itself")
+check(KrakenPortfolio.normalize("USDC") == ("USDC", false) && KrakenPortfolio.normalize("XETH", altnames: ["XETH": "ETH"]) == ("ETH", false), "kraken: plain codes stay, altnames are used")
+do {
+    let v = KrakenPortfolio.combine([(2, [(0, 10), (10, 11), (20, 12)]), (1, [(10, 100), (20, 90)])], cash: 5)
+    check(v.map(\.t) == [0, 10, 20] && v.map(\.value) == [125, 127, 119], "kraken: portfolio history adds amount × close, backfills a later series, plus cash")
+}
 
 // WireLog redaction: token, AUTH data, Wi-Fi config hex (property 7), apiKey
 do {

@@ -76,6 +76,9 @@ final class AppSettings: ObservableObject {
     @Published var earthCenter: String = "home" { didSet { save() } }
     /// SEO bar app: the site it watches (Apps → SEO).
     @Published var seoURL: String = "" { didSet { save() } }
+    /// Portfolio bar app: the currency it values the Kraken account in, and the smallest holding it lists.
+    @Published var portfolioCurrency: String = "EUR" { didSet { save() } }
+    @Published var portfolioMinValue: Double = 10 { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows this many single cards without scrolling (the clock card takes two slots) — counted on the bar 2026-11-04.
     static let coreCardsThatFit = 5
@@ -147,6 +150,8 @@ final class AppSettings: ObservableObject {
         var earthMinMag: Double? = nil
         var earthCenter: String? = nil
         var seoURL: String? = nil
+        var portfolioCurrency: String? = nil
+        var portfolioMinValue: Double? = nil
     }
 
     // MARK: VivoCube cards (ordered, max 6)
@@ -235,6 +240,8 @@ final class AppSettings: ObservableObject {
             earthMinMag = p.earthMinMag == 4.5 ? 4.5 : 2.5
             earthCenter = p.earthCenter == "turn" ? "turn" : "home"
             seoURL = p.seoURL ?? ""
+            portfolioCurrency = ["EUR", "USD", "GBP", "CHF"].contains(p.portfolioCurrency ?? "") ? p.portfolioCurrency! : "EUR"
+            portfolioMinValue = p.portfolioMinValue ?? 10
         }
         if let storedKey { accuWeatherKey = storedKey }
     }
@@ -250,7 +257,7 @@ final class AppSettings: ObservableObject {
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
                           claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes, barFirewall: barFirewall,
-                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL)
+                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL, portfolioCurrency: portfolioCurrency, portfolioMinValue: portfolioMinValue)
         // Holds the manual location: user-only from the moment it exists (Store.writePrivate).
         guard let data = try? JSONEncoder().encode(p), Store.writePrivate(data, to: url) else {
             NSLog("Deckhand: settings.json could not be saved"); return

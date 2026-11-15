@@ -16,7 +16,7 @@ import UltraBarKit
 @MainActor
 final class BarPages {
     /// Pages whose data comes from this Mac through `route` (Monitor's samples are served by `AppModel.startBarDataServer`).
-    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "seo"]
+    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "seo", "portfolio"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
@@ -37,7 +37,7 @@ final class BarPages {
     private let configWake = WakeSignal()
     private var subscriptions: [AnyCancellable] = []
     /// Wakes the loops that wait for a bar request: this class's own, the feeds', the Music poll.
-    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); seo.poke(); model?.musicWake.signal() }
+    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); seo.poke(); portfolio.poke(); model?.musicWake.signal() }
     /// Nobody can be looking at the bar apps: the bar's screen is off (presence over ADB) or this Mac is asleep,
     /// has its screens off or is locked, and no bar app asked for anything in the last two minutes (Deckhand Home
     /// asks every minute while it is on screen). The feeds pause then; the next request wakes them.
@@ -77,6 +77,8 @@ final class BarPages {
     let schiphol = SchipholFeed()
     /// One website's health and its Search Console numbers for the SEO app, refreshed while it is on the bar.
     let seo = SiteFeed()
+    /// The user's Kraken holdings and the market around them for the Portfolio app, refreshed while it is on the bar.
+    let portfolio = KrakenFeed()
     private weak var model: AppModel?
     private var settings: AppSettings?
 
@@ -86,6 +88,10 @@ final class BarPages {
         haven.start(key: { model.aisstreamKey }, wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
             return model.barAppVersion("haven") != nil || (self.lastHit["haven"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+        })
+        portfolio.start(currency: { [weak self] in self?.settings?.portfolioCurrency ?? "EUR" }, minValue: { [weak self] in self?.settings?.portfolioMinValue ?? 10 }, wanted: { [weak self] in
+            guard let self, !self.dormant else { return false }
+            return model.barAppVersion("portfolio") != nil || (self.lastHit["portfolio"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
         seo.start(url: { [weak self] in self?.settings?.seoURL ?? "" }, wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
@@ -214,7 +220,7 @@ final class BarPages {
         })
     }
 
-    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); seo.stop() }
+    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); seo.stop(); portfolio.stop() }
 
     /// Linear for the Tasks app.
     private func startLinearFeed(model: AppModel) {
@@ -425,6 +431,7 @@ final class BarPages {
         case "strava": return strava.snapshot(metric: settings?.units != .imperial, clock24h: settings?.clock24h ?? true)
         case "cask": return cask.snapshot(hasKey: !(model?.whiskystatsKey.isEmpty ?? true))
         case "seo": return seo.snapshot()
+        case "portfolio": return portfolio.snapshot()
         default: return [:]
         }
     }
@@ -501,6 +508,8 @@ final class BarPages {
         }
         // SEO: the mobile SEO score and the clicks of the last 28 days.
         if let line = seo.homeLine() { apps["seo"] = ["line": line] }
+        // Portfolio: the total and its change over the last day.
+        if let p = portfolio.homeLine() { apps["portfolio"] = ["line": p.line, "tone": p.tone] }
         return ["apps": apps, "order": homeOrder(), "at": Int(Date().timeIntervalSince1970)]
     }
 
