@@ -53,17 +53,18 @@
         <div class="bar" role="group" aria-label="The CoreBar's 1424 by 280 screen showing Deckhand's bar apps">
           <div class="bar-frame">
             <div class="bar-screen" id="barScreen" role="tabpanel">
-              <img src="assets/img/screens/bar-monitor.png" alt="Monitor app on the bar: CPU 25 %, network up and down, memory and disk bars, a clock" data-page="monitor">
+              <img src="assets/img/screens/bar-monitor.png" alt="Monitor app on the bar: the Mac's CPU history, network up and down, memory and disk, a clock" data-page="monitor">
               <img src="assets/img/screens/bar-haven.png" alt="Haven app: Rotterdam, Antwerpen, Hamburg and Duisburg, ships on their way in and alongside" data-page="haven" hidden>
               <img src="assets/img/screens/bar-tide.png" alt="Tide app: water levels at Hoek van Holland, Rotterdam and Nijmegen against the predicted tide, with sun and moon" data-page="tide" hidden>
               <img src="assets/img/screens/bar-schiphol.png" alt="Schiphol app: the runways in use for landing and take-off, aircraft around the field and the next arrivals and departures" data-page="schiphol" hidden>
+              <img src="assets/img/screens/bar-teletekst.png" alt="Teletekst app: the NOS news index in teletext colours, split into two columns" data-page="teletekst" hidden>
               <img src="assets/img/screens/bar-strava.png" alt="Training app: the latest run with its route, recent activities, this week against last week and the year so far" data-page="strava" hidden>
               <img src="assets/img/screens/bar-cask.png" alt="Whisky Portfolio app: a whisky collection at auction prices, each bottle with its trend" data-page="cask" hidden>
-              <img src="assets/img/screens/bar-claude.png" alt="Claude app: one terminal needs you, four session cards" data-page="claude" hidden>
-              <img src="assets/img/screens/bar-crypto.png" alt="Crypto app: ETH and XRP in euro with a sparkline of the day" data-page="crypto" hidden>
-              <img src="assets/img/screens/bar-weather.png" alt="Weather app: 10 °C partly cloudy and three days ahead" data-page="weather" hidden>
-              <img src="assets/img/screens/bar-music.png" alt="Music app: album art, title, artist and transport buttons" data-page="music" hidden>
-              <img src="assets/img/screens/bar-calendar.png" alt="Calendar app: today, tomorrow and Friday with events" data-page="calendar" hidden>
+              <img src="assets/img/screens/bar-claude.png" alt="Claude app: today's tokens, one session that needs your permission, one running and the rest done or idle" data-page="claude" hidden>
+              <img src="assets/img/screens/bar-crypto.png" alt="Crypto app: ETH, XRP and BTC in euro with a chart of the day" data-page="crypto" hidden>
+              <img src="assets/img/screens/bar-weather.png" alt="Weather app: 7 °C and cloudy in Amsterdam, and three days ahead" data-page="weather" hidden>
+              <img src="assets/img/screens/bar-music.png" alt="Music app: album art, title, artist and the transport buttons" data-page="music" hidden>
+              <img src="assets/img/screens/bar-calendar.png" alt="Calendar app: today, tomorrow and Tuesday with their events" data-page="calendar" hidden>
             </div>
           </div>
           <div class="bar-tabs" role="tablist" aria-label="Bar app">
@@ -71,6 +72,7 @@
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="haven">Haven</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="tide">Tide</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="schiphol">Schiphol</button>
+            <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="teletekst">Teletekst</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="strava">Training</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="cask">Whisky Portfolio</button>
             <button role="tab" aria-selected="false" aria-controls="barScreen" data-page="claude">Claude</button>
@@ -138,7 +140,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/monitor.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Monitor</h3><span class="badge">2.3</span></div>
+            <div class="title"><h3>Monitor</h3></div>
             <p>Your Mac, live: CPU with a two-minute history, network up and down, memory and disk bars, the time. Refreshed every second.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-monitor.png" alt="Monitor app on the bar" loading="lazy"></div>
@@ -146,7 +148,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/haven.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Haven</h3><span class="badge">2.3</span></div>
+            <div class="title"><h3>Haven</h3></div>
             <p>Ships at the ports and inland terminals you choose, live from AIS: how many are on their way in, how many lie alongside, the first few by name with an arrival time. Tap a place for its approach.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-haven.png" alt="Haven app on the bar" loading="lazy"></div>
@@ -154,7 +156,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/tide.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Tide</h3><span class="badge">2.3</span></div>
+            <div class="title"><h3>Tide</h3></div>
             <p>Dutch water levels from Rijkswaterstaat: up to four gauges with the level now in cm NAP, its trend, today's curve against the predicted tide and the next high and low water, plus sun and moon. Runs on the bar, no key.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-tide.png" alt="Tide app on the bar" loading="lazy"></div>
@@ -162,15 +164,23 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/schiphol.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Schiphol</h3><span class="badge">2.3</span></div>
+            <div class="title"><h3>Schiphol</h3></div>
             <p>Amsterdam Schiphol as the tower sees it: which runways are in use for landing and take-off, worked out live from open ADS-B data, the aircraft around them and the last 15 minutes' movements. With a free Schiphol key, the next arrivals and departures too.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-schiphol.png" alt="Schiphol app on the bar" loading="lazy"></div>
         </article>
         <article class="app">
+          <div class="icon"><img src="assets/img/icons/teletekst.png" alt=""></div>
+          <div class="body">
+            <div class="title"><h3>Teletekst</h3></div>
+            <p>NOS Teletekst as it looks on television, split into two columns for the wide screen. The pages turn by themselves; tap for the next or previous one. You choose the pages.</p>
+          </div>
+          <div class="shot"><img src="assets/img/screens/bar-teletekst.png" alt="Teletekst app on the bar" loading="lazy"></div>
+        </article>
+        <article class="app">
           <div class="icon"><img src="assets/img/icons/strava.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Training</h3><span class="badge">2.3</span></div>
+            <div class="title"><h3>Training</h3></div>
             <p>Your own activities: the latest with its route, the ones before it, this week against last week per sport and the year so far. Connect once with your own Strava API application. Powered by Strava.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-strava.png" alt="Training app on the bar" loading="lazy"></div>
@@ -178,7 +188,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/cask.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Whisky Portfolio</h3><span class="badge">2.3</span></div>
+            <div class="title"><h3>Whisky Portfolio</h3></div>
             <p>Your whisky collection at auction prices: what it is worth together, against what you paid and a month ago, with a trend per bottle. Prices from the Whiskystats Data API with your own key, kept within its monthly credits.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-cask.png" alt="Whisky Portfolio app on the bar" loading="lazy"></div>
@@ -186,7 +196,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/claude.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Claude</h3><span class="badge">2.3</span></div>
+            <div class="title"><h3>Claude</h3></div>
             <p>Which terminal needs you. Every Claude Code session on the Mac becomes a card; the ones waiting for an answer pulse orange, with the project, the question and how long ago.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-claude.png" alt="Claude app on the bar" loading="lazy"></div>
@@ -194,7 +204,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/crypto.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Crypto</h3><span class="badge">2.3</span></div>
+            <div class="title"><h3>Crypto</h3></div>
             <p>Up to five coins in your currency, each with a sparkline of the day and the change since midnight.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-crypto.png" alt="Crypto app on the bar" loading="lazy"></div>
@@ -202,7 +212,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/weather.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Weather</h3><span class="badge">2.3</span></div>
+            <div class="title"><h3>Weather</h3></div>
             <p>Now plus three days for the Mac's location: condition, temperature, humidity, wind and chance of rain.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-weather.png" alt="Weather app on the bar" loading="lazy"></div>
@@ -210,7 +220,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/music.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Music</h3><span class="badge">2.3</span></div>
+            <div class="title"><h3>Music</h3></div>
             <p>Apple Music with album art, title, artist and album. The transport buttons work from the bar's touch screen.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-music.png" alt="Music app on the bar" loading="lazy"></div>
@@ -218,7 +228,7 @@
         <article class="app">
           <div class="icon"><img src="assets/img/icons/calendar.png" alt=""></div>
           <div class="body">
-            <div class="title"><h3>Calendar</h3><span class="badge">2.3</span></div>
+            <div class="title"><h3>Calendar</h3></div>
             <p>Today, tomorrow and the day after from the Mac's calendars, in the colours you already know. Past events fade.</p>
           </div>
           <div class="shot"><img src="assets/img/screens/bar-calendar.png" alt="Calendar app on the bar" loading="lazy"></div>
@@ -239,8 +249,8 @@
         <p class="lede">A sidebar per device, a page per job. Everything the bar shows is drawn on the Mac first, so you see it before you publish it.</p>
       </div>
       <div class="screens">
-        <figure><img src="assets/img/screens/app-corebar.png" width="1600" height="1006" alt="Deckhand's CoreBar page: a preview of the bar's cards, the list of cards to publish, and the pages on the bar" loading="lazy"><figcaption class="meta">CoreBar page · cards and preview</figcaption></figure>
-        <figure><img src="assets/img/screens/app-apps.png" width="1600" height="1006" alt="Deckhand's Apps page: the eleven Deckhand bar apps, the marketplace and the firmware's built-in apps, with the chosen app's switch and settings" loading="lazy"><figcaption class="meta">Apps page · install and update the bar apps</figcaption></figure>
+        <figure><img src="assets/img/screens/app-corebar.png" width="1600" height="1025" alt="Deckhand's CoreBar page: a preview of the bar's cards and the list of cards to publish, with Publish in the toolbar" loading="lazy"><figcaption class="meta">CoreBar page · cards and preview</figcaption></figure>
+        <figure><img src="assets/img/screens/app-apps.png" width="1600" height="1025" alt="Deckhand's Apps page: the seventeen Deckhand bar apps with their versions, then the marketplace and the firmware's apps; on the right the chosen app with its buttons and settings, and Update All in the toolbar" loading="lazy"><figcaption class="meta">Apps page · install and update the bar apps</figcaption></figure>
       </div>
       <div class="hero-actions" style="margin-top:1.5rem">
         <a class="btn" href="deckhand/">Every page, requirements, security and privacy <span class="arrow">→</span></a>
