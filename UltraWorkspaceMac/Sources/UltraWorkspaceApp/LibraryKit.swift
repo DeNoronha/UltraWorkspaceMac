@@ -67,7 +67,7 @@ struct LibraryRow<Icon: View>: View {
             Spacer(minLength: 4)
             if busy { ProgressView().controlSize(.mini) }
             else if updateAvailable { Image(systemName: StatusKind.update.symbol).foregroundStyle(StatusKind.update.color).help("Update available") }
-            else if installed { Image(systemName: "checkmark.circle").foregroundStyle(.secondary).help("On the bar") }
+            else if installed { Image(systemName: StatusKind.ok.symbol).foregroundStyle(StatusKind.ok.color).help("On the bar and up to date") }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel([title, caption, busy ? "working" : updateAvailable ? "on the bar, update available" : installed ? "on the bar" : nil].compactMap { $0 }.joined(separator: ", "))
