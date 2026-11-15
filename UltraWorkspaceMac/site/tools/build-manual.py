@@ -40,6 +40,7 @@ HEAD = """<!doctype html>
       <a href="../marketplace/">Marketplace</a>
       <a href="./" aria-current="page">Manual</a>
       <a href="../#support">Support</a>
+      <a href="../contact/">Contact</a>
       <a href="https://github.com/DeNoronha/UltraWorkspaceMac">GitHub</a>
     </nav>
   </div>
@@ -80,6 +81,7 @@ __BODY__
         <ul>
           <li><a href="../download/Deckhand.dmg">Download the DMG</a></li>
           <li><a href="../deckhand/">The Mac app</a></li>
+          <li><a href="../contact/">Contact</a></li>
           <li><a href="../deckhand/#security">Security and privacy</a></li>
           <li><a href="#8-whats-next-roadmap">What's next</a></li>
         </ul>

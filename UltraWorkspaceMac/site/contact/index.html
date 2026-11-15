@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Contact · OpenBarX</title>
+<meta name="description" content="Questions, bug reports or ideas for Deckhand and the OpenBarX bar apps: send an e-mail or open an issue on GitHub.">
+<meta property="og:title" content="Contact · OpenBarX">
+<meta property="og:description" content="Questions, bug reports or ideas for Deckhand and the bar apps.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,700;0,6..12,900&family=JetBrains+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="../" aria-label="OpenBarX home">
+      <span class="name">OpenBar<i>X</i></span>
+      <span class="tag">Deckhand for macOS</span>
+    </a>
+    <nav class="nav" aria-label="Site">
+      <a href="../deckhand/">Deckhand</a>
+      <a href="../bar-apps/">Bar apps</a>
+      <a href="../marketplace/">Marketplace</a>
+      <a href="../manual/">Manual</a>
+      <a href="../#support">Support</a>
+      <a href="./" aria-current="page">Contact</a>
+      <a href="https://github.com/DeNoronha/UltraWorkspaceMac">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero hero-compact">
+    <div class="container">
+      <p class="eyebrow">Contact</p>
+      <h1>Questions, bugs or ideas? Write.</h1>
+      <p class="lede">Deckhand is made by one person in the evenings, and every message is read. Mail is the quickest way to reach me; a bug that others may hit too is best filed on GitHub, so the fix is visible to everyone.</p>
+      <div class="hero-actions">
+        <!-- The address lives only here: change data-user / data-domain when support@openbarx.com is ready. -->
+        <a class="btn btn-primary" id="mail" data-user="ramon" data-domain="denoronha.nl" href="#mail">Send an e-mail <small id="mail-address">ramon at denoronha dot nl</small> <span class="arrow">→</span></a>
+        <a class="btn" href="https://github.com/DeNoronha/UltraWorkspaceMac/issues/new" rel="noopener">Report a bug on GitHub <span class="arrow">→</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="before">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Before you write</p>
+        <h2>Many answers are already written down.</h2>
+      </div>
+      <div class="grid">
+        <article class="card">
+          <h3>FAQ</h3>
+          <p>Closing a bar app, the VivoCube not taking cards, installs failing after a bar restart, "Waiting for the Mac…".</p>
+          <a href="../#faq">Read the FAQ <span class="arrow">→</span></a>
+        </article>
+        <article class="card">
+          <h3>Manual</h3>
+          <p>Every page of Deckhand, installing, the debug bridge on the bar, and what each bar app shows.</p>
+          <a href="../manual/">Open the manual <span class="arrow">→</span></a>
+        </article>
+        <article class="card">
+          <h3>Build a bar app</h3>
+          <p>How the bar apps get their data from the Mac, and how to put your own in the marketplace.</p>
+          <a href="../bar-apps/#build">For builders <span class="arrow">→</span></a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="bug">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Reporting a problem</p>
+        <h2>What helps me help you.</h2>
+      </div>
+      <ol class="steps">
+        <li><b>Versions.</b><span>Deckhand's version (Deckhand → About Deckhand), your macOS version, and the bar's launcher version if you know it.</span></li>
+        <li><b>What you did and what happened.</b><span>The steps, what you expected, and the exact message Deckhand or the bar showed.</span></li>
+        <li><b>A screenshot.</b><span>One of Deckhand, or a photo of the bar, says more than a description.</span></li>
+        <li><b>Leave out secrets.</b><span>Never send passwords, API keys, tokens or your bar's serial number; I will never ask for them.</span></li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="cols">
+      <div class="dnc">
+        <img src="../assets/img/dnc-logo-white.svg" alt="De Noronha Consulting">
+        <p>Deckhand and OpenBarX are made by De Noronha Consulting in Sassenheim, the Netherlands.</p>
+        <a href="https://denoronha.consulting">denoronha.consulting <span class="arrow">→</span></a>
+      </div>
+      <div>
+        <h3>Deckhand</h3>
+        <ul>
+          <li><a href="../download/Deckhand.dmg">Download the DMG</a></li>
+          <li><a href="../manual/">Manual</a></li>
+          <li><a href="./">Contact</a></li>
+          <li><a href="../deckhand/#security">Security and privacy</a></li>
+          <li><a href="../manual/#8-whats-next-roadmap">What's next</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>For builders</h3>
+        <ul>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac">Source on GitHub</a></li>
+          <li><a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/PROTOCOL.md">The CoreBar protocol</a></li>
+          <li><a href="../bar-apps/#build">Build a bar app</a></li>
+          <li><a href="https://github.com/DeNoronha/openbarx-marketplace">Marketplace index (GitHub)</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="fine">Deckhand is independent, community software under the MIT license. UltraBar X, CoreBar, VivoCube, SenseCube, KnobKey and DotKey are names of Sanytron products; this project is not affiliated with or endorsed by Sanytron.</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // Assembled here so the address is not in the page's markup for harvesters.
+  var a = document.getElementById('mail'); if (!a) return;
+  var addr = a.dataset.user + '@' + a.dataset.domain;
+  a.href = 'mailto:' + addr + '?subject=' + encodeURIComponent('Deckhand');
+  document.getElementById('mail-address').textContent = addr;
+})();
+</script>
+</body>
+</html>
