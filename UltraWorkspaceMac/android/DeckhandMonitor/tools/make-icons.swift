@@ -60,6 +60,10 @@ let flavors: [Flavor] = [
     Flavor(name: "status", top: "0ea5e9", bottom: "0c2a4a", glyphColor: "ffffff", glyph: .fluent("cloud_3d.png")),
     Flavor(name: "actions", top: "334155", bottom: "0d1117", glyphColor: "ffffff", glyph: .fluent("gear_3d.png")),
     Flavor(name: "jira", top: "2684ff", bottom: "0a2a5c", glyphColor: "ffffff", glyph: .fluent("card_index_dividers_3d.png")),
+    Flavor(name: "climate", top: "f97316", bottom: "7c2d12", glyphColor: "ffffff", glyph: .fluent("thermometer_3d.png")),
+    Flavor(name: "books", top: "0d9488", bottom: "134e4a", glyphColor: "ffffff", glyph: .fluent("ledger_3d.png")),
+    Flavor(name: "traffic", top: "f5b400", bottom: "1e3a8a", glyphColor: "ffffff", glyph: .fluent("satellite_antenna_3d.png")),
+    Flavor(name: "connection", top: "38bdf8", bottom: "0c4a6e", glyphColor: "ffffff", glyph: .fluent("globe_with_meridians_3d.png")),
     // Deckhand Home is its own Gradle module (home/), not a flavor of the kiosk app.
     Flavor(name: "home", resDir: "home/src/main/res", top: "4b5a78", bottom: "1c2436", glyphColor: "ffffff", glyph: .house),
 ]

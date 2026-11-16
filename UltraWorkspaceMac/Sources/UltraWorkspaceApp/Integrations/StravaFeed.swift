@@ -321,6 +321,10 @@ final class OAuthCallback: @unchecked Sendable {
                                  denied: "You did not allow Deckhand to read your Search Console data.",
                                  missingScope: "Google gave no access to Search Console. Connect again and tick “View Search Console data for your verified sites”.",
                                  scopeOK: { $0.split(separator: " ").contains { $0.hasSuffix("/auth/webmasters.readonly") || $0.hasSuffix("/auth/webmasters") } })
+        /// Netatmo sends no scope back on the redirect; the token answer says which scopes were granted.
+        static let netatmo = Spec(path: "/netatmo/callback", provider: "Netatmo",
+                                  denied: "You did not allow Deckhand to read your Netatmo weather station.",
+                                  missingScope: "", scopeOK: { _ in true })
     }
 
     private let state: String

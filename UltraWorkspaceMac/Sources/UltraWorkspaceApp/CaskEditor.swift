@@ -18,7 +18,7 @@ struct CaskSettings: View {
 
     var body: some View {
         Section {
-            SecureField("Whiskystats key", text: $model.whiskystatsKey)
+            SecureField("Whiskystats key", text: $model.whiskystatsKey, prompt: Text("Paste the key here"))
                 .onSubmit { Task { await feed.checkCredits() } }
             if let e = feed.lastError { StatusLabel(e, .failed) }
             else if model.whiskystatsKey.isEmpty { StatusLabel("No key yet.", .info) }

@@ -34,7 +34,7 @@ struct SeoSettings: View {
         }
         Section {
             TextField("Client ID", text: $feed.clientID, prompt: Text("…apps.googleusercontent.com"))
-            SecureField("Client secret", text: $feed.clientSecret)
+            SecureField("Client secret", text: $feed.clientSecret, prompt: Text("Paste the secret here"))
             Link("Open Google Cloud Console", destination: URL(string: "https://console.cloud.google.com/apis/credentials")!)
             DetailsDisclosure("How to create it", text: "Once, at console.cloud.google.com: create a project; APIs & Services → Library → Google Search Console API → Enable; OAuth consent screen: External, add yourself as a test user, then Publish app so the sign-in does not expire after a week (Google then shows an \"unverified app\" warning, which is fine for your own use); Credentials → Create credentials → OAuth client ID → Desktop app. Paste its Client ID and Client secret here.")
             HStack(spacing: 10) {

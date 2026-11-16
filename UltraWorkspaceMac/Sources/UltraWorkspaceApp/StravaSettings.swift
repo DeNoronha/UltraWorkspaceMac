@@ -13,7 +13,7 @@ struct StravaSettings: View {
     var body: some View {
         Section {
             TextField("Client ID", text: $feed.clientID, prompt: Text("From strava.com/settings/api"))
-            SecureField("Client secret", text: $feed.clientSecret)
+            SecureField("Client secret", text: $feed.clientSecret, prompt: Text("Paste the secret here"))
             Link("Open strava.com/settings/api", destination: URL(string: "https://www.strava.com/settings/api")!)
             DetailsDisclosure("How to create it", text: "Create an API application once at strava.com/settings/api: any name without the word Strava, category Visualizer, any website, and Authorization Callback Domain localhost.")
         } header: {

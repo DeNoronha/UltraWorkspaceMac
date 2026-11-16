@@ -12,7 +12,7 @@ struct CommitSecureField: View {
     init(_ title: String, value: Binding<String>) { self.title = title; _value = value }
 
     var body: some View {
-        SecureField(title, text: $draft)
+        SecureField(title, text: $draft, prompt: Text("Paste the key here"))
             .focused($focused)
             .onAppear { if !loaded { draft = value; loaded = true } }
             .onSubmit(commit)

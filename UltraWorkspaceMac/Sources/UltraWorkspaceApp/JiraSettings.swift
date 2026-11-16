@@ -8,8 +8,8 @@ struct JiraSettings: View {
     var body: some View {
         Section {
             TextField("Site", text: $settings.jiraSite, prompt: Text("yourcompany.atlassian.net"))
-            TextField("E-mail", text: $feed.email)
-            SecureField("API token", text: $feed.token)
+            TextField("E-mail", text: $feed.email, prompt: Text("you@company.com"))
+            SecureField("API token", text: $feed.token, prompt: Text("Paste the token here"))
             DetailsDisclosure("How to make an API token", text: "Sign in at id.atlassian.com → Security → Create and manage API tokens → Create API token. Name it Deckhand and copy it here. Deckhand only reads boards and cards and never changes anything in Jira.")
             TimelineView(.periodic(from: .now, by: 5)) { _ in
                 VStack(alignment: .leading, spacing: 4) {

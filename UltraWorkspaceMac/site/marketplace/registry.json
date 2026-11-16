@@ -440,6 +440,82 @@
       "distribution": "bundled",
       "publisher": "De Noronha Consulting",
       "license": "MIT"
+    },
+    {
+      "id": "climate",
+      "name": "Climate",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.climate",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "Your tado heating and Netatmo weather station: inside, outside and the last 24 hours, and taps to heat the house to 19–22 °C for a while or until the schedule. Sign-ins stay in the Mac's Keychain.",
+      "icon": "../assets/img/icons/climate.png",
+      "screenshot": "../assets/img/screens/bar-climate.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
+    },
+    {
+      "id": "books",
+      "name": "Books",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.books",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "Your e-Boekhouden administration: bank accounts, debtors and creditors, revenue per month against last year and the profit so far. Reads only, with an API token kept in the Mac's Keychain.",
+      "icon": "../assets/img/icons/books.png",
+      "screenshot": "../assets/img/screens/bar-books.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
+    },
+    {
+      "id": "traffic",
+      "name": "Traffic",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.traffic",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "Your Mac's network traffic, in the spirit of Sniffnet: the rate in and out and the hosts, services and apps that use the most. No packet capture, no administrator rights.",
+      "icon": "../assets/img/icons/traffic.png",
+      "screenshot": "../assets/img/screens/bar-traffic.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
+    },
+    {
+      "id": "connection",
+      "name": "Connection",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.connection",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "How your connection is doing, hop by hop from your Mac to the services you use, with a weather-style verdict on where a problem is, and your ASUS router or ZenWiFi mesh. No administrator rights, no packet capture.",
+      "icon": "../assets/img/icons/connection.png",
+      "screenshot": "../assets/img/screens/bar-connection.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
     }
   ],
   "cards": [

@@ -16,7 +16,7 @@ import UltraBarKit
 @MainActor
 final class BarPages {
     /// Pages whose data comes from this Mac through `route` (Monitor's samples are served by `AppModel.startBarDataServer`).
-    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "seo", "portfolio", "actions", "jira"]
+    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "seo", "portfolio", "actions", "jira", "climate", "books", "traffic", "connection"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
@@ -37,7 +37,7 @@ final class BarPages {
     private let configWake = WakeSignal()
     private var subscriptions: [AnyCancellable] = []
     /// Wakes the loops that wait for a bar request: this class's own, the feeds', the Music poll.
-    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); seo.poke(); portfolio.poke(); actions.poke(); jira.poke(); model?.musicWake.signal() }
+    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); seo.poke(); portfolio.poke(); actions.poke(); jira.poke(); climate.poke(); books.poke(); traffic.poke(); connection.poke(); model?.musicWake.signal() }
     /// Nobody can be looking at the bar apps: the bar's screen is off (presence over ADB) or this Mac is asleep,
     /// has its screens off or is locked, and no bar app asked for anything in the last two minutes (Deckhand Home
     /// asks every minute while it is on screen). The feeds pause then; the next request wakes them.
@@ -83,6 +83,14 @@ final class BarPages {
     let actions = ActionsFeed()
     /// One Jira board's columns and cards for the Jira Board app, refreshed while it is on the bar.
     let jira = JiraFeed()
+    /// The house's heating (tado) and the Netatmo station for the Climate app, refreshed while it is on the bar.
+    let climate = ClimateFeed()
+    /// The e-Boekhouden administration's bank, results and open invoices for the Books app, refreshed while it is on the bar.
+    let books = BooksFeed()
+    /// This Mac's network traffic per host, service and app for the Traffic app, sampled only while it is on screen.
+    let traffic = TrafficFeed()
+    /// The path to the internet hop by hop and the ASUS router for the Connection app, measured only while it is on screen.
+    let connection = ConnectionFeed()
     private weak var model: AppModel?
     private var settings: AppSettings?
 
@@ -105,6 +113,24 @@ final class BarPages {
                    onlyMine: { [weak self] in self?.settings?.jiraOnlyMine ?? false }, wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
             return model.barAppVersion("jira") != nil || (self.lastHit["jira"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+        })
+        // Traffic samples every 5 s, so only while the app was asked in the last two minutes (it asks every 5 s on screen),
+        // not merely installed.
+        connection.start(address: { [weak self] in self?.settings?.routerAddress ?? "" }, https: { [weak self] in self?.settings?.routerHTTPS ?? false }, wanted: { [weak self] in
+            guard let self, !self.dormant else { return false }
+            return self.lastHit["connection"].map { Date().timeIntervalSince($0) < 120 } ?? false
+        })
+        traffic.start(window: { [weak self] in self?.settings?.trafficWindow ?? 10 }, wanted: { [weak self] in
+            guard let self, !self.dormant else { return false }
+            return self.lastHit["traffic"].map { Date().timeIntervalSince($0) < 120 } ?? false
+        })
+        books.start(hide: { [weak self] in self?.settings?.booksHide ?? false }, wanted: { [weak self] in
+            guard let self, !self.dormant else { return false }
+            return model.barAppVersion("books") != nil || (self.lastHit["books"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+        })
+        climate.start(wanted: { [weak self] in
+            guard let self, !self.dormant else { return false }
+            return model.barAppVersion("climate") != nil || (self.lastHit["climate"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
         seo.start(url: { [weak self] in self?.settings?.seoURL ?? "" }, wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
@@ -233,7 +259,7 @@ final class BarPages {
         })
     }
 
-    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); seo.stop(); portfolio.stop(); actions.stop(); jira.stop() }
+    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); seo.stop(); portfolio.stop(); actions.stop(); jira.stop(); climate.stop(); books.stop(); traffic.stop(); connection.stop() }
 
     /// Linear for the Tasks app.
     private func startLinearFeed(model: AppModel) {
@@ -373,7 +399,8 @@ final class BarPages {
              "state": i.state, "stateType": i.stateType, "color": i.stateColor, "project": i.project.map { $0 as Any } ?? NSNull(), "team": i.team] }]
     }
 
-    /// Answer one POST with the `X-Deckhand: action` header: `/tasks/done/<uuid>`, `/music/cmd/<play|next|previous>`.
+    /// Answer one POST with the `X-Deckhand: action` header: `/tasks/done/<uuid>`, `/music/cmd/<play|next|previous>`,
+    /// `/climate/heat/<°C>/<30|60|120|240|next>`, `/climate/schedule`.
     nonisolated func action(_ path: String, model: AppModel) -> MonitorServer.Response? {
         let parts = path.split(separator: "/").map(String.init)
         guard let page = parts.first, Self.macPages.contains(page) else { return nil }
@@ -401,6 +428,18 @@ final class BarPages {
                 }
             }
             return .json(["ok": true])
+        }
+        if page == "climate" {
+            // The heating: only the shapes Climate.heatRequest allows (15–25 °C in half degrees, fixed durations).
+            if parts.count == 4, parts[1] == "heat", let r = Climate.heatRequest(celsius: parts[2], duration: parts[3]) {
+                DispatchQueue.main.async { Task { @MainActor in await self.climate.heat(celsius: r.celsius, minutes: r.minutes) } }
+                return .json(["ok": true])
+            }
+            if parts == ["climate", "schedule"] {
+                DispatchQueue.main.async { Task { @MainActor in await self.climate.backToSchedule() } }
+                return .json(["ok": true])
+            }
+            return MonitorServer.Response("400 Bad Request", type: "text/plain", body: Data("not a heating request".utf8))
         }
         if page == "music", parts.count == 3, parts[1] == "cmd" {
             DispatchQueue.main.async {
@@ -449,6 +488,10 @@ final class BarPages {
         case "portfolio": return portfolio.snapshot()
         case "actions": return actions.snapshot()
         case "jira": return jira.snapshot()
+        case "climate": return climate.snapshot()
+        case "books": return books.snapshot()
+        case "traffic": return traffic.snapshot()
+        case "connection": return connection.snapshot()
         default: return [:]
         }
     }
@@ -531,6 +574,14 @@ final class BarPages {
         if let l = actions.homeLine() { apps["actions"] = ["line": l.line, "tone": l.tone] }
         // Jira Board: the user's cards waiting for review or in progress, else how many are open.
         if let l = jira.homeLine() { apps["jira"] = ["line": l.line, "tone": l.tone] }
+        // Climate: a manual heating setting with its end, else inside and outside.
+        if let l = climate.homeLine() { apps["climate"] = ["line": l.line, "tone": l.tone] }
+        // Books: profit this year and what customers still owe.
+        if let l = books.homeLine() { apps["books"] = ["line": l.line, "tone": l.tone] }
+        // Traffic: the rate right now, while it is being sampled.
+        if let l = traffic.homeLine() { apps["traffic"] = ["line": l.line, "tone": l.tone] }
+        // Connection: the verdict, while it is being measured.
+        if let l = connection.homeLine() { apps["connection"] = ["line": l.line, "tone": l.tone] }
         return ["apps": apps, "order": homeOrder(), "at": Int(Date().timeIntervalSince1970)]
     }
 

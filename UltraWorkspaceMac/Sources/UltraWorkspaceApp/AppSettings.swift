@@ -88,6 +88,13 @@ final class AppSettings: ObservableObject {
     @Published var jiraSite: String = "" { didSet { save() } }
     @Published var jiraBoard: Int = 0 { didSet { save() } }
     @Published var jiraOnlyMine: Bool = false { didSet { save() } }
+    /// Books bar app: hide the amounts on the bar until it is tapped.
+    @Published var booksHide: Bool = false { didSet { save() } }
+    /// Traffic bar app: the minutes of traffic it adds up (1, 10 or 60).
+    @Published var trafficWindow: Int = 10 { didSet { save() } }
+    /// Connection bar app: the ASUS router's address (empty: the default gateway) and whether to use its HTTPS port.
+    @Published var routerAddress: String = "" { didSet { save() } }
+    @Published var routerHTTPS: Bool = false { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows this many single cards without scrolling (the clock card takes two slots) — counted on the bar 2026-11-04.
     static let coreCardsThatFit = 5
@@ -167,6 +174,10 @@ final class AppSettings: ObservableObject {
         var jiraSite: String? = nil
         var jiraBoard: Int? = nil
         var jiraOnlyMine: Bool? = nil
+        var booksHide: Bool? = nil
+        var trafficWindow: Int? = nil
+        var routerAddress: String? = nil
+        var routerHTTPS: Bool? = nil
     }
 
     // MARK: VivoCube cards (ordered, max 6)
@@ -263,6 +274,10 @@ final class AppSettings: ObservableObject {
             jiraSite = p.jiraSite ?? ""
             jiraBoard = max(0, p.jiraBoard ?? 0)
             jiraOnlyMine = p.jiraOnlyMine ?? false
+            booksHide = p.booksHide ?? false
+            routerAddress = p.routerAddress ?? ""
+            routerHTTPS = p.routerHTTPS ?? false
+            trafficWindow = [1, 10, 60].contains(p.trafficWindow ?? 0) ? p.trafficWindow! : 10
         }
         if let storedKey { accuWeatherKey = storedKey }
     }
@@ -278,7 +293,7 @@ final class AppSettings: ObservableObject {
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
                           claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes, barFirewall: barFirewall,
-                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL, portfolioCurrency: portfolioCurrency, portfolioMinValue: portfolioMinValue, statusServices: statusServices, actionsDays: actionsDays, actionsForks: actionsForks, jiraSite: jiraSite, jiraBoard: jiraBoard, jiraOnlyMine: jiraOnlyMine)
+                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL, portfolioCurrency: portfolioCurrency, portfolioMinValue: portfolioMinValue, statusServices: statusServices, actionsDays: actionsDays, actionsForks: actionsForks, jiraSite: jiraSite, jiraBoard: jiraBoard, jiraOnlyMine: jiraOnlyMine, booksHide: booksHide, trafficWindow: trafficWindow, routerAddress: routerAddress, routerHTTPS: routerHTTPS)
         // Holds the manual location: user-only from the moment it exists (Store.writePrivate).
         guard let data = try? JSONEncoder().encode(p), Store.writePrivate(data, to: url) else {
             NSLog("Deckhand: settings.json could not be saved"); return

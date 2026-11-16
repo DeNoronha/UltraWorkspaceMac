@@ -893,6 +893,165 @@ do {
           && JiraBoard.host("atlassian.net.evil.com") == nil && JiraBoard.host(".atlassian.net") == nil, "jira: site → host, only plain host names under atlassian.net")
 }
 
+// Climate: tado's zone state, the bar's heating requests, tado's RateLimit header, Netatmo's station and measures.
+do {
+    let state: [String: Any] = ["tadoMode": "HOME", "setting": ["type": "HEATING", "power": "ON", "temperature": ["celsius": 21.0]],
+        "overlayType": "MANUAL", "overlay": ["termination": ["typeSkillBasedApp": "TIMER", "projectedExpiry": "2026-11-16T14:30:00Z"]],
+        "nextScheduleChange": ["start": "2026-11-16T17:00:00Z", "setting": ["power": "ON", "temperature": ["celsius": 20.0]]],
+        "sensorDataPoints": ["insideTemperature": ["celsius": 19.4], "humidity": ["percentage": 52.1]],
+        "activityDataPoints": ["heatingPower": ["percentage": 63.0]], "link": ["state": "ONLINE"], "openWindow": NSNull()]
+    let h = Climate.heating(state)
+    check(h?.on == true && h?.target == 21 && h?.inside == 19.4 && h?.power == 63 && h?.manual == true && h?.untilSchedule == false
+          && h?.manualEnds == ISO8601DateFormatter().date(from: "2026-11-16T14:30:00Z") && h?.nextTarget == 20 && h?.openWindow == false && h?.online == true,
+          "climate: tado state with a timer overlay")
+    let off: [String: Any] = ["setting": ["type": "HEATING", "power": "OFF", "temperature": NSNull()], "overlay": NSNull(),
+        "nextScheduleChange": ["start": "2026-11-16T17:00:00Z", "setting": ["power": "ON", "temperature": ["celsius": 20.0]]]]
+    let o = Climate.heating(off)
+    check(o?.on == false && o?.target == nil && o?.nextOn == true && o?.nextAt != nil, "climate: heating off by the schedule, next block on")
+    check(Climate.heating(["nothing": 1]) == nil, "climate: no setting, no state")
+    let nb: [String: Any] = ["setting": ["power": "ON", "temperature": ["celsius": 22]], "overlay": ["termination": ["typeSkillBasedApp": "NEXT_TIME_BLOCK"]]]
+    check(Climate.heating(nb)?.untilSchedule == true, "climate: until the next schedule change")
+    check(Climate.heatRequest(celsius: "21", duration: "120")! == (21, 120) && Climate.heatRequest(celsius: "20.5", duration: "next")! == (20.5, nil),
+          "climate: allowed heating requests")
+    check(Climate.heatRequest(celsius: "30", duration: "60") == nil && Climate.heatRequest(celsius: "21.3", duration: "60") == nil
+          && Climate.heatRequest(celsius: "21", duration: "45") == nil && Climate.heatRequest(celsius: "nan", duration: "60") == nil
+          && Climate.heatRequest(celsius: "14", duration: "next") == nil, "climate: other temperatures and durations refused")
+    let body = Climate.overlayBody(celsius: 21, minutes: 60)
+    check(((body["termination"] as? [String: Any])?["durationInSeconds"] as? Int) == 3600
+          && ((Climate.overlayBody(celsius: 21, minutes: nil)["termination"] as? [String: Any])?["typeSkillBasedApp"] as? String) == "NEXT_TIME_BLOCK",
+          "climate: overlay body for a timer and for the next block")
+    check(Climate.rateLimit("\"perday\";r=87;t=3600")! == (87, 3600) && Climate.rateLimit(nil) == nil && Climate.rateLimit("q=100;w=86400") == nil,
+          "climate: tado RateLimit header")
+    check(Climate.heatingZone([["id": 0, "type": "HOT_WATER"], ["id": 1, "name": "Huis", "type": "HEATING"]])! == (1, "Huis"), "climate: first heating zone")
+    let stations: [String: Any] = ["body": ["devices": [["_id": "70:ee:50:00:00:01", "type": "NAMain", "module_name": "Woonkamer", "station_name": "Thuis",
+        "dashboard_data": ["Temperature": 20.6, "Humidity": 48, "CO2": 1210, "Pressure": 1013.4, "Noise": 38, "time_utc": 1_794_830_000],
+        "modules": [["_id": "02:00:00:00:00:01", "type": "NAModule1", "module_name": "", "battery_percent": 71,
+                     "dashboard_data": ["Temperature": 7.9, "Humidity": 86, "min_temp": 4.1, "max_temp": 9.2, "temp_trend": "up"]],
+                    ["_id": "03:00:00:00:00:01", "type": "NAModule4", "module_name": "Slaapkamer", "reachable": false, "dashboard_data": ["Temperature": 17.2, "CO2": 650]],
+                    ["_id": "x", "type": "NAModule9"]]]]]]
+    let ms = Climate.modules(stations)
+    check(ms.map(\.kind) == [.indoor, .outdoor, .extra] && ms[0].co2 == 1210 && ms[1].name == "Outdoor" && ms[1].min == 4.1 && ms[1].battery == 71
+          && ms[2].reachable == false && ms[1].station == "70:ee:50:00:00:01", "climate: Netatmo station, outdoor and extra module")
+    check(Climate.co2Level(800) == "good" && Climate.co2Level(1210) == "stuffy" && Climate.co2Level(1600) == "bad", "climate: CO2 levels")
+    let meas = Climate.measure(["body": ["1794830000": [7.5], "1794828200": [7.1], "bad": [1]]])
+    check(meas.map(\.1) == [7.1, 7.5], "climate: getmeasure values in time order")
+}
+
+// Books (e-Boekhouden): ledgers, balances with either sign convention, bank, results and open invoices.
+do {
+    let led = Books.ledgers(["items": [["id": 1, "code": "1100", "description": "Bank ING", "category": "FIN"], ["id": 2, "code": "1000", "description": "Kas", "category": "FIN"],
+                                       ["id": 3, "code": "8000", "description": "Omzet", "category": "VW"], ["id": 4, "code": "4500", "description": "Kantoorkosten", "category": "VW"],
+                                       ["id": 5, "code": "1300", "description": "Debiteuren", "category": "DEB"], ["x": 1]], "count": 6])
+    check(led.count == 5 && led[0].name == "Bank ING" && Books.isRevenue(led[2]) && !Books.isRevenue(led[3]), "books: ledgers and revenue ledgers")
+    // Debit positive (revenue negative): 10,000 revenue, 2,500 costs.
+    let debit = Books.balances(["items": [["code": "8000", "type": "VW", "balance": -10000.0], ["code": "4500", "type": "VW", "balance": 2500.0],
+                                          ["code": "1100", "balance": 7300.5], ["code": "1000", "balance": 40]]])
+    let sd = Books.creditSign(debit, ledgers: led)
+    check(sd == -1 && Books.result(debit, ledgers: led, sign: sd) == Books.Result(revenue: 10000, costs: 2500)
+          && Books.result(debit, ledgers: led, sign: sd).profit == 7500, "books: debit-positive balances → revenue, costs, profit")
+    let b = Books.bank(debit, ledgers: led, sign: sd)
+    check(b.map(\.name) == ["Bank ING", "Kas"] && b[0].balance == 7300.5, "books: bank and cash accounts, largest first")
+    // Credit positive: the same books.
+    let credit = debit.mapValues { -$0 }
+    let sc = Books.creditSign(credit, ledgers: led)
+    check(sc == 1 && Books.result(credit, ledgers: led, sign: sc) == Books.Result(revenue: 10000, costs: 2500) && Books.bank(credit, ledgers: led, sign: sc)[0].balance == 7300.5,
+          "books: credit-positive balances give the same figures")
+    check(Books.creditSign([:], ledgers: led) == -1, "books: no revenue yet → debit positive")
+    let now = Books.day("2026-11-16")!
+    let inv = Books.outstanding(["items": [["date": "2026-11-10T00:00:00", "invoiceNumber": "F-12", "company": "Demo BV", "outstandingAmount": 1210.0],
+                                           ["date": "2026-09-01", "invoiceNumber": "F-7", "company": "Voorbeeld", "outstandingAmount": 400.0],
+                                           ["date": "2026-11-01", "invoiceNumber": "F-9", "company": "Paid", "outstandingAmount": 0.0]]])
+    let o = Books.open(inv, now: now)
+    check(inv.count == 2 && o.total == 1610 && o.count == 2 && o.overdue == 400 && o.overdueCount == 1 && o.top.first?.number == "F-12", "books: open invoices, older than 30 days")
+}
+
+// Traffic: nettop's CSV, deltas, services, local addresses, domains and app names.
+do {
+    let csv = """
+    ,bytes_in,bytes_out,
+    kernel_task.0,5000,2000,
+    tcp4 192.168.50.207:53621<->192.168.50.96:445,5000,2000,
+    zoom.us.811,9000,4000,
+    tcp4 192.168.50.207:60001<->170.114.10.5:443,8000,3000,
+    udp4 192.168.50.207:61000<->170.114.10.9:8801,1000,1000,
+    tcp4 *:5900<->*:*,,,
+    Google Chrome H.25889,300,100,
+    tcp6 fe80::2c8b:45ff:fe62:eb85%anri0.49158<->fe80::2c8b:45ff:fe62:eb7a%anri0.58783,300,100,
+    udp4 *:*<->*:*,,,
+    """
+    let ps = Traffic.parse(csv)
+    check(ps.map(\.name) == ["kernel_task", "zoom.us", "Google Chrome H"] && ps.map(\.pid) == [0, 811, 25889] && ps[1].bytesIn == 9000,
+          "traffic: processes, with dots in names")
+    check(ps[1].connections.count == 2 && ps[1].connections[0].remoteIP == "170.114.10.5" && ps[1].connections[0].remotePort == 443
+          && ps[2].connections.first?.remoteIP == "fe80::2c8b:45ff:fe62:eb7a" && ps[2].connections.first?.remotePort == 58783,
+          "traffic: IPv4 and IPv6 connections, listening sockets left out")
+    let d = Traffic.delta(["a": (150, 20), "b": (10, 5), "c": (3, 0), "e": (7, 7)], previous: ["a": (100, 20), "c": (9, 0), "e": (7, 7)])
+    check(d["a"]! == (50, 0) && d["b"]! == (10, 5) && d["c"]! == (3, 0) && d["e"] == nil, "traffic: deltas, new keys in full, reset counters from zero")
+    check(Traffic.service(local: 60001, remote: 443) == "https" && Traffic.service(local: 61000, remote: 8801, proto: "udp4") == "zoom"
+          && Traffic.service(local: 53621, remote: 445) == "smb" && Traffic.service(local: 50000, remote: 50001) == "?"
+          && Traffic.service(local: 51000, remote: 9999) == "9999" && Traffic.service(local: 5000, remote: 50001, name: { p, _ in p == 5000 ? "commplex-main" : nil }) == "commplex-main",
+          "traffic: service by the well-known port")
+    check(Traffic.isLocal("192.168.50.96") && Traffic.isLocal("10.0.0.1") && Traffic.isLocal("172.20.1.1") && !Traffic.isLocal("172.32.1.1")
+          && Traffic.isLocal("fe80::1") && Traffic.isLocal("fd00::1") && !Traffic.isLocal("2a02:1::1") && !Traffic.isLocal("170.114.10.5"),
+          "traffic: local addresses")
+    check(Traffic.domain("server-1.fra.zoom.us.") == "zoom.us" && Traffic.domain("news.bbc.co.uk") == "bbc.co.uk" && Traffic.domain("iphone.local") == "iphone"
+          && Traffic.domain("github.com") == "github.com", "traffic: registrable domains")
+    check(Traffic.appName(path: "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper") == "Google Chrome"
+          && Traffic.appName(path: "/usr/sbin/mDNSResponder") == "mDNSResponder" && Traffic.appName(path: "/Users/x/.local/share/claude/versions/2.1.322") == "claude", "traffic: app names from paths")
+}
+
+// Connection: ping and traceroute output, the verdict per hop, the ASUS router's answer.
+do {
+    let pg = Connection.ping("PING 1.1.1.1 (1.1.1.1): 56 data bytes\n\n--- 1.1.1.1 ping statistics ---\n10 packets transmitted, 9 packets received, 10.0% packet loss\nround-trip min/avg/max/stddev = 5.677/6.394/6.953/0.534 ms\n")
+    check(pg?.sent == 10 && pg?.received == 9 && pg?.avg == 6.394 && pg?.jitter == 0.534 && abs((pg?.loss ?? 0) - 0.1) < 1e-9, "connection: ping summary")
+    let none = Connection.ping("--- 10.9.9.9 ping statistics ---\n10 packets transmitted, 0 packets received, 100.0% packet loss\n")
+    check(none?.received == 0 && none?.avg == nil && none?.loss == 1, "connection: no answer at all")
+    let tr = Connection.traceroute("traceroute to 1.1.1.1 (1.1.1.1), 8 hops max\n 1  192.168.50.1  1.662 ms\n 2  *\n 3  100.64.0.1  4 ms\n 4  143.177.124.1  3.644 ms\n 5  10.227.133.222  6.4 ms\n")
+    check(tr.count == 5 && tr[1] == nil && Connection.ispHop(tr) == "143.177.124.1", "connection: traceroute, ISP's first public router")
+    let good = Connection.Ping(sent: 10, received: 10, avg: 3, max: 5, jitter: 1), net = Connection.Ping(sent: 10, received: 10, avg: 12, max: 20, jitter: 2)
+    let svc = [Connection.Service(name: "Zoom", ms: 120), Connection.Service(name: "Google", ms: 90)]
+    check(Connection.verdict(wifi: .init(rssi: -50, noise: -90, rate: 866), wired: false, gateway: good, internet: net, services: svc).sky == .clear, "connection: all good, clear skies")
+    check(Connection.verdict(wifi: .init(rssi: -82, noise: -90, rate: 54), wired: false, gateway: good, internet: net, services: svc).culprit == "wifi", "connection: weak signal blames the Wi-Fi")
+    let lossyGw = Connection.Ping(sent: 10, received: 7, avg: 40, max: 200, jitter: 50)
+    let v = Connection.verdict(wifi: .init(rssi: -60, noise: -90, rate: 400), wired: false, gateway: lossyGw, internet: Connection.Ping(sent: 10, received: 6, avg: 60, max: 300, jitter: 60), services: svc)
+    check(v.sky == .stormy && v.culprit == "wifi", "connection: loss at the router is a home problem, not the provider")
+    check(Connection.verdict(wifi: nil, wired: true, gateway: good, internet: Connection.Ping(sent: 10, received: 5, avg: 30, max: 90, jitter: 10), services: svc).culprit == "isp",
+          "connection: router fine, internet lossy → provider")
+    check(Connection.verdict(wifi: nil, wired: true, gateway: good, internet: net, services: [Connection.Service(name: "Zoom", ms: 900), Connection.Service(name: "Google", ms: 80)]).headline == "Zoom is slow",
+          "connection: one slow service")
+    check(Connection.verdict(wifi: nil, wired: true, gateway: good, internet: net, services: svc, routerWanDown: true).culprit == "isp", "connection: router without internet")
+    let asus = Connection.asusJSON("""
+    {"productid":"ZenWiFi_XT8","firmver":"3.0.0.4","buildno":"388","extendno":"24231","wan0_state_t":"2",
+     "cpu_usage":{"cpu1_total":"1000","cpu1_usage":"100","cpu2_total":"1000","cpu2_usage":"300"},
+     "memory_usage":{"mem_total":"512000","mem_free":"128000","mem_used":"384000"},
+     "get_clientlist":{"maclist":["AA"],"AA:00":{"isWL":"0","isOnline":"1"},"BB:00":{"isWL":"2","isOnline":"1","amesh_papMac":"11:22"},"CC:00":{"isWL":"1","isOnline":"0"}},
+     "get_cfg_clientlist":[{"alias":"Living","model_name":"XT8","ip":"192.168.50.1","mac":"aa:bb","online":"1"},{"alias":"","model_name":"XT8","ip":"192.168.50.2","mac":"11:22","online":"1"},],
+    }
+    """)
+    let r = Connection.router(asus)
+    check(r.model == "ZenWiFi_XT8" && r.firmware == "3.0.0.4.388_24231" && r.wanUp == true && abs((r.cpu ?? 0) - 20) < 1e-9 && abs((r.memory ?? 0) - 75) < 1e-9,
+          "connection: ASUS model, firmware, internet, CPU and memory")
+    check(r.wired == 1 && r.wireless == 1 && r.nodes.count == 2 && r.nodes[0].name == "Living" && r.nodes[1].name == "XT8" && r.nodes[1].clients == 1,
+          "connection: ASUS clients and AiMesh nodes, trailing commas tolerated")
+    check(Connection.routerBase("192.168.50.1:8443", fallback: nil, https: false) == "https://192.168.50.1:8443"
+          && Connection.routerBase("https://router.asus.com/index.asp", fallback: nil, https: false) == "https://router.asus.com:8443"
+          && Connection.routerBase("", fallback: "192.168.50.1", https: false) == "http://192.168.50.1"
+          && Connection.routerBase("192.168.50.1", fallback: nil, https: true) == "https://192.168.50.1:8443"
+          && Connection.routerBase("http://192.168.1.1:8080/", fallback: nil, https: false) == "http://192.168.1.1:8080"
+          && Connection.routerBase("ftp://x", fallback: nil, https: false) == nil
+          && Connection.routerBase("1.2.3.4@evil", fallback: nil, https: false) == nil
+          && Connection.routerBase("1.2.3.4:99999", fallback: nil, https: false) == nil,
+          "connection: router address with port, scheme and path")
+    let newer = Connection.router(Connection.asusJSON("""
+    { "productid":"RT-AX95Q", "cpu_usage":{{"cpu0":{"total":"1000","usage":"250"}},{"cpu1":{"total":"1000","usage":"50"}}},
+      "memory_usage":{"mem_total":"1000","mem_free":"400","mem_used":"600"}, "x":"{not a brace}" }
+    """))
+    check(newer.model == "RT-AX95Q" && abs((newer.cpu ?? 0) - 15) < 0.01 && abs((newer.memory ?? 0) - 60) < 0.01,
+          "connection: newer ASUS firmware's keyless cpu_usage objects")
+    check(Climate.roomName("Netatmo Kantoor") == "Kantoor" && Climate.roomName(" netatmo  Slaapkamer ") == "Slaapkamer"
+          && Climate.roomName("Netatmo") == "Netatmo" && Climate.roomName("Outdoor Module") == "Outdoor Module", "climate: room names without the brand")
+}
+
 // APK manifests: package and version read from the binary XML of a Deckhand bar app when a build is present.
 do {
     let apk = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("dist/bar-apps/DeckhandMonitor.apk")
