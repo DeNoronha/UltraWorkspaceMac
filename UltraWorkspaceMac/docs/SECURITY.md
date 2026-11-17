@@ -132,6 +132,7 @@ Outbound connections the app makes (no telemetry, no account, nothing else):
 - `api.auth.schiphol.nl`, `api.schiphol.nl` — Schiphol's timetable, only with your client id and secret; `api.adsb.lol` and `api.adsbdb.com` — aircraft around Schiphol (no key).
 - `data.api.whiskystats.com` — Whisky Portfolio: auction prices for your bottles' Whiskystats ids, with your key.
 - `login.microsoftonline.com` — Teams: Microsoft's public sign-in configuration for the domain of a speed-dial contact's Call from address, to find that organisation's tenant id (only the domain is sent; no sign-in).
+- `api.open-meteo.com` — Walk: the rain per quarter of an hour and the temperature at the location under Settings → Location & Units, rounded to about 100 m, every 15 minutes while Walk is on the bar with the rain on.
 - `api.chess.com` — Chess: the public profile, ratings, games and the puzzle of the day for the username you set (no key, no password; the username is the only thing sent), only while Chess is on the bar.
 - `ddapi20-waterwebservices.rijkswaterstaat.nl` — the list of tide gauges in Apps → Tide (no key).
 - `api.github.com`, `github.com` (and GitHub's download host) — Settings → Bar software: the vendor's latest release and its APKs.

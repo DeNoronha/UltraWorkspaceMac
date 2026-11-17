@@ -103,6 +103,15 @@ final class AppSettings: ObservableObject {
     @Published var teamsContacts: [TeamsContact] = [] { didSet { save() } }
     @Published var teamsCalendars: [String] = [] { didSet { save() } }
     @Published var teamsAllMeetings: Bool = true { didSet { save() } }
+    /// Walk bar app: the dog's name, hours between walks, a walk's usual length in minutes, the active hours (no
+    /// reminders outside them), whether the rain is shown, and the calendars that say when the user is busy (empty: all).
+    @Published var walkDog: String = "" { didSet { save() } }
+    @Published var walkHours: Double = 4 { didSet { save() } }
+    @Published var walkMinutes: Int = 30 { didSet { save() } }
+    @Published var walkFrom: Int = 7 { didSet { save() } }
+    @Published var walkTo: Int = 22 { didSet { save() } }
+    @Published var walkWeather: Bool = true { didSet { save() } }
+    @Published var walkCalendars: [String] = [] { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows this many single cards without scrolling (the clock card takes two slots) — counted on the bar 2026-11-04.
     static let coreCardsThatFit = 5
@@ -191,6 +200,13 @@ final class AppSettings: ObservableObject {
         var teamsContacts: [TeamsContact]? = nil
         var teamsCalendars: [String]? = nil
         var teamsAllMeetings: Bool? = nil
+        var walkDog: String? = nil
+        var walkHours: Double? = nil
+        var walkMinutes: Int? = nil
+        var walkFrom: Int? = nil
+        var walkTo: Int? = nil
+        var walkWeather: Bool? = nil
+        var walkCalendars: [String]? = nil
     }
 
     // MARK: VivoCube cards (ordered, max 6)
@@ -295,6 +311,13 @@ final class AppSettings: ObservableObject {
             teamsContacts = Array((p.teamsContacts ?? []).prefix(8))
             teamsCalendars = p.teamsCalendars ?? []
             teamsAllMeetings = p.teamsAllMeetings ?? true
+            walkDog = p.walkDog ?? ""
+            walkHours = min(12, max(1, p.walkHours ?? 4))
+            walkMinutes = min(120, max(10, p.walkMinutes ?? 30))
+            walkFrom = (0...23).contains(p.walkFrom ?? -1) ? p.walkFrom! : 7
+            walkTo = (0...24).contains(p.walkTo ?? -1) ? p.walkTo! : 22
+            walkWeather = p.walkWeather ?? true
+            walkCalendars = p.walkCalendars ?? []
             trafficWindow = [1, 10, 60].contains(p.trafficWindow ?? 0) ? p.trafficWindow! : 10
         }
         if let storedKey { accuWeatherKey = storedKey }
@@ -311,7 +334,7 @@ final class AppSettings: ObservableObject {
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
                           claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes, barFirewall: barFirewall,
-                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL, portfolioCurrency: portfolioCurrency, portfolioMinValue: portfolioMinValue, statusServices: statusServices, actionsDays: actionsDays, actionsForks: actionsForks, jiraSite: jiraSite, jiraBoard: jiraBoard, jiraOnlyMine: jiraOnlyMine, booksHide: booksHide, trafficWindow: trafficWindow, routerAddress: routerAddress, routerHTTPS: routerHTTPS, chessUser: chessUser, chessPuzzle: chessPuzzle, teamsContacts: teamsContacts, teamsCalendars: teamsCalendars, teamsAllMeetings: teamsAllMeetings)
+                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL, portfolioCurrency: portfolioCurrency, portfolioMinValue: portfolioMinValue, statusServices: statusServices, actionsDays: actionsDays, actionsForks: actionsForks, jiraSite: jiraSite, jiraBoard: jiraBoard, jiraOnlyMine: jiraOnlyMine, booksHide: booksHide, trafficWindow: trafficWindow, routerAddress: routerAddress, routerHTTPS: routerHTTPS, chessUser: chessUser, chessPuzzle: chessPuzzle, teamsContacts: teamsContacts, teamsCalendars: teamsCalendars, teamsAllMeetings: teamsAllMeetings, walkDog: walkDog, walkHours: walkHours, walkMinutes: walkMinutes, walkFrom: walkFrom, walkTo: walkTo, walkWeather: walkWeather, walkCalendars: walkCalendars)
         // Holds the manual location: user-only from the moment it exists (Store.writePrivate).
         guard let data = try? JSONEncoder().encode(p), Store.writePrivate(data, to: url) else {
             NSLog("Deckhand: settings.json could not be saved"); return

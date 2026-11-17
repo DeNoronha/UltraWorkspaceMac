@@ -1138,6 +1138,33 @@ do {
           "teams: meeting keys are stable, 16 hex digits")
 }
 
+// Walk: due times, free gaps, rain, the best moment.
+do {
+    var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+    func at(_ h: Int, _ m: Int = 0, day: Int = 17) -> Date { cal.date(from: DateComponents(year: 2026, month: 11, day: day, hour: h, minute: m))! }
+    typealias S = Walks.Span
+    let gaps = Walks.freeGaps(busy: [S(at(10), at(11)), S(at(10, 30), at(12)), S(at(13), at(13, 20)), S(at(13, 40), at(14))], from: at(9), to: at(17), minLength: 1800)
+    check(gaps == [S(at(9), at(10)), S(at(12), at(13)), S(at(14), at(17))], "walk: free gaps merge overlapping meetings and drop gaps too short", "\(gaps)")
+    check(Walks.freeGaps(busy: [S(at(8), at(18))], from: at(9), to: at(17), minLength: 60).isEmpty, "walk: no gap in a day that is all meetings")
+    check(Walks.due(lastEnd: nil, interval: 4 * 3600, now: at(6), from: 7, to: 22, calendar: cal) == at(7)
+          && Walks.due(lastEnd: at(9), interval: 4 * 3600, now: at(10), from: 7, to: 22, calendar: cal) == at(13)
+          && Walks.due(lastEnd: at(19), interval: 4 * 3600, now: at(20), from: 7, to: 22, calendar: cal) == nil
+          && Walks.due(lastEnd: at(21, day: 16), interval: 4 * 3600, now: at(8), from: 7, to: 22, calendar: cal) == at(7)
+          && Walks.due(lastEnd: at(12), interval: 4 * 3600, now: at(23), from: 7, to: 22, calendar: cal) == nil,
+          "walk: due at the start of the day, then the interval after the last walk, nothing past the end of the day")
+    check(Walks.due(lastEnd: at(22), interval: 2 * 3600, now: at(1, day: 18), from: 20, to: 2, calendar: cal) == at(0, day: 18)
+          && Walks.isActive(hour: 1, from: 20, to: 2) && !Walks.isActive(hour: 3, from: 20, to: 2), "walk: active hours past midnight")
+    let rain: [(Date, Double)] = [(at(12), 0), (at(12, 15), 0), (at(12, 30), 0.6), (at(12, 45), 0.4), (at(13), 0), (at(13, 15), 0)]
+    check(Walks.sky(rain, now: at(12, 5)) == .dry(until: at(12, 30)) && Walks.sky(rain, now: at(12, 40)) == .wet(until: at(13))
+          && Walks.sky(rain, now: at(13, 5)) == .dry(until: nil) && Walks.sky(rain, now: at(15)) == nil, "walk: dry or wet now and until when")
+    let s1 = Walks.suggestion(gaps: [S(at(12), at(14))], rain: rain, length: 1800, earliest: at(12, 10))
+    check(s1?.span == S(at(13), at(13, 30)) && s1?.dry == true, "walk: the best moment waits for the shower to pass", "\(String(describing: s1))")
+    let s2 = Walks.suggestion(gaps: [S(at(12, 20), at(12, 50))], rain: rain, length: 1800, earliest: at(12))
+    check(s2?.span == S(at(12, 20), at(12, 50)) && s2?.dry == false, "walk: a wet moment when no dry one fits")
+    check(Walks.suggestion(gaps: [S(at(12), at(12, 20))], rain: [], length: 1800, earliest: at(12)) == nil, "walk: no moment when no gap is long enough")
+    check(Walks.duration(80 * 60) == "1 h 20 min" && Walks.duration(45 * 60) == "45 min" && Walks.dogName("  ") == "the dog", "walk: durations and the dog's name")
+}
+
 // APK manifests: package and version read from the binary XML of a Deckhand bar app when a build is present.
 do {
     let apk = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("dist/bar-apps/DeckhandMonitor.apk")

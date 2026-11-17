@@ -554,6 +554,25 @@
       "distribution": "bundled",
       "publisher": "De Noronha Consulting",
       "license": "MIT"
+    },
+    {
+      "id": "walk",
+      "name": "Walk",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.walk",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "When the dog's next walk is due, fitted around your meetings and the rain: the best free moment today, whether it is dry, and Going now and Back home buttons that keep count. Reads your Mac's calendars (only when you are busy) and Open-Meteo.",
+      "icon": "../assets/img/icons/walk.png",
+      "screenshot": "../assets/img/screens/bar-walk.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
     }
   ],
   "cards": [
