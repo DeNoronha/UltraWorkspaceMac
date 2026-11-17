@@ -25,6 +25,7 @@ struct AppsView: View {
         case "books": return "book.closed"
         case "traffic": return "arrow.up.arrow.down.circle"
         case "connection": return "cloud.sun"
+        case "chess": return "checkerboard.rectangle"
         case "status": return "exclamationmark.icloud"
         default: return "waveform.path.ecg" }
     }
@@ -51,6 +52,7 @@ struct AppsView: View {
         case "schiphol": return "Amsterdam Schiphol: which runways are in use for landing and take-off, the aircraft on and around them, the last 15 minutes' movements, and with a Schiphol API key the next arrivals and departures."
         case "status": return "Whether Microsoft 365, Azure, AWS, Google Cloud and Workspace, GitHub, Cloudflare, Slack and other services are up, from their official status pages. Tap a service for what is going on."
         case "connection": return "How your connection is doing, hop by hop from this Mac over Wi-Fi and the router to your provider, the internet and the services you use, with a weather-style verdict on where a problem is. Reads an ASUS router (ZenWiFi) too."
+        case "chess": return "Your Chess.com games and ratings: the board of each daily game with the last move, whose move it is and the time left, your recent results with accuracy, your rating per time control with its trend, and the puzzle of the day to solve on the bar."
         case "traffic": return "This Mac's network traffic: the rate in and out, and which hosts, services and apps use the most, in the spirit of Sniffnet but without capturing packets."
         case "books": return "Your e-Boekhouden administration: the bank accounts, what debtors owe you and what you owe creditors, revenue per month against last year, and the profit so far this year."
         case "climate": return "Your heating and your Netatmo weather station: the temperature, humidity and CO₂ inside, the weather outside, what tado is doing, and taps to heat the house to 19–22 °C for a while or until the schedule takes over."
@@ -279,6 +281,8 @@ struct AppsView: View {
             TrafficSettings()
         case "connection":
             ConnectionSettings(feed: model.barPages.connection)
+        case "chess":
+            ChessSettings(feed: model.barPages.chess)
         case "status":
             StatusSettings()
         case "earth":

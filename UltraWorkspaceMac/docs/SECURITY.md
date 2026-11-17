@@ -131,6 +131,7 @@ Outbound connections the app makes (no telemetry, no account, nothing else):
 - `www.strava.com` — Training: the OAuth exchange and refresh with your own API application's client id and secret, then your activities and stats with your token.
 - `api.auth.schiphol.nl`, `api.schiphol.nl` — Schiphol's timetable, only with your client id and secret; `api.adsb.lol` and `api.adsbdb.com` — aircraft around Schiphol (no key).
 - `data.api.whiskystats.com` — Whisky Portfolio: auction prices for your bottles' Whiskystats ids, with your key.
+- `api.chess.com` — Chess: the public profile, ratings, games and the puzzle of the day for the username you set (no key, no password; the username is the only thing sent), only while Chess is on the bar.
 - `ddapi20-waterwebservices.rijkswaterstaat.nl` — the list of tide gauges in Apps → Tide (no key).
 - `api.github.com`, `github.com` (and GitHub's download host) — Settings → Bar software: the vendor's latest release and its APKs.
 - `gatewayssl.dev.aiks360.com` — the vendor's public app catalogue (apps and screensavers), a POST with page numbers only; icon URLs from it are rewritten to `https`.

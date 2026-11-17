@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit
  *  - `/<page>/data.json`          [Feeds], fetched by the bar itself and cached ([Feed])
  *  - `/flights/tile/z/x/y.png`    OpenStreetMap tiles, toned down like the Mac's `MapTiles`, cached 30 days
  *
- * Mac pages (monitor, claude, music, calendar, tasks, haven, strava, cask, schiphol, seo, portfolio, actions, jira, climate, books, traffic, connection) show what only the Mac knows, so their data requests are
+ * Mac pages (monitor, claude, music, calendar, tasks, haven, strava, cask, schiphol, seo, portfolio, actions, jira, climate, books, traffic, connection, chess) show what only the Mac knows, so their data requests are
  * passed on to Deckhand's data API at the address its beacon names ([macBase]): `/monitor/stats.json`,
  * `/<page>/data.json`, `/music/art.jpg`, and the actions (POST `/music/cmd/…`, `/tasks/done/…`, `/climate/heat/…`, `/climate/schedule`, with the
  * `X-Deckhand: action` header the Mac requires), each with the per-bar `X-Deckhand-Key` Deckhand pushed ([MacLink]).

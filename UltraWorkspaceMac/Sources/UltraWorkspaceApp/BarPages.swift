@@ -16,7 +16,7 @@ import UltraBarKit
 @MainActor
 final class BarPages {
     /// Pages whose data comes from this Mac through `route` (Monitor's samples are served by `AppModel.startBarDataServer`).
-    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "seo", "portfolio", "actions", "jira", "climate", "books", "traffic", "connection"]
+    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "seo", "portfolio", "actions", "jira", "climate", "books", "traffic", "connection", "chess"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
@@ -37,7 +37,7 @@ final class BarPages {
     private let configWake = WakeSignal()
     private var subscriptions: [AnyCancellable] = []
     /// Wakes the loops that wait for a bar request: this class's own, the feeds', the Music poll.
-    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); seo.poke(); portfolio.poke(); actions.poke(); jira.poke(); climate.poke(); books.poke(); traffic.poke(); connection.poke(); model?.musicWake.signal() }
+    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); seo.poke(); portfolio.poke(); actions.poke(); jira.poke(); climate.poke(); books.poke(); traffic.poke(); connection.poke(); chess.poke(); model?.musicWake.signal() }
     /// Nobody can be looking at the bar apps: the bar's screen is off (presence over ADB) or this Mac is asleep,
     /// has its screens off or is locked, and no bar app asked for anything in the last two minutes (Deckhand Home
     /// asks every minute while it is on screen). The feeds pause then; the next request wakes them.
@@ -91,6 +91,8 @@ final class BarPages {
     let traffic = TrafficFeed()
     /// The path to the internet hop by hop and the ASUS router for the Connection app, measured only while it is on screen.
     let connection = ConnectionFeed()
+    /// One Chess.com player's ratings, games and the puzzle of the day for the Chess app, refreshed while it is on the bar.
+    let chess = ChessFeed()
     private weak var model: AppModel?
     private var settings: AppSettings?
 
@@ -123,6 +125,10 @@ final class BarPages {
         traffic.start(window: { [weak self] in self?.settings?.trafficWindow ?? 10 }, wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
             return self.lastHit["traffic"].map { Date().timeIntervalSince($0) < 120 } ?? false
+        })
+        chess.start(user: { [weak self] in self?.settings?.chessUser ?? "" }, showPuzzle: { [weak self] in self?.settings?.chessPuzzle ?? true }, wanted: { [weak self] in
+            guard let self, !self.dormant else { return false }
+            return model.barAppVersion("chess") != nil || (self.lastHit["chess"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
         books.start(hide: { [weak self] in self?.settings?.booksHide ?? false }, wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
@@ -259,7 +265,7 @@ final class BarPages {
         })
     }
 
-    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); seo.stop(); portfolio.stop(); actions.stop(); jira.stop(); climate.stop(); books.stop(); traffic.stop(); connection.stop() }
+    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); seo.stop(); portfolio.stop(); actions.stop(); jira.stop(); climate.stop(); books.stop(); traffic.stop(); connection.stop(); chess.stop() }
 
     /// Linear for the Tasks app.
     private func startLinearFeed(model: AppModel) {
@@ -492,6 +498,7 @@ final class BarPages {
         case "books": return books.snapshot()
         case "traffic": return traffic.snapshot()
         case "connection": return connection.snapshot()
+        case "chess": return chess.snapshot()
         default: return [:]
         }
     }
@@ -582,6 +589,8 @@ final class BarPages {
         if let l = traffic.homeLine() { apps["traffic"] = ["line": l.line, "tone": l.tone] }
         // Connection: the verdict, while it is being measured.
         if let l = connection.homeLine() { apps["connection"] = ["line": l.line, "tone": l.tone] }
+        // Chess: the games waiting for the user's move (with a badge), else the main rating and its month.
+        if let l = chess.homeLine() { var t: [String: Any] = ["line": l.line, "tone": l.tone]; if l.badge > 0 { t["badge"] = l.badge }; apps["chess"] = t }
         return ["apps": apps, "order": homeOrder(), "at": Int(Date().timeIntervalSince1970)]
     }
 

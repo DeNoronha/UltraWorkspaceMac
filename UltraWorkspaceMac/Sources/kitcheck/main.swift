@@ -20,6 +20,23 @@ if let i = CommandLine.arguments.firstIndex(of: "apk"), CommandLine.arguments.co
     let info = try ApkInfo.read(apk: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
     print("\(info.package) \(info.versionName) (\(info.versionCode))"); exit(0)
 }
+// `kitcheck chess <archive.json>…` — replay every game of Chess.com monthly archives and compare the final position
+// with the one Chess.com reports: proves the PGN reader and the move rules on real games.
+if let i = CommandLine.arguments.firstIndex(of: "chess"), CommandLine.arguments.count > i + 1 {
+    var ok = 0, bad = 0, skipped = 0
+    for path in CommandLine.arguments[(i + 1)...] {
+        guard let data = FileManager.default.contents(atPath: path),
+              let games = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["games"] as? [[String: Any]] else { print("unreadable: \(path)"); continue }
+        for g in games {
+            guard g["rules"] as? String == "chess", let pgn = g["pgn"] as? String, let fen = g["fen"] as? String else { skipped += 1; continue }
+            let game = Chess.pgn(pgn)
+            let r = Chess.replay(game)
+            if r.moves.count == game.sans.count, r.position.placement == String(fen.split(separator: " ")[0]) { ok += 1 }
+            else { bad += 1; if bad <= 5 { print("MISMATCH \(g["url"] ?? "?") after \(r.moves.count)/\(game.sans.count): next \(game.sans.dropFirst(r.moves.count).first ?? "-") at \(r.position.fen)") } }
+        }
+    }
+    print("chess replay: \(ok) match, \(bad) mismatch, \(skipped) skipped"); exit(bad == 0 ? 0 : 1)
+}
 if CommandLine.arguments.contains("weather") {
     let city = CommandLine.arguments.last ?? "Amsterdam"
     do {
@@ -1050,6 +1067,38 @@ do {
           "connection: newer ASUS firmware's keyless cpu_usage objects")
     check(Climate.roomName("Netatmo Kantoor") == "Kantoor" && Climate.roomName(" netatmo  Slaapkamer ") == "Slaapkamer"
           && Climate.roomName("Netatmo") == "Netatmo" && Climate.roomName("Outdoor Module") == "Outdoor Module", "climate: room names without the brand")
+}
+
+// Chess: PGN reading, move rules (castling, en passant, promotion, pins), and Chess.com's readings.
+do {
+    let g = Chess.pgn("""
+    [Event "Live Chess"]
+    [White "a"]
+    [Black "b"]
+
+    1. e4 {[%clk 0:01:00]} 1... e5 2. Nf3 Nc6 (2... d6 3. d4) 3. Bc4 $1 Nf6 4. O-O Bc5 5.d3 d6 1-0
+    """)
+    check(g.headers["White"] == "a" && g.sans == ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "O-O", "Bc5", "d3", "d6"], "chess: PGN without comments, variations, NAGs and numbers", "\(g.sans)")
+    let r = Chess.replay(g)
+    check(r.moves.count == 10 && r.position.fen == "r1bqk2r/ppp2ppp/2np1n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQ1RK1 w kq -", "chess: replay with castling", r.position.fen)
+    check(r.moves[6].from == Chess.square("e1") && r.moves[6].to == Chess.square("g1"), "chess: castling moves the king e1 → g1")
+    var ep = Chess.Position(fen: "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1")!
+    check(ep.play("exd6") != nil && ep.placement == "4k3/8/3P4/8/8/8/8/4K3", "chess: en passant removes the pawn", ep.placement)
+    var promo = Chess.Position(fen: "8/4P3/8/8/8/8/k7/4K3 w - - 0 1")!
+    check(promo.play("e8=Q+") != nil && promo.placement == "4Q3/8/8/8/8/8/k7/4K3", "chess: promotion", promo.placement)
+    check(Chess.Position(fen: "Q3k3/8/8/8/8/8/8/RNBQKBNR w - - 0 1")!.missing.white == "PPPPPPP", "chess: a promoted queen counts as the pawn it was, not as a lost piece", Chess.Position(fen: "Q3k3/8/8/8/8/8/8/RNBQKBNR w - - 0 1")!.missing.white)
+    // Both knights can reach e2, but the bishop on a5 pins the one on c3 to the king: "Ne2" is the g1 knight.
+    var pin = Chess.Position(fen: "4k3/8/8/b7/8/2N5/8/4K1N1 w - - 0 1")!
+    check(pin.play("Ne2") != nil && pin.board[Chess.square("e2")!] == "N" && pin.board[Chess.square("c3")!] == "N", "chess: the pinned knight is not the one that moves")
+    var bad = Chess.Position.start
+    check(bad.play("e5") == nil && bad.play("Nf6") == nil && bad.play("O-O") == nil, "chess: impossible moves are refused")
+    check(Chess.Position(fen: "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3")!.inCheck, "chess: check is seen")
+    check(Chess.opening(fromURL: "https://www.chess.com/openings/Pirc-Defense-2.d4-Nf6-3.Bd3-e5") == "Pirc Defense"
+          && Chess.opening(fromURL: "https://www.chess.com/openings/Closed-Sicilian-Defense-Fianchetto-Variation...5.d3-d6") == "Closed Sicilian Defense Fianchetto Variation", "chess: opening names without the moves")
+    check(Chess.outcome("win") == .win && Chess.outcome("repetition") == .draw && Chess.outcome("timeout") == .loss && Chess.ending("checkmated") == "checkmate", "chess: result codes")
+    check(Chess.cleanUsername(" @Hikaru ") == "hikaru" && Chess.cleanUsername("https://www.chess.com/member/MagnusCarlsen") == "magnuscarlsen"
+          && Chess.cleanUsername("a b") == nil && Chess.cleanUsername("x") == nil, "chess: usernames as typed, from links, and refused")
+    check(Chess.username(fromPlayerURL: "https://api.chess.com/pub/player/erik") == "erik", "chess: username from a player link")
 }
 
 // APK manifests: package and version read from the binary XML of a Deckhand bar app when a build is present.

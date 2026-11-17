@@ -22,6 +22,7 @@ The launcher-icon glyphs of the Deckhand bar apps (every flavor except `claude`)
 | teletekst | Television | `television_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Television/3D/television_3d.png |
 | portfolio | Money bag | `money_bag_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Money%20bag/3D/money_bag_3d.png |
 | status | Cloud | `cloud_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Cloud/3D/cloud_3d.png |
+| chess | Chess pawn | `chess_pawn_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Chess%20pawn/3D/chess_pawn_3d.png |
 | actions | Gear | `gear_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Gear/3D/gear_3d.png |
 | connection | Globe with meridians | `globe_with_meridians_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Globe%20with%20meridians/3D/globe_with_meridians_3d.png |
 | traffic | Satellite antenna | `satellite_antenna_3d.png` | https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Satellite%20antenna/3D/satellite_antenna_3d.png |

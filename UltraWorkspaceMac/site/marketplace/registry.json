@@ -1,7 +1,7 @@
 {
   "v": 1,
   "name": "OpenBarX marketplace",
-  "updated": "2026-11-15",
+  "updated": "2026-11-17",
   "description": "Apps and cards for the UltraBar X, installed through Deckhand. Phase 1 of the marketplace: a public index, curated through pull requests on github.com/DeNoronha/UltraWorkspaceMac.",
   "apps": [
     {
@@ -508,6 +508,25 @@
       "summary": "How your connection is doing, hop by hop from your Mac to the services you use, with a weather-style verdict on where a problem is, and your ASUS router or ZenWiFi mesh. No administrator rights, no packet capture.",
       "icon": "../assets/img/icons/connection.png",
       "screenshot": "../assets/img/screens/bar-connection.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
+    },
+    {
+      "id": "chess",
+      "name": "Chess",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.chess",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "Your Chess.com games and ratings: the board of each daily game with the last move and the time left, your recent results with accuracy, your rating per time control with its trend, and the puzzle of the day to solve on the bar. Public data, no password.",
+      "icon": "../assets/img/icons/chess.png",
+      "screenshot": "../assets/img/screens/bar-chess.png",
       "requires": {
         "deckhand": ">=0.1",
         "wifiAdb": true
