@@ -535,6 +535,25 @@
       "distribution": "bundled",
       "publisher": "De Noronha Consulting",
       "license": "MIT"
+    },
+    {
+      "id": "teams",
+      "name": "Teams",
+      "kind": "bar-app",
+      "package": "nl.denoronha.deckhand.teams",
+      "version": "2.6",
+      "versionCode": 17,
+      "summary": "Your next meetings with a countdown and a Join button, and a speed dial for the people you call most. Teams, Zoom and Google Meet open on your Mac; the meetings come from your Mac's calendars.",
+      "icon": "../assets/img/icons/teams.png",
+      "screenshot": "../assets/img/screens/bar-teams.png",
+      "requires": {
+        "deckhand": ">=0.1",
+        "wifiAdb": true
+      },
+      "source": "https://github.com/DeNoronha/UltraWorkspaceMac/tree/main/UltraWorkspaceMac/android/DeckhandMonitor",
+      "distribution": "bundled",
+      "publisher": "De Noronha Consulting",
+      "license": "MIT"
     }
   ],
   "cards": [

@@ -58,6 +58,7 @@ android {
             Triple("traffic", "nl.denoronha.deckhand.traffic", "Traffic"),
             Triple("connection", "nl.denoronha.deckhand.connection", "Connection"),
             Triple("chess", "nl.denoronha.deckhand.chess", "Chess"),
+            Triple("teams", "nl.denoronha.deckhand.teams", "Teams"),
         )
         // These fetch their own data on the bar (1.9): page and feeds in the APK, only config.json from the Mac.
         val onBar = setOf("flights", "crypto", "weather", "sky", "news", "verse", "tide", "teletekst", "earth", "status")

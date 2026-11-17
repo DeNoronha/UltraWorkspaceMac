@@ -16,7 +16,7 @@ import UltraBarKit
 @MainActor
 final class BarPages {
     /// Pages whose data comes from this Mac through `route` (Monitor's samples are served by `AppModel.startBarDataServer`).
-    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "seo", "portfolio", "actions", "jira", "climate", "books", "traffic", "connection", "chess"]
+    nonisolated static let macPages: Set<String> = ["claude", "music", "calendar", "tasks", "haven", "strava", "cask", "schiphol", "seo", "portfolio", "actions", "jira", "climate", "books", "traffic", "connection", "chess", "teams"]
     nonisolated static let packagePrefix = "nl.denoronha.deckhand."
     nonisolated static func package(for page: String) -> String { packagePrefix + page }
     /// Pages whose bar app fetches its own data on the bar: the APK carries the page and the feeds, and gets only
@@ -37,7 +37,7 @@ final class BarPages {
     private let configWake = WakeSignal()
     private var subscriptions: [AnyCancellable] = []
     /// Wakes the loops that wait for a bar request: this class's own, the feeds', the Music poll.
-    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); seo.poke(); portfolio.poke(); actions.poke(); jira.poke(); climate.poke(); books.poke(); traffic.poke(); connection.poke(); chess.poke(); model?.musicWake.signal() }
+    private func poke() { hits.signal(); haven.poke(); strava.poke(); schiphol.poke(); seo.poke(); portfolio.poke(); actions.poke(); jira.poke(); climate.poke(); books.poke(); traffic.poke(); connection.poke(); chess.poke(); teams.poke(); model?.musicWake.signal() }
     /// Nobody can be looking at the bar apps: the bar's screen is off (presence over ADB) or this Mac is asleep,
     /// has its screens off or is locked, and no bar app asked for anything in the last two minutes (Deckhand Home
     /// asks every minute while it is on screen). The feeds pause then; the next request wakes them.
@@ -93,6 +93,8 @@ final class BarPages {
     let connection = ConnectionFeed()
     /// One Chess.com player's ratings, games and the puzzle of the day for the Chess app, refreshed while it is on the bar.
     let chess = ChessFeed()
+    /// The next meetings with their join links and the speed-dial contacts for the Teams app.
+    let teams = TeamsFeed()
     private weak var model: AppModel?
     private var settings: AppSettings?
 
@@ -129,6 +131,11 @@ final class BarPages {
         chess.start(user: { [weak self] in self?.settings?.chessUser ?? "" }, showPuzzle: { [weak self] in self?.settings?.chessPuzzle ?? true }, wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
             return model.barAppVersion("chess") != nil || (self.lastHit["chess"].map { Date().timeIntervalSince($0) < 600 } ?? false)
+        })
+        teams.start(calendars: { [weak self] in self?.settings?.teamsCalendars ?? [] }, allMeetings: { [weak self] in self?.settings?.teamsAllMeetings ?? true },
+                    contacts: { [weak self] in self?.settings?.teamsContacts ?? [] }, wanted: { [weak self] in
+            guard let self, !self.dormant else { return false }
+            return model.barAppVersion("teams") != nil || (self.lastHit["teams"].map { Date().timeIntervalSince($0) < 600 } ?? false)
         })
         books.start(hide: { [weak self] in self?.settings?.booksHide ?? false }, wanted: { [weak self] in
             guard let self, !self.dormant else { return false }
@@ -265,7 +272,7 @@ final class BarPages {
         })
     }
 
-    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); seo.stop(); portfolio.stop(); actions.stop(); jira.stop(); climate.stop(); books.stop(); traffic.stop(); connection.stop(); chess.stop() }
+    func stop() { tasks.forEach { $0.cancel() }; tasks.removeAll(); subscriptions.removeAll(); haven.stop(); strava.stop(); cask.stop(); schiphol.stop(); seo.stop(); portfolio.stop(); actions.stop(); jira.stop(); climate.stop(); books.stop(); traffic.stop(); connection.stop(); chess.stop(); teams.stop() }
 
     /// Linear for the Tasks app.
     private func startLinearFeed(model: AppModel) {
@@ -406,7 +413,7 @@ final class BarPages {
     }
 
     /// Answer one POST with the `X-Deckhand: action` header: `/tasks/done/<uuid>`, `/music/cmd/<play|next|previous>`,
-    /// `/climate/heat/<°C>/<30|60|120|240|next>`, `/climate/schedule`.
+    /// `/climate/heat/<°C>/<30|60|120|240|next>`, `/climate/schedule`, `/teams/join/<key>`, `/teams/call/<0-7>/<audio|video|chat>`.
     nonisolated func action(_ path: String, model: AppModel) -> MonitorServer.Response? {
         let parts = path.split(separator: "/").map(String.init)
         guard let page = parts.first, Self.macPages.contains(page) else { return nil }
@@ -434,6 +441,21 @@ final class BarPages {
                 }
             }
             return .json(["ok": true])
+        }
+        if page == "teams" {
+            // Only a meeting this Mac served, by its key, and only a speed-dial position; the link or address is looked
+            // up here, so the bar can make the Mac open nothing else.
+            if parts.count == 3, parts[1] == "join", parts[2].range(of: "^[0-9a-f]{16}$", options: .regularExpression) != nil {
+                let ok = DispatchQueue.main.sync { MainActor.assumeIsolated { self.teams.join(parts[2]) } }
+                if ok { DispatchQueue.main.async { if let s = self.teams.lastOpened { model.say("Teams: \(s)") } } }
+                return ok ? .json(["ok": true]) : MonitorServer.Response("404 Not Found", type: "text/plain", body: Data("no such meeting".utf8))
+            }
+            if parts.count == 4, parts[1] == "call", let i = Int(parts[2]), (0..<8).contains(i), let mode = Meetings.CallMode(rawValue: parts[3]) {
+                let ok = DispatchQueue.main.sync { MainActor.assumeIsolated { self.teams.call(i, mode: mode) } }
+                if ok { DispatchQueue.main.async { if let s = self.teams.lastOpened { model.say("Teams: \(s)") } } }
+                return ok ? .json(["ok": true]) : MonitorServer.Response("404 Not Found", type: "text/plain", body: Data("no such contact".utf8))
+            }
+            return MonitorServer.Response("400 Bad Request", type: "text/plain", body: Data("not a Teams request".utf8))
         }
         if page == "climate" {
             // The heating: only the shapes Climate.heatRequest allows (15–25 °C in half degrees, fixed durations).
@@ -499,6 +521,7 @@ final class BarPages {
         case "traffic": return traffic.snapshot()
         case "connection": return connection.snapshot()
         case "chess": return chess.snapshot()
+        case "teams": return teams.snapshot()
         default: return [:]
         }
     }
@@ -590,6 +613,8 @@ final class BarPages {
         // Connection: the verdict, while it is being measured.
         if let l = connection.homeLine() { apps["connection"] = ["line": l.line, "tone": l.tone] }
         // Chess: the games waiting for the user's move (with a badge), else the main rating and its month.
+        // Teams: the meeting on now, else the next one with how long until it starts.
+        if let l = teams.homeLine() { apps["teams"] = ["line": l.line, "tone": l.tone] }
         if let l = chess.homeLine() { var t: [String: Any] = ["line": l.line, "tone": l.tone]; if l.badge > 0 { t["badge"] = l.badge }; apps["chess"] = t }
         return ["apps": apps, "order": homeOrder(), "at": Int(Date().timeIntervalSince1970)]
     }

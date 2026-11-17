@@ -98,6 +98,11 @@ final class AppSettings: ObservableObject {
     /// Chess bar app: the Chess.com username (as typed; ChessFeed cleans it) and whether the puzzle of the day is shown.
     @Published var chessUser: String = "" { didSet { save() } }
     @Published var chessPuzzle: Bool = true { didSet { save() } }
+    /// Teams bar app: the speed-dial contacts (at most eight), the calendars its meetings come from (empty: all), and
+    /// whether meetings without a join link show too.
+    @Published var teamsContacts: [TeamsContact] = [] { didSet { save() } }
+    @Published var teamsCalendars: [String] = [] { didSet { save() } }
+    @Published var teamsAllMeetings: Bool = true { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows this many single cards without scrolling (the clock card takes two slots) — counted on the bar 2026-11-04.
     static let coreCardsThatFit = 5
@@ -183,6 +188,9 @@ final class AppSettings: ObservableObject {
         var routerHTTPS: Bool? = nil
         var chessUser: String? = nil
         var chessPuzzle: Bool? = nil
+        var teamsContacts: [TeamsContact]? = nil
+        var teamsCalendars: [String]? = nil
+        var teamsAllMeetings: Bool? = nil
     }
 
     // MARK: VivoCube cards (ordered, max 6)
@@ -284,6 +292,9 @@ final class AppSettings: ObservableObject {
             routerHTTPS = p.routerHTTPS ?? false
             chessUser = p.chessUser ?? ""
             chessPuzzle = p.chessPuzzle ?? true
+            teamsContacts = Array((p.teamsContacts ?? []).prefix(8))
+            teamsCalendars = p.teamsCalendars ?? []
+            teamsAllMeetings = p.teamsAllMeetings ?? true
             trafficWindow = [1, 10, 60].contains(p.trafficWindow ?? 0) ? p.trafficWindow! : 10
         }
         if let storedKey { accuWeatherKey = storedKey }
@@ -300,7 +311,7 @@ final class AppSettings: ObservableObject {
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
                           claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes, barFirewall: barFirewall,
-                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL, portfolioCurrency: portfolioCurrency, portfolioMinValue: portfolioMinValue, statusServices: statusServices, actionsDays: actionsDays, actionsForks: actionsForks, jiraSite: jiraSite, jiraBoard: jiraBoard, jiraOnlyMine: jiraOnlyMine, booksHide: booksHide, trafficWindow: trafficWindow, routerAddress: routerAddress, routerHTTPS: routerHTTPS, chessUser: chessUser, chessPuzzle: chessPuzzle)
+                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL, portfolioCurrency: portfolioCurrency, portfolioMinValue: portfolioMinValue, statusServices: statusServices, actionsDays: actionsDays, actionsForks: actionsForks, jiraSite: jiraSite, jiraBoard: jiraBoard, jiraOnlyMine: jiraOnlyMine, booksHide: booksHide, trafficWindow: trafficWindow, routerAddress: routerAddress, routerHTTPS: routerHTTPS, chessUser: chessUser, chessPuzzle: chessPuzzle, teamsContacts: teamsContacts, teamsCalendars: teamsCalendars, teamsAllMeetings: teamsAllMeetings)
         // Holds the manual location: user-only from the moment it exists (Store.writePrivate).
         guard let data = try? JSONEncoder().encode(p), Store.writePrivate(data, to: url) else {
             NSLog("Deckhand: settings.json could not be saved"); return

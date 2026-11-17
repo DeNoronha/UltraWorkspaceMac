@@ -1101,6 +1101,43 @@ do {
     check(Chess.username(fromPlayerURL: "https://api.chess.com/pub/player/erik") == "erik", "chess: username from a player link")
 }
 
+// Teams: join links in invitations, the Teams app's own links, and what the bar shows.
+do {
+    let notes = """
+    ________________________________________________________________________________
+    Microsoft Teams Need help? <https://aka.ms/JoinTeamsMeeting?omkt=en-US>
+    Join the meeting now <https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0?context=%7b%22Tid%22%3a%22x%22%7d>
+    Meeting ID: 123 456 789
+    """
+    let l = Meetings.joinLink(in: [nil, "Microsoft Teams Meeting", notes])
+    check(l?.kind == .teams && l?.url.path.hasPrefix("/l/meetup-join/") == true, "teams: the join link in Outlook's notes, not the help link", "\(String(describing: l))")
+    let safe = "https://eur01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fteams.microsoft.com%2Fl%2Fmeetup-join%2F19%253ameeting_x%2540thread.v2%2F0&data=1"
+    check(Meetings.joinLink(in: [safe])?.url.host == "teams.microsoft.com", "teams: a Safe Links wrapped link is unwrapped")
+    check(Meetings.joinLink(in: ["Zoom: https://us02web.zoom.us/j/8123456789?pwd=abc."])?.kind == .zoom
+          && Meetings.joinLink(in: ["https://meet.google.com/abc-defg-hij"])?.kind == .meet, "teams: Zoom and Meet links")
+    check(Meetings.joinLink(in: ["https://evil.example/teams.microsoft.com/l/meetup-join/x", "http://teams.microsoft.com/l/meetup-join/x",
+                                 "https://teams.microsoft.com.evil.example/l/meetup-join/x", "https://zoom.us.evil.example/j/1"]) == nil,
+          "teams: other hosts, plain http and look-alike hosts are never a join link")
+    if let l {
+        check(Meetings.appURL(l, teamsInstalled: true).absoluteString.hasPrefix("msteams:/l/meetup-join/") && Meetings.appURL(l, teamsInstalled: false) == l.url,
+              "teams: opened in the Teams app when it is installed", Meetings.appURL(l, teamsInstalled: true).absoluteString)
+    }
+    check(Meetings.callURL(email: "anna@example.com", mode: .video, teamsInstalled: true)?.absoluteString == "msteams:/l/call/0/0?users=anna@example.com&withVideo=true"
+          && Meetings.callURL(email: "anna@example.com", mode: .chat, teamsInstalled: false)?.absoluteString == "https://teams.microsoft.com/l/chat/0/0?users=anna@example.com"
+          && Meetings.callURL(email: "not an address", mode: .audio, teamsInstalled: true) == nil, "teams: call, video and chat links; no link without an address")
+    check(Meetings.callURL(email: "a@b.com", mode: .audio, teamsInstalled: true, tenantID: "72F988BF-86F1-41AF-91AB-2D7CD011DB47")?.absoluteString == "msteams:/l/call/0/0?users=a@b.com&tenantId=72f988bf-86f1-41af-91ab-2d7cd011db47"
+          && Meetings.callURL(email: "a@b.com", mode: .audio, teamsInstalled: true, tenantID: "not-a-guid")?.absoluteString == "msteams:/l/call/0/0?users=a@b.com",
+          "teams: the organisation to call from, only as a tenant GUID")
+    check(Meetings.tenantID(fromOpenIDConfiguration: Data(#"{"issuer":"https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/v2.0"}"#.utf8)) == "72f988bf-86f1-41af-91ab-2d7cd011db47"
+          && Meetings.tenantID(fromOpenIDConfiguration: Data(#"{"issuer":"https://evil.example/72f988bf-86f1-41af-91ab-2d7cd011db47/v2.0"}"#.utf8)) == nil
+          && Meetings.domain(ofEmail: " Ramon@Example.COM ") == "example.com", "teams: tenant id from Microsoft's OpenID configuration only, domains from addresses")
+    check(Meetings.initials("Anna de Vries") == "AV" && Meetings.initials("bram") == "B" && Meetings.initials("") == "?", "teams: initials without tussenvoegsels")
+    check(Meetings.place("Microsoft Teams Meeting") == nil && Meetings.place("Delft; https://teams.microsoft.com/l/meetup-join/x") == "Delft", "teams: the place without links and boilerplate")
+    let k = Meetings.key(id: "abc", start: Date(timeIntervalSince1970: 1_800_000_000))
+    check(k.count == 16 && k == Meetings.key(id: "abc", start: Date(timeIntervalSince1970: 1_800_000_000)) && k != Meetings.key(id: "abd", start: Date(timeIntervalSince1970: 1_800_000_000)),
+          "teams: meeting keys are stable, 16 hex digits")
+}
+
 // APK manifests: package and version read from the binary XML of a Deckhand bar app when a build is present.
 do {
     let apk = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("dist/bar-apps/DeckhandMonitor.apk")
