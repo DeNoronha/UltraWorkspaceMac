@@ -34,7 +34,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
 @MainActor
 enum HelpWindow {
     static let id = "help"
-    static let manualURL = URL(string: "https://denoronha.github.io/UltraWorkspaceMac/manual/")!
+    static let manualURL = URL(string: "https://openbarx.com/manual/")!
     /// SwiftUI's `openWindow(id:)`, handed over by the main window when it appears.
     static var openAction: (() -> Void)?
 

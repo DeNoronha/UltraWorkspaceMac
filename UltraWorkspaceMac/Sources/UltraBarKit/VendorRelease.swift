@@ -65,7 +65,7 @@ public enum VendorRelease {
     public static func fetchLatest() async throws -> Release {
         var req = URLRequest(url: latestURL); req.timeoutInterval = 15
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        req.setValue("Deckhand (+https://denoronha.github.io/UltraWorkspaceMac/)", forHTTPHeaderField: "User-Agent")
+        req.setValue("Deckhand (+https://openbarx.com/)", forHTTPHeaderField: "User-Agent")
         let (data, resp) = try await URLSession.shared.data(for: req)
         if let h = resp as? HTTPURLResponse, h.statusCode != 200 { throw UltraBarError.protocolError("GitHub answered \(h.statusCode)") }
         return try parse(data)

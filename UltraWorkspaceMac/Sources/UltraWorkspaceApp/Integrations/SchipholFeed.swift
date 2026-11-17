@@ -127,7 +127,7 @@ final class SchipholFeed {
     private let session: URLSession = {
         let c = URLSessionConfiguration.ephemeral
         c.timeoutIntervalForRequest = 15; c.timeoutIntervalForResource = 25   // a hard cap, so a call can never hang the loop
-        c.httpAdditionalHeaders = ["User-Agent": "Deckhand (+https://denoronha.github.io/UltraWorkspaceMac/)"]
+        c.httpAdditionalHeaders = ["User-Agent": "Deckhand (+https://openbarx.com/)"]
         return URLSession(configuration: c)
     }()
 

@@ -414,7 +414,7 @@ enum SiteAudit {
         let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
         var req = URLRequest(url: u, timeoutInterval: 20)
-        req.setValue("Mozilla/5.0 (Macintosh) Deckhand-SEO/1.0 (+https://denoronha.github.io/UltraWorkspaceMac/)", forHTTPHeaderField: "User-Agent")
+        req.setValue("Mozilla/5.0 (Macintosh) Deckhand-SEO/1.0 (+https://openbarx.com/)", forHTTPHeaderField: "User-Agent")
         let t0 = Date()
         guard let (data, resp) = try? await session.data(for: req), let http = resp as? HTTPURLResponse else { return nil }
         let ms = Int(Date().timeIntervalSince(t0) * 1000)

@@ -119,7 +119,7 @@ extension AppModel {
         }
         barSoftwareBusy = "Downloading \(asset.name) (\(asset.size / 1_000_000) MB)…"
         var req = URLRequest(url: asset.url); req.timeoutInterval = 300
-        req.setValue("Deckhand (+https://denoronha.github.io/UltraWorkspaceMac/)", forHTTPHeaderField: "User-Agent")
+        req.setValue("Deckhand (+https://openbarx.com/)", forHTTPHeaderField: "User-Agent")
         let (tmp, resp) = try await URLSession.shared.download(for: req)
         guard let h = resp as? HTTPURLResponse, h.statusCode == 200 else {
             throw UltraBarError.protocolError("GitHub answered \((resp as? HTTPURLResponse)?.statusCode ?? 0) for \(asset.name)")
