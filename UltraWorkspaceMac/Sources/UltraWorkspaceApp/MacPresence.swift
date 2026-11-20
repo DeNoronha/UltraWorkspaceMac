@@ -89,8 +89,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var defaultsObserver: NSObjectProtocol?
     private var windowObservers: [NSObjectProtocol] = []
 
+    /// Started at login in menu-bar-only mode: the window SwiftUI opens at launch is closed again, so Deckhand starts
+    /// in the menu bar without a window (and so without a Dock icon). Opened by hand it still shows its window.
+    private var hideLaunchWindow = false
+
     func applicationWillFinishLaunching(_ notification: Notification) {
-        if !MacPresence.current.showsDockIcon { NSApp.setActivationPolicy(.accessory) }
+        if !MacPresence.current.showsDockIcon {
+            NSApp.setActivationPolicy(.accessory)
+            hideLaunchWindow = Self.launchedAsLoginItem()
+        }
+    }
+
+    /// Whether macOS started Deckhand as a login item (System Settings → General → Login Items, `LaunchAtLogin`):
+    /// the open-application event then carries `keyAELaunchedAsLogInItem`.
+    private static func launchedAsLoginItem() -> Bool {
+        guard let e = NSAppleEventManager.shared().currentAppleEvent, e.eventID == AEEventID(kAEOpenApplication) else { return false }
+        return e.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue == OSType(keyAELaunchedAsLogInItem)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -107,9 +121,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func watchWindows() {
         let nc = NotificationCenter.default
         for name in [NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification] {
-            windowObservers.append(nc.addObserver(forName: name, object: nil, queue: .main) { note in
+            windowObservers.append(nc.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
                 guard let w = note.object as? NSWindow else { return }
-                MainActor.assumeIsolated { AppActivation.windowBecameKey(w) }
+                // The launch window that is about to be closed again must not bring the Dock icon up first.
+                MainActor.assumeIsolated { if self?.hideLaunchWindow != true { AppActivation.windowBecameKey(w) } }
             })
         }
         windowObservers.append(nc.addObserver(forName: NSWindow.willCloseNotification, object: nil, queue: .main) { note in
@@ -120,9 +135,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 DispatchQueue.main.async { AppActivation.returnToMenuBarIfNoWindows(closing: w) }
             }
         })
-        // A window SwiftUI opened at launch in menu-bar-only mode: give it the menu bar from the start.
-        DispatchQueue.main.async {
-            if NSApp.windows.contains(where: { AppActivation.isAppWindow($0) && $0.isVisible }) { AppActivation.becomeRegular() }
+        // A window SwiftUI opened at launch in menu-bar-only mode: give it the menu bar from the start, or close it
+        // when Deckhand started at login.
+        DispatchQueue.main.async { [weak self] in
+            let launched = NSApp.windows.filter { AppActivation.isAppWindow($0) && $0.isVisible }
+            let hide = self?.hideLaunchWindow == true
+            self?.hideLaunchWindow = false
+            guard !launched.isEmpty else { return }
+            if hide { launched.forEach { $0.close() } } else { AppActivation.becomeRegular() }
         }
     }
 
