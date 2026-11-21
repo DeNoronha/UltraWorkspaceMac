@@ -14,6 +14,8 @@
 ## 🍎 Deckhand — native macOS client (this repository's active project)
 
 > **[`UltraWorkspaceMac/`](UltraWorkspaceMac/) — Deckhand, a native, independent macOS client for UltraBar X, written in Swift/SwiftUI.** (The folder keeps its original name; the app is called Deckhand.)
+>
+> 🌐 **Website, download, bar apps and marketplace: [openbarx.com](https://openbarx.com)**
 > This is **community software, not affiliated with or endorsed by Sanytron.** The sections below mirror the official product description for reference; the actual code developed here is the native Mac app.
 >
 > It already does LAN discovery, pairing (certificate-pinned, token stored in a user-only file), module listing + provisioning, VivoCube widgets (13), SenseCube readings, a one-shot CoreBar screen preview, and ships with a mock CoreBar for hardware-free testing. See [`UltraWorkspaceMac/README.md`](UltraWorkspaceMac/README.md) and the reverse-engineered [`UltraWorkspaceMac/PROTOCOL.md`](UltraWorkspaceMac/PROTOCOL.md).
