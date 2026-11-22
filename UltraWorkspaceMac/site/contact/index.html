@@ -4,7 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Contact · OpenBarX</title>
-<meta name="description" content="Questions, bug reports or ideas for Deckhand and the OpenBarX bar apps: send an e-mail or open an issue on GitHub.">
+<meta name="description" content="Report a bug in Deckhand or the OpenBarX bar apps on GitHub Issues, suggest and upvote ideas in GitHub Discussions, or e-mail support@openbarx.com.">
+<link rel="canonical" href="https://openbarx.com/contact/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="OpenBarX">
+<meta property="og:url" content="https://openbarx.com/contact/">
+<meta property="og:image" content="https://openbarx.com/assets/img/screens/bar-monitor.png">
+<meta name="twitter:card" content="summary_large_image">
 <meta property="og:title" content="Contact · OpenBarX">
 <meta property="og:description" content="Questions, bug reports or ideas for Deckhand and the bar apps.">
 <link rel="icon" href="../assets/img/favicon-32.png" type="image/png" sizes="32x32">
@@ -38,13 +44,27 @@
   <section class="hero hero-compact">
     <div class="container">
       <p class="eyebrow">Contact</p>
-      <h1>Questions, bugs or ideas? Write.</h1>
-      <p class="lede">Deckhand is made by one person in the evenings, and every message is read. Mail is the quickest way to reach me; a bug that others may hit too is best filed on GitHub, so the fix is visible to everyone.</p>
+      <h1>Questions, bugs or ideas? Tell us.</h1>
+      <p class="lede">Deckhand is made by one person in the evenings, and everything is read. Bugs go on GitHub Issues and ideas under GitHub Discussions, where others can upvote them, so everyone sees what is fixed and what is wanted most. For anything you'd rather not post in public, send an e-mail.</p>
       <div class="hero-actions">
-        <!-- The address lives only here: change data-user / data-domain when support@openbarx.com is ready. -->
-        <a class="btn btn-primary" id="mail" data-user="ramon" data-domain="denoronha.nl" href="#mail">Send an e-mail <small id="mail-address">ramon at denoronha dot nl</small> <span class="arrow">→</span></a>
-        <a class="btn" href="https://github.com/DeNoronha/UltraWorkspaceMac/issues/new" rel="noopener">Report a bug on GitHub <span class="arrow">→</span></a>
+        <a class="btn btn-primary" href="https://github.com/DeNoronha/UltraWorkspaceMac/issues/new?template=bug_report.yml" rel="noopener">Report a bug <span class="arrow">→</span></a>
+        <a class="btn" href="https://github.com/DeNoronha/UltraWorkspaceMac/discussions/new?category=ideas" rel="noopener">Suggest an idea <span class="arrow">→</span></a>
+        <!-- Assembled by the script at the bottom so the address is not in the markup for harvesters. -->
+        <a class="btn" id="mail" data-user="support" data-domain="openbarx.com" href="#mail">E-mail support <small id="mail-address">support at openbarx dot com</small> <span class="arrow">→</span></a>
       </div>
+    </div>
+  </section>
+
+  <section class="section" id="ideas">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Ideas</p>
+        <h2>What people want next.</h2>
+        <p>The most upvoted ideas from <a href="https://github.com/DeNoronha/UltraWorkspaceMac/discussions/categories/ideas">GitHub Discussions → Ideas</a>. Upvote the ones you want too (it needs a free GitHub account); the most wanted are built first.</p>
+      </div>
+      <ol class="ideas" id="ideas-list" hidden></ol>
+      <p id="ideas-empty">No ideas yet. <a href="https://github.com/DeNoronha/UltraWorkspaceMac/discussions/new?category=ideas">Be the first <span class="arrow">→</span></a></p>
+      <p class="ideas-updated" id="ideas-updated" hidden></p>
     </div>
   </section>
 
@@ -129,6 +149,24 @@
   var addr = a.dataset.user + '@' + a.dataset.domain;
   a.href = 'mailto:' + addr + '?subject=' + encodeURIComponent('Deckhand');
   document.getElementById('mail-address').textContent = addr;
+})();
+(function () {
+  // ideas.json is written by the Pages workflow from GitHub Discussions → Ideas (daily and on every deploy).
+  fetch('../community/ideas.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    if (!d || !d.ideas || !d.ideas.length) return;
+    var ol = document.getElementById('ideas-list');
+    d.ideas.forEach(function (i) {
+      var li = document.createElement('li');
+      var votes = document.createElement('span'); votes.className = 'votes'; votes.textContent = '▲ ' + i.upvotes;
+      var a = document.createElement('a'); a.href = i.url; a.textContent = i.title;
+      var meta = document.createElement('small'); meta.textContent = i.comments + (i.comments === 1 ? ' comment' : ' comments');
+      li.append(votes, a, meta); ol.appendChild(li);
+    });
+    ol.hidden = false;
+    document.getElementById('ideas-empty').innerHTML = '<a href="https://github.com/DeNoronha/UltraWorkspaceMac/discussions/categories/ideas">All ideas on GitHub <span class="arrow">→</span></a>';
+    var u = document.getElementById('ideas-updated');
+    if (d.updated) { u.textContent = 'Updated ' + new Date(d.updated).toLocaleString(); u.hidden = false; }
+  }).catch(function () {});
 })();
 </script>
 </body>

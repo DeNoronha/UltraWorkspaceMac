@@ -8,10 +8,14 @@ on:
     paths: ["UltraWorkspaceMac/site/**", ".github/workflows/pages.yml"]
   release:
     types: [published]
+  # Daily, so the most upvoted ideas on Contact (community/ideas.json) stay current.
+  schedule:
+    - cron: "17 5 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
+  discussions: read
   pages: write
   id-token: write
 
@@ -53,6 +57,31 @@ jobs:
           published=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json publishedAt --jq .publishedAt)
           printf '{"tag":"%s","size":%s,"published":"%s","sha256":"%s"}\n' "$tag" "$size" "$published" "$sha256" > UltraWorkspaceMac/site/download/latest.json
           cat UltraWorkspaceMac/site/download/latest.json
+      # The most upvoted ideas from Discussions → Ideas for the Contact page. Public data only (title, link,
+      # upvotes, comments); on any failure the page just links to the Ideas category.
+      - name: Fetch the top ideas from GitHub Discussions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          mkdir -p UltraWorkspaceMac/site/community
+          owner=${GITHUB_REPOSITORY%/*}; repo=${GITHUB_REPOSITORY#*/}
+          cat_id=$(gh api graphql -f owner="$owner" -f repo="$repo" -f query='
+            query($owner:String!,$repo:String!){ repository(owner:$owner,name:$repo){ discussionCategory(slug:"ideas"){ id } } }' \
+            --jq '.data.repository.discussionCategory.id // empty')
+          if [ -n "$cat_id" ] && gh api graphql -f owner="$owner" -f repo="$repo" -f cat="$cat_id" -f query='
+            query($owner:String!,$repo:String!,$cat:ID!){ repository(owner:$owner,name:$repo){
+              discussions(first:100, categoryId:$cat, states:OPEN, orderBy:{field:UPDATED_AT,direction:DESC}){
+                nodes{ title url upvoteCount comments{ totalCount } } } } }' \
+            --jq '[.data.repository.discussions.nodes[]
+                   | {title, url, upvotes: .upvoteCount, comments: .comments.totalCount}]
+                  | sort_by(-.upvotes) | .[:10]
+                  | {updated: (now | todate), ideas: .}' > UltraWorkspaceMac/site/community/ideas.json; then
+            cat UltraWorkspaceMac/site/community/ideas.json
+          else
+            echo "::warning::Could not read Discussions → Ideas; deploying without ideas.json"
+            rm -f UltraWorkspaceMac/site/community/ideas.json
+          fi
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:

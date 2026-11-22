@@ -332,4 +332,4 @@ This is independent of the CoreBar's own built-in AccuWeather card, which needs 
 
 A few things in the works, in no particular order: choosing your own KnobKey and DotKey bindings (today they are fixed), a Meetings bar app (next meeting, countdown and Join from Apple Calendar), module firmware updates from Deckhand, and installing community apps straight from the OpenBarX marketplace with version checks.
 
-Support: this is community software — file issues at https://github.com/DeNoronha/UltraWorkspaceMac/issues.
+Support: this is community software. Report bugs at https://github.com/DeNoronha/UltraWorkspaceMac/issues, suggest and upvote ideas at https://github.com/DeNoronha/UltraWorkspaceMac/discussions/categories/ideas, and for anything else e-mail support@openbarx.com (see https://openbarx.com/contact/).

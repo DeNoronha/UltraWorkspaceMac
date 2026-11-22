@@ -20,6 +20,14 @@ HEAD = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Deckhand manual · OpenBarX</title>
 <meta name="description" content="The Deckhand user manual: install, connect the UltraBar X, pages on the CoreBar, cards on the VivoCube, bindings, apps, troubleshooting.">
+<link rel="canonical" href="https://openbarx.com/manual/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="OpenBarX">
+<meta property="og:url" content="https://openbarx.com/manual/">
+<meta property="og:title" content="Deckhand manual">
+<meta property="og:description" content="Install Deckhand, connect the UltraBar X, put pages and bar apps on the CoreBar, troubleshoot.">
+<meta property="og:image" content="https://openbarx.com/assets/img/screens/app-corebar.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="../assets/img/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -52,7 +60,7 @@ HEAD = """<!doctype html>
     <div class="container">
       <p class="eyebrow">Manual <span class="sep">·</span> Deckhand</p>
       <h1>How to use Deckhand.</h1>
-      <p class="lede">The same text ships inside the repository as <a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/MANUAL.md">MANUAL.md</a>; this page is generated from it. Something missing or wrong? <a href="https://github.com/DeNoronha/UltraWorkspaceMac/issues">Open an issue</a>.</p>
+      <p class="lede">The same text ships inside the repository as <a href="https://github.com/DeNoronha/UltraWorkspaceMac/blob/main/UltraWorkspaceMac/MANUAL.md">MANUAL.md</a>; this page is generated from it. Something wrong? <a href="https://github.com/DeNoronha/UltraWorkspaceMac/issues/new?template=bug_report.yml">Report a bug</a>. Something missing? <a href="https://github.com/DeNoronha/UltraWorkspaceMac/discussions/categories/ideas">Suggest an idea</a>.</p>
     </div>
   </section>
 

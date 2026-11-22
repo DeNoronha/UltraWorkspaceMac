@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Suggest a feature or app
+    url: https://github.com/DeNoronha/UltraWorkspaceMac/discussions/new?category=ideas
+    about: Post ideas under Discussions → Ideas, where others can upvote them.
+  - name: Ask a question
+    url: https://github.com/DeNoronha/UltraWorkspaceMac/discussions/new?category=q-a
+    about: How do I…? Questions go to Discussions → Q&A.
+  - name: E-mail support
+    url: https://openbarx.com/contact/
+    about: For anything you'd rather not post in public.

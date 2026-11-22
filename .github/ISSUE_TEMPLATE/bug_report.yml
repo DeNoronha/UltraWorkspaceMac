@@ -1,0 +1,54 @@
+name: Bug report
+description: Something in Deckhand or a bar app doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Have an idea or a wish instead? Post it under [Ideas](https://github.com/DeNoronha/UltraWorkspaceMac/discussions/categories/ideas) so others can upvote it.
+        **Leave out secrets:** never paste passwords, API keys, tokens or your bar's serial number.
+  - type: input
+    id: deckhand
+    attributes:
+      label: Deckhand version
+      description: Deckhand → About Deckhand.
+      placeholder: "0.7.1"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "macOS 26.1"
+    validations:
+      required: true
+  - type: input
+    id: bar
+    attributes:
+      label: Bar software
+      description: The launcher or firmware version, if you know it (Deckhand → Bar System).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Deckhand (the Mac app)
+        - A bar app on the CoreBar
+        - Connecting to the bar / debug bridge
+        - Installing or updating
+        - Website or manual
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The steps you took, what you expected, and what happened instead. The exact message Deckhand or the bar showed helps most.
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot or photo
+      description: Drag an image of Deckhand or a photo of the bar in here.
