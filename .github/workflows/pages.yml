@@ -15,6 +15,9 @@ on:
 
 permissions:
   contents: read
+  # deploy-pages looks up the uploaded site artifact through the Actions API (failed with
+  # "No artifacts named github-pages" without it, 2026-11-22).
+  actions: read
   discussions: read
   pages: write
   id-token: write
