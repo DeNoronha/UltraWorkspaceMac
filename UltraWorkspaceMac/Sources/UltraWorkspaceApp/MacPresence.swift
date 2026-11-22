@@ -158,7 +158,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     /// The background services, once per launch and without a window: the bar apps' data server and feeds, presence
-    /// over ADB, the Music poll, the cover refresh, the Claude watch, the bar firewall and the cube's timed switching.
+    /// over ADB, the Music poll, the cover refresh, the Claude watch, the bar firewall, the cube's timed switching and
+    /// cycling through the bar apps.
     /// Before 2026-11-15 they started from the window's onAppear, so nothing ran until the window opened, and every
     /// reopened window restarted all of them (the Haven socket reconnected, logcat was killed and spawned again).
     private func startServices() {
@@ -174,6 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.startPresence(settings: settings)
         model.resumeCubeRotation()
         model.setBarFirewall(settings.barFirewall)
+        model.startBarCycle(settings: settings)
     }
 
     // MARK: Menu bar icon

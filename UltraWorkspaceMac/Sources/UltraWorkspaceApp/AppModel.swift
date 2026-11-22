@@ -156,6 +156,9 @@ final class AppModel: ObservableObject {
     /// Wakes the presence loop on a presence line or a dead log tail (AppModel+Presence).
     let presenceWake = WakeSignal()
     @Published var barScreenOn: Bool?
+    /// Bar System → Cycle through apps (AppModel+Cycle).
+    var barCycleTask: Task<Void, Never>?
+    @Published var barCycleStatus = "Off."
     @Published var presenceStatus = "Off."
     @Published var lastPagePublishedAt: Date?
     @Published var lastCoverRefreshAt: Date?

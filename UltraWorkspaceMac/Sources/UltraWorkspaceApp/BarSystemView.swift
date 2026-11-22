@@ -25,6 +25,7 @@ struct BarSystemView: View {
             }
             software
             home
+            cycle
             screen
             launcher
         }
@@ -143,6 +144,42 @@ struct BarSystemView: View {
         } footer: {
             Footnote("Deckhand Home shows the clock and one tile per app; the bar's own launcher keeps running, one tap away, with its pages. Publish on the CoreBar page rewrites those pages: after a Deploy from the official app, publish again. Refresh (⌘R) reads all of this off the bar.")
         }
+    }
+
+    // MARK: Cycle
+
+    /// Every 1, 3, 5 or 10 minutes the next bar app (AppModel+Cycle).
+    private var cycle: some View {
+        let installed = AppModel.barAppPages.filter { model.barApps.isEmpty || model.barAppVersion($0.page) != nil }
+        return Section {
+            Toggle("Cycle through the bar apps", isOn: $settings.barCycle)
+            Picker("Next app every", selection: $settings.barCycleMinutes) {
+                ForEach(BarCycle.intervals, id: \.self) { Text("\($0) min").tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .disabled(!settings.barCycle)
+            if settings.barCycle {
+                StatusLabel(model.barCycleStatus, .info)
+                DisclosureGroup("Apps in the cycle (\(model.barCyclePackages(settings: settings).count))") {
+                    ForEach(installed, id: \.page) { app in
+                        Toggle(app.label, isOn: Binding(
+                            get: { settings.barCyclePages.isEmpty || settings.barCyclePages.contains(app.page) },
+                            set: { on in toggleCycle(app.page, on: on, all: installed.map(\.page)) }))
+                    }
+                }
+            }
+        } header: {
+            Text("Cycle through apps")
+        } footer: {
+            Footnote("Deckhand opens the next app over the debug bridge while this Mac is on, in the order of the Apps page. It waits while you use the bar (until the screen has not been touched for the whole interval) and while the screen is off, and leaves alone any other app you opened.")
+        }
+    }
+
+    /// Empty means every app on the bar; switching one off turns the list into "all the others".
+    private func toggleCycle(_ page: String, on: Bool, all: [String]) {
+        var set = settings.barCyclePages.isEmpty ? Set(all) : Set(settings.barCyclePages)
+        if on { set.insert(page) } else { set.remove(page) }
+        settings.barCyclePages = set.count == all.count ? [] : all.filter { set.contains($0) }
     }
 
     // MARK: Screen

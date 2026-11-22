@@ -1184,5 +1184,23 @@ do {
     catch { check(Date().timeIntervalSince(t0) < 1, "apk: hostile string pool rejected quickly, no crash", "\(error)") }
 } catch { check(false, "apk: read", "\(error)") }
 
+// Bar cycle: reading dumpsys and deciding each turn.
+do {
+    let act = "  mResumedActivity: ActivityRecord{5b29d87 u0 nl.denoronha.deckhand.walk/nl.denoronha.deckhand.monitor.MainActivity t305}"
+    check(BarCycle.resumedPackage(act) == "nl.denoronha.deckhand.walk", "cycle: package in front read from dumpsys")
+    check(BarCycle.resumedPackage("") == nil, "cycle: no package without a resumed activity")
+    let power = "  mWakefulness=Awake\n  mLastUserActivityTime=1325708037 (32221172 ms ago)"
+    check(BarCycle.isAwake(power) && BarCycle.idleSeconds(power) == 32221.172, "cycle: screen state and idle time read from dumpsys power")
+    check(!BarCycle.isAwake("  mWakefulness=Asleep"), "cycle: asleep is not awake")
+    let c = ["a.x", "b.x", "c.x"], homes: Set<String> = ["home.x"]
+    check(BarCycle.next(after: "c.x", in: c) == "a.x" && BarCycle.next(after: "a.x", in: c) == "b.x" && BarCycle.next(after: nil, in: c) == "a.x", "cycle: next wraps round, starts at the first")
+    check(BarCycle.turn(awake: true, idle: 400, front: "a.x", cycle: c, homes: homes, interval: 180) == .open("b.x"), "cycle: idle long enough opens the next app")
+    check(BarCycle.turn(awake: true, idle: 400, front: "home.x", cycle: c, homes: homes, interval: 180) == .open("a.x"), "cycle: from the home screen it starts with the first app")
+    check(BarCycle.turn(awake: true, idle: 100, front: "a.x", cycle: c, homes: homes, interval: 180) == .wait(80, .touched), "cycle: waits until untouched for a whole interval")
+    check(BarCycle.turn(awake: false, idle: 900, front: "a.x", cycle: c, homes: homes, interval: 180) == .wait(60, .screenOff), "cycle: nothing while the screen is off")
+    check(BarCycle.turn(awake: true, idle: 900, front: "spotify.x", cycle: c, homes: homes, interval: 180) == .wait(180, .otherApp("spotify.x")), "cycle: leaves another app alone")
+    check(BarCycle.turn(awake: true, idle: 900, front: "a.x", cycle: ["a.x"], homes: homes, interval: 180) == .wait(180, .nothingToCycle), "cycle: one app is nothing to cycle")
+}
+
 print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
 exit(failures == 0 ? 0 : 1)

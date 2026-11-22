@@ -112,6 +112,11 @@ final class AppSettings: ObservableObject {
     @Published var walkTo: Int = 22 { didSet { save() } }
     @Published var walkWeather: Bool = true { didSet { save() } }
     @Published var walkCalendars: [String] = [] { didSet { save() } }
+    /// Bar System → Cycle through apps: Deckhand opens the next bar app every `barCycleMinutes` (AppModel+Cycle).
+    @Published var barCycle: Bool = false { didSet { save() } }
+    @Published var barCycleMinutes: Int = 3 { didSet { save() } }
+    /// The bar apps (page ids) in the cycle; empty = every Deckhand app on the bar.
+    @Published var barCyclePages: [String] = [] { didSet { save() } }
     static let defaultCoreCards = ["TIME", "WORLD_TIME", "CPU", "MEMORY"]
     /// The 1424-px strip shows this many single cards without scrolling (the clock card takes two slots) — counted on the bar 2026-11-04.
     static let coreCardsThatFit = 5
@@ -207,6 +212,9 @@ final class AppSettings: ObservableObject {
         var walkTo: Int? = nil
         var walkWeather: Bool? = nil
         var walkCalendars: [String]? = nil
+        var barCycle: Bool? = nil
+        var barCycleMinutes: Int? = nil
+        var barCyclePages: [String]? = nil
     }
 
     // MARK: VivoCube cards (ordered, max 6)
@@ -318,6 +326,9 @@ final class AppSettings: ObservableObject {
             walkTo = (0...24).contains(p.walkTo ?? -1) ? p.walkTo! : 22
             walkWeather = p.walkWeather ?? true
             walkCalendars = p.walkCalendars ?? []
+            barCycle = p.barCycle ?? false
+            barCycleMinutes = BarCycle.intervals.contains(p.barCycleMinutes ?? 0) ? p.barCycleMinutes! : 3
+            barCyclePages = p.barCyclePages ?? []
             trafficWindow = [1, 10, 60].contains(p.trafficWindow ?? 0) ? p.trafficWindow! : 10
         }
         if let storedKey { accuWeatherKey = storedKey }
@@ -334,7 +345,7 @@ final class AppSettings: ObservableObject {
                           dateStyle: dateStyle, dateShowWeekday: dateShowWeekday, dateShowYear: dateShowYear,
                           cryptoCoins: cryptoCoins, cryptoCurrency: cryptoCurrency, calendarIDs: calendarIDs,
                           claudePlan: claudePlan, claudeDailyBudget: claudeDailyBudget, claudeNotifyWaiting: claudeNotifyWaiting, presenceWake: presenceWake, presenceSleepMinutes: presenceSleepMinutes, barFirewall: barFirewall,
-                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL, portfolioCurrency: portfolioCurrency, portfolioMinValue: portfolioMinValue, statusServices: statusServices, actionsDays: actionsDays, actionsForks: actionsForks, jiraSite: jiraSite, jiraBoard: jiraBoard, jiraOnlyMine: jiraOnlyMine, booksHide: booksHide, trafficWindow: trafficWindow, routerAddress: routerAddress, routerHTTPS: routerHTTPS, chessUser: chessUser, chessPuzzle: chessPuzzle, teamsContacts: teamsContacts, teamsCalendars: teamsCalendars, teamsAllMeetings: teamsAllMeetings, walkDog: walkDog, walkHours: walkHours, walkMinutes: walkMinutes, walkFrom: walkFrom, walkTo: walkTo, walkWeather: walkWeather, walkCalendars: walkCalendars)
+                          flightsRadiusKm: flightsRadiusKm, newsSource: newsSource, earthMinMag: earthMinMag, earthCenter: earthCenter, seoURL: seoURL, portfolioCurrency: portfolioCurrency, portfolioMinValue: portfolioMinValue, statusServices: statusServices, actionsDays: actionsDays, actionsForks: actionsForks, jiraSite: jiraSite, jiraBoard: jiraBoard, jiraOnlyMine: jiraOnlyMine, booksHide: booksHide, trafficWindow: trafficWindow, routerAddress: routerAddress, routerHTTPS: routerHTTPS, chessUser: chessUser, chessPuzzle: chessPuzzle, teamsContacts: teamsContacts, teamsCalendars: teamsCalendars, teamsAllMeetings: teamsAllMeetings, walkDog: walkDog, walkHours: walkHours, walkMinutes: walkMinutes, walkFrom: walkFrom, walkTo: walkTo, walkWeather: walkWeather, walkCalendars: walkCalendars, barCycle: barCycle, barCycleMinutes: barCycleMinutes, barCyclePages: barCyclePages)
         // Holds the manual location: user-only from the moment it exists (Store.writePrivate).
         guard let data = try? JSONEncoder().encode(p), Store.writePrivate(data, to: url) else {
             NSLog("Deckhand: settings.json could not be saved"); return
