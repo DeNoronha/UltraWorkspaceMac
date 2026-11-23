@@ -29,7 +29,7 @@ final class SiteFeed: ObservableObject {
         didSet { Store.shared.saveSecret(clientSecret.trimmingCharacters(in: .whitespacesAndNewlines), name: "google-client-secret", debounce: true) }
     }
     @Published var pageSpeedKey: String = Store.shared.loadSecret(name: "pagespeed-key") ?? "" {
-        didSet { Store.shared.saveSecret(pageSpeedKey.trimmingCharacters(in: .whitespacesAndNewlines), name: "pagespeed-key", debounce: true); psiAt = .distantPast; poke() }
+        didSet { Store.shared.saveSecret(pageSpeedKey.trimmingCharacters(in: .whitespacesAndNewlines), name: "pagespeed-key", debounce: true); psiAt = .distantPast; psiError = nil; poke() }
     }
     @Published private(set) var tokens: GoogleTokens? = SiteFeed.loadTokens()
     @Published private(set) var connecting = false
@@ -42,6 +42,8 @@ final class SiteFeed: ObservableObject {
 
     var hasClient: Bool { !clientID.trimmingCharacters(in: .whitespaces).isEmpty && !clientSecret.trimmingCharacters(in: .whitespaces).isEmpty }
     var connected: Bool { tokens != nil }
+    /// Whether PageSpeed has answered with scores (for the key's green tick).
+    var pageSpeedWorks: Bool { !psi.isEmpty && psiError == nil }
 
     private var url: () -> String = { "" }
     private var audit: [String: Any]?
@@ -116,6 +118,8 @@ final class SiteFeed: ObservableObject {
 
     private func refreshPageSpeed(_ site: String) async {
         psiAt = Date()
+        // An old error must not stand while the new check (a minute or two) runs.
+        psiError = nil
         var out: [String: Any] = [:]
         for strategy in ["mobile", "desktop"] {
             var c = URLComponents(string: "https://www.googleapis.com/pagespeedonline/v5/runPagespeed")!

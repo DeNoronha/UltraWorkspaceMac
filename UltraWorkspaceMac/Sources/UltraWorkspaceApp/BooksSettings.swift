@@ -7,7 +7,7 @@ struct BooksSettings: View {
 
     var body: some View {
         Section {
-            SecureField("API token", text: $feed.token, prompt: Text("Paste the token here"))
+            CredentialRow("API token", value: $feed.token, status: .from(error: feed.lastError, working: feed.updatedAt != nil))
             DetailsDisclosure("How to make an API token", text: "Sign in at e-boekhouden.nl and open your account's settings, where API tokens are managed. Create a token named Deckhand and copy it here; e-Boekhouden shows it only once. Deckhand only reads balances and open invoices and never books anything.")
             TimelineView(.periodic(from: .now, by: 5)) { _ in
                 VStack(alignment: .leading, spacing: 4) {

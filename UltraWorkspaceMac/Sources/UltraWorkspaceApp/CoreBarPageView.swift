@@ -175,7 +175,7 @@ struct CoreBarPageView: View {
     /// The bar's own weather card needs an AccuWeather key; shown only while that card is on the page.
     private var weatherKeySection: some View {
         Section {
-            CommitSecureField("AccuWeather key", value: $settings.accuWeatherKey)
+            CredentialRow("AccuWeather key", value: $settings.accuWeatherKey)
             Link("Get a Key", destination: URL(string: "https://developer.accuweather.com")!)
         } header: {
             Text("Weather (bar's own)")

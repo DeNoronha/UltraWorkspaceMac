@@ -18,10 +18,10 @@ struct CaskSettings: View {
 
     var body: some View {
         Section {
-            SecureField("Whiskystats key", text: $model.whiskystatsKey, prompt: Text("Paste the key here"))
-                .onSubmit { Task { await feed.checkCredits() } }
+            CredentialRow("Whiskystats key", value: $model.whiskystatsKey, status: .from(error: feed.lastError, working: false)) {
+                Task { await feed.checkCredits() }
+            }
             if let e = feed.lastError { StatusLabel(e, .failed) }
-            else if model.whiskystatsKey.isEmpty { StatusLabel("No key yet.", .info) }
             else if let b = feed.busy { BusyLabel("Fetching \(b)…") }
         } header: {
             Text("Whiskystats")

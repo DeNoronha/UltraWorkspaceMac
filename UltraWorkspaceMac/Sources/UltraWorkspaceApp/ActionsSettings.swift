@@ -7,7 +7,7 @@ struct ActionsSettings: View {
 
     var body: some View {
         Section {
-            SecureField("Token", text: $feed.token, prompt: Text("github_pat_…"))
+            CredentialRow("Token", value: $feed.token, prompt: "github_pat_…", status: .from(error: feed.lastError, working: feed.updatedAt != nil))
             DetailsDisclosure("How to make a token", text: "At github.com: Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. Name it Deckhand, choose an expiry, set Repository access to All repositories, and under Repository permissions set only Actions to Read-only. GitHub adds Metadata read-only by itself. Deckhand can then see your workflow runs and nothing else.")
             TimelineView(.periodic(from: .now, by: 5)) { _ in
                 VStack(alignment: .leading, spacing: 4) {

@@ -24,10 +24,16 @@ struct SchipholSettings: View {
             Footnote("Works without a key.")
         }
         Section {
-            TextField("Client ID", text: $id, prompt: Text("Client ID or app_id"))
-                .onChange(of: id) { v in Store.shared.saveSecret(v.trimmingCharacters(in: .whitespacesAndNewlines), name: SchipholFeed.secretID, debounce: true); model.barPages.schiphol.credentialsDidChange() }
-            SecureField("Client secret", text: $key, prompt: Text("Client secret or app_key"))
-                .onChange(of: key) { v in Store.shared.saveSecret(v.trimmingCharacters(in: .whitespacesAndNewlines), name: SchipholFeed.secretKey, debounce: true); model.barPages.schiphol.credentialsDidChange() }
+            TimelineView(.periodic(from: .now, by: 3)) { _ in
+                let f = model.barPages.schiphol
+                let status = CredentialStatus.from(error: f.boardError, working: f.boardAt != .distantPast)
+                CredentialRow("Client ID", value: $id, secret: false, prompt: "Client ID or app_id", optional: true, status: status) {
+                    Store.shared.saveSecret(id, name: SchipholFeed.secretID); f.credentialsDidChange()
+                }
+                CredentialRow("Client secret", value: $key, prompt: "Client secret or app_key", optional: true, status: status) {
+                    Store.shared.saveSecret(key, name: SchipholFeed.secretKey); f.credentialsDidChange()
+                }
+            }
             TimelineView(.periodic(from: .now, by: 3)) { _ in
                 let f = model.barPages.schiphol
                 if id.isEmpty || key.isEmpty { StatusLabel("No key: runways and traffic only.", .info) }

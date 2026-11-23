@@ -7,8 +7,8 @@ struct PortfolioSettings: View {
 
     var body: some View {
         Section {
-            TextField("API key", text: $feed.apiKey, prompt: Text("From Kraken → Settings → API"))
-            SecureField("Private key", text: $feed.apiSecret, prompt: Text("Paste the private key here"))
+            CredentialRow("API key", value: $feed.apiKey, prompt: "From Kraken → Settings → API", status: .from(error: feed.lastError, working: feed.updatedAt != nil))
+            CredentialRow("Private key", value: $feed.apiSecret, status: .from(error: feed.lastError, working: feed.updatedAt != nil))
             DetailsDisclosure("How to make a read-only key", text: "At kraken.com: Settings → Connections & API → Create API key. Name it Deckhand and tick only Funds → Query. Leave every other permission off: Deckhand only reads your balances and can then never trade, deposit or withdraw. Copy the API key and the private key here; Kraken shows the private key only once.")
             TimelineView(.periodic(from: .now, by: 5)) { _ in
                 VStack(alignment: .leading, spacing: 4) {

@@ -253,9 +253,8 @@ struct AppsView: View {
             } header: { Text("Headlines") } footer: { Footnote("The bar fetches the headlines itself, every 10 minutes.") }
         case "tasks":
             Section {
-                SecureField("Linear API key", text: $model.linearKey, prompt: Text("lin_api_…"))
+                CredentialRow("Linear API key", value: $model.linearKey, prompt: "lin_api_…", status: .from(error: model.linearError, working: false))
                 if let e = model.linearError { StatusLabel(e, .failed) }
-                else if model.linearKey.isEmpty { StatusLabel("No key yet.", .info) }
             } header: { Text("Tasks") } footer: { Footnote("Linear → Settings → Security & access → Personal API keys. Kept in this Mac's Keychain.") }
         case "haven":
             HavenSettings()
@@ -366,11 +365,10 @@ private struct HavenSettings: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         Section {
-            SecureField("aisstream.io key", text: $model.aisstreamKey, prompt: Text("Paste the key here"))
+            CredentialRow("aisstream.io key", value: $model.aisstreamKey, status: .from(error: model.barPages.haven.lastError, working: model.barPages.haven.isLive))
             TimelineView(.periodic(from: .now, by: 3)) { _ in
                 let h = model.barPages.haven
                 if let e = h.lastError ?? h.placesError { StatusLabel(e, .failed) }
-                else if model.aisstreamKey.isEmpty { StatusLabel("No key yet.", .info) }
                 else if h.isLive { StatusLabel("Connected · \(h.messages) messages", .ok) }
                 else { StatusLabel("Saved. Connects while Haven is on the bar.", .info) }
             }

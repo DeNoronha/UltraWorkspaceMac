@@ -8,8 +8,8 @@ struct ConnectionSettings: View {
     var body: some View {
         Section {
             TextField("Address", text: $settings.routerAddress, prompt: Text("The router this Mac uses"))
-            TextField("User name", text: $feed.routerUser, prompt: Text("admin"))
-            SecureField("Password", text: $feed.routerPassword, prompt: Text("The router's admin password"))
+            CredentialRow("User name", value: $feed.routerUser, secret: false, prompt: "admin", optional: true, status: .from(error: feed.routerError, working: feed.routerName != nil))
+            CredentialRow("Password", value: $feed.routerPassword, prompt: "The router's admin password", optional: true, status: .from(error: feed.routerError, working: feed.routerName != nil))
             Toggle("Use HTTPS", isOn: $settings.routerHTTPS)
             TimelineView(.periodic(from: .now, by: 5)) { _ in
                 if let e = feed.routerError { StatusLabel(e, .failed) }

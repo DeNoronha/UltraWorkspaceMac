@@ -40,8 +40,8 @@ struct ClimateSettings: View {
         } message: { Text("Deckhand forgets the sign-in on this Mac. The heating can no longer be set from the bar.") }
 
         Section {
-            TextField("Client ID", text: $feed.netatmoClientID, prompt: Text("Paste the client ID here"))
-            SecureField("Client secret", text: $feed.netatmoClientSecret, prompt: Text("Paste the secret here"))
+            CredentialRow("Client ID", value: $feed.netatmoClientID, secret: false, status: .from(error: feed.netatmoError, working: feed.netatmoConnected))
+            CredentialRow("Client secret", value: $feed.netatmoClientSecret, status: .from(error: feed.netatmoError, working: feed.netatmoConnected))
             Link("Open Netatmo Connect", destination: URL(string: "https://dev.netatmo.com/apps/")!)
             DetailsDisclosure("How to create it", text: "Once, at dev.netatmo.com: sign in with your Netatmo account → My apps → Create. Give it a name (Deckhand) and a description, leave Redirect URI and Webhook URI empty, and save. Copy its Client ID and Client secret here, then press Connect Netatmo.")
             HStack(spacing: 10) {
